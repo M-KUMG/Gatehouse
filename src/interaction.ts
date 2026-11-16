@@ -137,6 +137,16 @@ export class Editor {
     this.placer.start(typeId, e);
   }
 
+  /** Drop everything in progress (drag, wire, placing, popup, selection), e.g. before a project loads. */
+  reset(): void {
+    this.placer.end();
+    this.wiring.cancel();
+    this.valueEditor.close();
+    this.endDrag();
+    this.selection.clear();
+    this.setHover(NO_HOVER);
+  }
+
   /** Add a ready-made circuit below what is already there and show it. */
   loadExample(state: ProjectState): void {
     if (this.placer.active || this.drag) return;

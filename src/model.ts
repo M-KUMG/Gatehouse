@@ -112,6 +112,13 @@ export class Scene {
     return part;
   }
 
+  /** Replace the whole circuit, keeping the given ids (for loading a project). */
+  replace(parts: PlacedPart[], wires: Wire[]): void {
+    this.parts.splice(0, this.parts.length, ...parts);
+    this.wires.splice(0, this.wires.length, ...wires);
+    this.nextId = [...parts, ...wires].reduce((max, x) => Math.max(max, x.id), 0) + 1;
+  }
+
   find(id: number | null): PlacedPart | undefined {
     return id === null ? undefined : this.parts.find((p) => p.id === id);
   }

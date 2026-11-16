@@ -30,7 +30,6 @@ export interface ScreenRect {
 
 /** Draws the grid and the scene. Owns the camera, wheel zoom and middle-mouse panning. */
 export class GridView {
-  readonly camera: Camera = { x: 0, y: 0, zoom: 1 };
   readonly selected = new Set<number>();
   readonly selectedWires = new Set<number>();
   hoverId: number | null = null;
@@ -60,6 +59,8 @@ export class GridView {
   constructor(
     readonly canvas: HTMLCanvasElement,
     private readonly scene: Scene,
+    /** Owned by the project; changed in place. */
+    readonly camera: Camera,
   ) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('2D canvas is not supported');
@@ -118,7 +119,8 @@ export class GridView {
     this.zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, zoom);
   }
 
-  private cameraChanged(): void {
+  /** Call after changing the camera from outside (e.g. loading a project). */
+  cameraChanged(): void {
     this.onCameraChange?.();
     this.requestRender();
   }
