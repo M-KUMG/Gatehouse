@@ -1,0 +1,14 @@
+{
+  "name": "gatehouse",
+  "version": "0.1.0",
+  "description": "Gatehouse: simulator for Arduino and RP2040 boards and circuits",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "web": "npx serve .",
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}
