@@ -59,8 +59,11 @@ html, body {
 }
 
 .palette-list {
-  overflow-y: auto;
+  overflow: hidden auto;
+  scrollbar-width: thin;
+  scrollbar-color: #4a4d55 transparent;
   min-height: 0;
+  flex: 0 1 auto;
   display: grid;
   gap: 8px;
 }
@@ -163,4 +166,109 @@ html, body {
 .zoom-readout:hover {
   color: #d8dbe0;
   border-color: #6b7280;
+}
+
+/* Example circuit buttons under the parts list. */
+#palette .palette-section {
+  margin: 14px 0 8px;
+}
+
+.palette-example {
+  margin-bottom: 6px;
+  padding: 7px 8px;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  background: #2b2e34;
+  color: #d8dbe0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.palette-example:hover {
+  border-color: #4ea1ff;
+}
+
+/* Simulation status along the bottom edge, right of the zoom readout. */
+.status-line {
+  position: fixed;
+  left: 72px;
+  bottom: 10px;
+  z-index: 5;
+  max-width: calc(100% - 320px);
+  padding: 3px 8px;
+  border: 1px solid #3a3d44;
+  border-radius: 4px;
+  background: rgba(37, 39, 44, 0.85);
+  color: #9aa0aa;
+  font: 12px system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Live values next to the cursor. */
+.readout {
+  position: fixed;
+  z-index: 8;
+  max-width: 260px;
+  padding: 5px 8px;
+  border: 1px solid #3a3d44;
+  border-radius: 5px;
+  background: rgba(24, 25, 28, 0.94);
+  color: #d8dbe0;
+  font: 12px/1.45 system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  user-select: none;
+}
+
+.readout-title {
+  color: #9aa0aa;
+}
+
+.readout-warning {
+  color: #ff8a80;
+}
+
+/* Popup for typing a part's value. */
+.value-editor {
+  position: fixed;
+  z-index: 9;
+  padding: 6px 8px;
+  border: 1px solid #4ea1ff;
+  border-radius: 6px;
+  background: #25272c;
+  color: #9aa0aa;
+  font: 12px system-ui, sans-serif;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+
+.value-editor label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.value-editor input {
+  width: 70px;
+  padding: 3px 5px;
+  border: 1px solid #3a3d44;
+  border-radius: 4px;
+  background: #1e1f22;
+  color: #e6e8ec;
+  font: 13px system-ui, sans-serif;
+  outline: none;
+}
+
+.value-editor input:focus {
+  border-color: #4ea1ff;
+}
+
+.value-editor input.invalid {
+  border-color: #e5534b;
 }

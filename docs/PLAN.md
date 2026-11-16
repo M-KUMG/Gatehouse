@@ -7,6 +7,7 @@ Living notes so later sessions keep the same context. Add a line to "Done" after
 - Retractable parts menu on the right (battery, BJT TO-92, resistor, LED). Drag a part onto the grid to place it, snapped to cells. Visual only: no pins, no behavior, no selecting or moving placed parts yet.
 - Realistic SVG part art (src/art), pointer-based placement with a snapped ghost, and select/move/rotate (button or R)/delete/duplicate (Ctrl+D) of placed parts. PlacedPart is plain data (id, typeId, col, row, rotation).
 - Wheel zoom around the cursor (25%-400%, readout bottom-left resets to 100%), selection box + Shift+click multi-select (move/rotate/duplicate/delete as a group, Ctrl+A, Esc), floating rotate/duplicate/delete toolbar, fixed missed-drop/first-click bug.
+- Pins, wires between pins, more parts (9V battery, push button, toggle switch, potentiometer, ground), DC circuit simulation (MNA solver in src/sim with 20 unit tests), LED glow, hover readouts, example circuit. Open decisions: DC only (no timing yet); solver runs on the main thread, move to a Web Worker later. The agent that built this hit a usage limit during its own testing, so verification was done by the owner by hand.
 
 ## Vision
 Simulator for Arduino (AVR) and Raspberry Pi Pico (RP2040) boards plus circuits, running real firmware on emulated CPUs. Web app and Electron app from one codebase. University project, non-commercial, built entirely with Claude (teacher requirement).

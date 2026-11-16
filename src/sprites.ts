@@ -1,9 +1,9 @@
 // Turns part SVGs into images for the canvas. Each part is rasterized per
 // device-pixel scale (DPR x zoom), so it stays sharp at any DPR and zoom.
 
-import type { PartType } from './parts';
+import type { PartState, PartType } from './parts';
 
-const MAX_RASTERS = 64; // zooming creates many sizes; keep the most recent ones
+const MAX_RASTERS = 96; // zooming creates many sizes; keep the most recent ones
 
 const urls = new Map<string, string>();
 const images = new Map<string, HTMLImageElement>();
@@ -19,12 +19,23 @@ export function partImageUrl(type: PartType): string {
   return url;
 }
 
-function loadedImage(type: PartType, onLoad: () => void): HTMLImageElement | null {
-  let img = images.get(type.id);
+/** One look of a part: its default art or a state-dependent variant. */
+export interface PartLook {
+  key: string; // unique per part type and look
+  svg: string;
+}
+
+export function partLook(type: PartType, state: PartState | undefined): PartLook {
+  const variant = state && type.variant?.(state);
+  return variant ? { key: `${type.id}:${variant.key}`, svg: variant.svg } : { key: type.id, svg: type.svg };
+}
+
+function loadedImage(look: PartLook, onLoad: () => void): HTMLImageElement | null {
+  let img = images.get(look.key);
   if (!img) {
     img = new Image();
-    img.src = partImageUrl(type);
-    images.set(type.id, img);
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(look.svg)}`;
+    images.set(look.key, img);
   }
   if (img.complete && img.naturalWidth > 0) return img;
   img.addEventListener('load', onLoad, { once: true });
@@ -36,8 +47,8 @@ function loadedImage(type: PartType, onLoad: () => void): HTMLImageElement | nul
  * while the SVG is still loading (onLoad is called once it is ready).
  * Pass a whole number of pixels so nearby zoom levels share a bitmap.
  */
-export function getSprite(type: PartType, pxPerCell: number, onLoad: () => void): HTMLCanvasElement | null {
-  const key = `${type.id}@${pxPerCell}`;
+export function getSprite(type: PartType, look: PartLook, pxPerCell: number, onLoad: () => void): HTMLCanvasElement | null {
+  const key = `${look.key}@${pxPerCell}`;
   const cached = rasters.get(key);
   if (cached) {
     // Re-insert so the map's order stays least-recently-used first.
@@ -45,7 +56,7 @@ export function getSprite(type: PartType, pxPerCell: number, onLoad: () => void)
     rasters.set(key, cached);
     return cached;
   }
-  const img = loadedImage(type, onLoad);
+  const img = loadedImage(look, onLoad);
   if (!img) return null;
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(type.cols * pxPerCell));

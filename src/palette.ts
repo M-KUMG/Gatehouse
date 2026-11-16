@@ -3,11 +3,22 @@ import { partImageUrl } from './sprites';
 
 const ICON_CELL = 12; // pixels per grid cell in menu icons
 
+export interface PaletteAction {
+  name: string;
+  hint: string;
+  run: () => void;
+}
+
 /**
  * Retractable parts menu on the right. Pressing on an item calls `onGrab`,
- * which starts dragging that part onto the grid.
+ * which starts dragging that part onto the grid. `examples` become buttons
+ * under the list.
  */
-export function createPalette(parent: HTMLElement, onGrab: (typeId: string, e: PointerEvent) => void): void {
+export function createPalette(
+  parent: HTMLElement,
+  onGrab: (typeId: string, e: PointerEvent) => void,
+  examples: readonly PaletteAction[] = [],
+): void {
   const panel = document.createElement('aside');
   panel.id = 'palette';
 
@@ -48,6 +59,22 @@ export function createPalette(parent: HTMLElement, onGrab: (typeId: string, e: P
       if (e.button === 0) onGrab(part.id, e);
     });
     list.appendChild(item);
+  }
+
+  if (examples.length > 0) {
+    const heading = document.createElement('h2');
+    heading.textContent = 'Examples';
+    heading.className = 'palette-section';
+    panel.appendChild(heading);
+    for (const example of examples) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'palette-example';
+      b.textContent = example.name;
+      b.title = example.hint;
+      b.addEventListener('click', example.run);
+      panel.appendChild(b);
+    }
   }
 
   const setOpen = (open: boolean): void => {

@@ -1,7 +1,10 @@
-import { screenToWorld, worldToScreen, zoomAround, type Camera } from './camera';
-import { footprint, type CellBox, type Placement, type Scene } from './model';
+import { ART_CELL } from './art/common';
+import { screenToWorld, worldToScreen, zoomAround, type Camera, type Point } from './camera';
+import { footprint, type CellBox, type PinRef, type Placement, type Scene } from './model';
 import { getPart } from './parts';
-import { getSprite } from './sprites';
+import type { SimView } from './simulation';
+import { getSprite, partLook } from './sprites';
+import { drawDraft, drawPins, drawWarnings, drawWires, type WireDraft } from './wireview';
 
 export const GRID_SIZE = 20; // world units between minor lines
 const MAJOR_EVERY = 5; // every Nth line is drawn stronger
@@ -29,7 +32,16 @@ export interface ScreenRect {
 export class GridView {
   readonly camera: Camera = { x: 0, y: 0, zoom: 1 };
   readonly selected = new Set<number>();
+  readonly selectedWires = new Set<number>();
   hoverId: number | null = null;
+  hoverWireId: number | null = null;
+  hoverPin: PinRef | null = null;
+  /** Wire being drawn. */
+  draft: WireDraft | null = null;
+  /** Latest simulation results, for glow, wire colours and warnings. */
+  sim: SimView | null = null;
+  /** Lets a part under the cursor use the wheel (e.g. a knob). Return true when handled. */
+  onWheel: ((e: WheelEvent) => boolean) | null = null;
   /** Part being placed from the menu, drawn translucent. */
   ghost: Placement | null = null;
   /** Selection rectangle being dragged, in (fractional) cells. */
@@ -60,7 +72,7 @@ export class GridView {
     // Stop the browser's middle-click autoscroll.
     canvas.addEventListener('auxclick', (e) => e.preventDefault());
     // Not passive: Ctrl+wheel must not zoom the page.
-    canvas.addEventListener('wheel', this.onWheel, { passive: false });
+    canvas.addEventListener('wheel', this.handleWheel, { passive: false });
     window.addEventListener('resize', this.requestRender);
 
     this.render();
@@ -111,9 +123,27 @@ export class GridView {
     this.requestRender();
   }
 
-  private onWheel = (e: WheelEvent): void => {
+  /** CSS pixels per grid cell at the current zoom. */
+  get cellPx(): number {
+    return GRID_SIZE * this.camera.zoom;
+  }
+
+  /** Canvas-relative CSS pixel position of a (fractional) cell point. */
+  cellToCanvas(col: number, row: number): Point {
+    return worldToScreen(this.camera, col * GRID_SIZE, row * GRID_SIZE);
+  }
+
+  /** Pan so the box sits in the middle of the canvas. */
+  centerOn(box: CellBox): void {
+    const cam = this.camera;
+    cam.x = (box.col + box.cols / 2) * GRID_SIZE - this.canvas.clientWidth / 2 / cam.zoom;
+    cam.y = (box.row + box.rows / 2) * GRID_SIZE - this.canvas.clientHeight / 2 / cam.zoom;
+    this.cameraChanged();
+  }
+
+  private handleWheel = (e: WheelEvent): void => {
     e.preventDefault();
-    if (this.panning) return;
+    if (this.panning || this.onWheel?.(e)) return;
     const unit = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 800 : 1; // lines / pages to pixels
     const delta = Math.max(-300, Math.min(300, e.deltaY * unit));
     this.zoomAt(e.clientX, e.clientY, this.camera.zoom * Math.exp(-delta * WHEEL_SPEED));
@@ -157,6 +187,7 @@ export class GridView {
 
   private render(): void {
     const { canvas, ctx } = this;
+    this.sim?.update();
     const dpr = window.devicePixelRatio || 1;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
@@ -173,6 +204,7 @@ export class GridView {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     for (const part of this.scene.parts) this.drawPart(part, dpr, false);
+    const animating = drawWires(this, ctx, this.scene, performance.now());
 
     const hovered = this.scene.find(this.hoverId);
     if (hovered && !this.selected.has(hovered.id)) this.outline(footprint(hovered), COLORS.hover, 1, 2);
@@ -180,6 +212,10 @@ export class GridView {
       const part = this.scene.find(id);
       if (part) this.outline(footprint(part), COLORS.select, 1.5, 3, COLORS.selectFill);
     }
+
+    drawPins(this, ctx, this.scene);
+    drawWarnings(this, ctx, this.scene);
+    drawDraft(this, ctx, this.scene);
 
     if (this.ghost) {
       this.drawPart(this.ghost, dpr, true);
@@ -191,6 +227,7 @@ export class GridView {
     if (this.marquee) this.drawMarquee(this.marquee);
 
     for (const listener of this.renderListeners) listener();
+    if (animating) this.requestRender(); // keep the current dashes moving
   }
 
   /** Grid lines in device pixels so they stay 1px sharp at any DPR and zoom. */
@@ -235,12 +272,16 @@ export class GridView {
     strokeLines(COLORS.major, true);
   }
 
-  private drawPart(p: Placement, dpr: number, ghost: boolean): void {
+  private drawPart(p: Placement & { id?: number }, dpr: number, ghost: boolean): void {
     const type = getPart(p.typeId);
     if (!type) return;
     const { ctx, camera } = this;
     const cell = GRID_SIZE * camera.zoom; // CSS pixels per cell
-    const sprite = getSprite(type, Math.max(1, Math.round(cell * dpr)), this.requestRender);
+    const px = Math.max(1, Math.round(cell * dpr));
+    // While a state's own artwork is still loading, show the default look instead of a gap.
+    const sprite =
+      getSprite(type, partLook(type, p.state), px, this.requestRender) ??
+      getSprite(type, partLook(type, undefined), px, this.requestRender);
     if (!sprite) return;
     const w = type.cols * cell;
     const h = type.rows * cell;
@@ -266,6 +307,12 @@ export class GridView {
       ctx.shadowOffsetY = 2 * shadow;
     }
     ctx.drawImage(sprite, 0, 0, w, h);
+    if (!ghost && type.overlay) {
+      // Live parts of the art (glow, knob pointer) are drawn in art units.
+      ctx.shadowColor = 'transparent';
+      ctx.scale(cell / ART_CELL, cell / ART_CELL);
+      type.overlay(ctx, p.state ?? {}, p.id === undefined ? undefined : this.sim?.partResult(p.id));
+    }
     ctx.restore();
   }
 

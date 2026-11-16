@@ -1,13 +1,30 @@
-// Editing on the grid: selecting (click, Shift+click, selection box),
-// moving, rotating, duplicating and deleting placed parts. Placing new
-// parts from the menu lives in placing.ts, the buttons in toolbar.ts.
+// Editing on the grid: decides what a press, drag, click or key means and
+// hands the work to focused helpers: selection.ts (selection + commands),
+// wiring.ts (drawing wires), controls.ts (buttons, switches, knobs),
+// placing.ts (new parts from the menu), toolbar.ts / readout.ts (overlays).
 
+import { clickPart, isOnKnob, knobPosition, knobPositionAt, setKnob, setPressed } from './controls';
 import type { GridView } from './grid';
-import { boundsOf, boxesOverlap, footprint, type PlacedPart, type Scene } from './model';
+import { boundsOf, boxesOverlap, footprint, type GridPoint, type PinRef, type PlacedPart, type ProjectState, type Scene } from './model';
+import { getPart } from './parts';
+import { findPin, pinAt, wireAt, wireRoute } from './pins';
 import { Placer } from './placing';
-import { Toolbar, createZoomReadout } from './toolbar';
+import { Readout, describePart, describePin, describeWire, type ReadoutText } from './readout';
+import { Selection } from './selection';
+import type { Simulation } from './simulation';
+import { Toolbar, createStatusLine, createZoomReadout } from './toolbar';
+import { ValueEditor } from './valueedit';
+import { WireTool, pinRadius } from './wiring';
 
 const DRAG_THRESHOLD = 3; // CSS pixels before a press becomes a drag
+const WIRE_GRAB = 5; // CSS pixels around a wire that still hit it
+const WHEEL_KNOB_STEP = 0.05; // knob travel per wheel notch
+const WIRING_HINT = 'Wiring: click a pin to finish · click the grid to add a corner · Backspace removes it · Esc cancels';
+
+interface Cell {
+  col: number;
+  row: number;
+}
 
 interface Moving {
   kind: 'move';
@@ -15,9 +32,13 @@ interface Moving {
   parts: PlacedPart[]; // every part that moves (the selection)
   offsetCol: number; // grab point relative to the anchor's top-left cell
   offsetRow: number;
-  starts: Map<PlacedPart, { col: number; row: number }>;
+  starts: Map<PlacedPart, Cell>;
+  /** Corners of the wires between the moving parts: they move along. */
+  corners: Map<GridPoint, Cell>;
   /** Plain click on a part of a multi-selection: select only it if it never moved. */
   narrowTo: number | null;
+  /** A release without movement counts as a click on the part (flips a switch). */
+  click: boolean;
   moved: boolean;
   downX: number;
   downY: number;
@@ -28,42 +49,72 @@ interface Marquee {
   startCol: number;
   startRow: number;
   base: Set<number>; // selection kept underneath (Shift adds to it)
+  baseWires: Set<number>;
   active: boolean; // past the drag threshold
   downX: number;
   downY: number;
 }
 
+interface Turning {
+  kind: 'knob';
+  part: PlacedPart;
+  start: number; // position to go back to on Escape
+}
+
+interface Hover {
+  partId: number | null;
+  wireId: number | null;
+  pin: PinRef | null;
+  onKnob: boolean;
+}
+
+const NO_HOVER: Hover = { partId: null, wireId: null, pin: null, onKnob: false };
+
 export class Editor {
+  private readonly selection: Selection;
   private readonly placer: Placer;
+  private readonly wiring: WireTool;
   private readonly toolbar: Toolbar;
+  private readonly readout = new Readout();
+  private readonly valueEditor = new ValueEditor();
   private readonly updateZoomReadout: () => void;
-  private drag: Moving | Marquee | null = null;
+  private readonly setStatus = createStatusLine();
+  private drag: Moving | Marquee | Turning | null = null;
+  private pressed: PlacedPart | null = null; // push button held down by the mouse
+  private onKnob = false;
   private pointer: { x: number; y: number } | null = null; // last position over the canvas
 
   constructor(
     private readonly view: GridView,
     private readonly scene: Scene,
+    private readonly sim: Simulation,
   ) {
     const canvas = view.canvas;
     canvas.addEventListener('pointerdown', this.onCanvasDown);
     canvas.addEventListener('pointermove', this.onCanvasMove);
     canvas.addEventListener('pointerup', this.onCanvasUp);
     canvas.addEventListener('pointercancel', this.onCanvasUp);
+    canvas.addEventListener('dblclick', this.onDoubleClick);
     canvas.addEventListener('pointerleave', () => {
-      if (!this.drag) this.setHover(null);
+      if (this.drag || this.wiring.active) return;
+      this.setHover(NO_HOVER);
+      this.pointer = null;
     });
     window.addEventListener('keydown', this.onKeyDown);
     // The menu slides open/closed: keep the toolbar out from under it.
     document.addEventListener('transitionend', view.requestRender);
 
+    this.selection = new Selection(view, scene);
+    this.wiring = new WireTool(view, scene);
     this.placer = new Placer(view, scene, (part, x, y) => {
-      this.selectOnly(part.id);
+      this.selection.set([part.id]);
       this.pointer = { x, y };
       this.refreshHover();
     });
     this.toolbar = new Toolbar(canvas, {
       rotate: () => this.rotateSelected(),
       duplicate: () => this.duplicateSelected(),
+      edit: () => this.editValue(this.selection.parts()[0]),
       delete: () => this.deleteSelected(),
     });
     this.updateZoomReadout = createZoomReadout(
@@ -73,63 +124,111 @@ export class Editor {
 
     view.renderListeners.push(this.positionOverlays);
     view.onCameraChange = this.onCameraChange;
+    view.onWheel = this.onWheel;
     this.positionOverlays();
   }
 
   /** Start dragging a new part from the menu. Call from a pointerdown. */
   startPlacing(typeId: string, e: PointerEvent): void {
     if (this.placer.active || this.drag) return;
-    this.clearSelection();
+    this.wiring.cancel();
+    this.valueEditor.close();
+    this.selection.clear();
     this.placer.start(typeId, e);
+  }
+
+  /** Add a ready-made circuit below what is already there and show it. */
+  loadExample(state: ProjectState): void {
+    if (this.placer.active || this.drag) return;
+    this.wiring.cancel();
+    const existing = boundsOf(this.scene.parts);
+    const incoming = boundsOf(state.parts);
+    if (!incoming) return;
+    const dCol = existing ? existing.col - incoming.col : 0;
+    const dRow = existing ? existing.row + existing.rows + 4 - incoming.row : 0;
+    const added = this.scene.insert(state, dCol, dRow);
+    this.selection.set(added.parts.map((p) => p.id));
+    const box = this.selection.bounds();
+    if (box) this.view.centerOn(box);
   }
 
   // ---- Pointer on the canvas -------------------------------------------
 
   private onCanvasDown = (e: PointerEvent): void => {
     if (e.button !== 0 || this.placer.active || this.drag) return;
+    this.valueEditor.close();
     this.pointer = { x: e.clientX, y: e.clientY };
+    const canvas = this.view.canvas;
+    if (this.wiring.active) {
+      canvas.setPointerCapture(e.pointerId); // the release decides what the click does
+      return;
+    }
     const cell = this.view.toCell(e.clientX, e.clientY);
-    const part = this.scene.partAt(cell.col, cell.row);
-    const sel = this.view.selected;
+    const sel = this.selection;
 
+    const pin = pinAt(this.scene, cell.col, cell.row, pinRadius(this.view));
+    if (pin) {
+      sel.clear();
+      this.setHover(NO_HOVER);
+      this.wiring.start(pin.ref, e.clientX, e.clientY);
+      canvas.setPointerCapture(e.pointerId);
+      this.updateCursor();
+      return;
+    }
+
+    const wire = wireAt(this.scene, cell.col, cell.row, WIRE_GRAB / this.view.cellPx);
+    if (wire) {
+      if (!e.shiftKey) sel.set([], [wire.id]);
+      else if (!sel.wireIds.delete(wire.id)) sel.wireIds.add(wire.id);
+      this.view.requestRender();
+      return;
+    }
+
+    const part = this.scene.partAt(cell.col, cell.row);
     if (!part) {
       // Empty grid: start a selection box (Shift keeps the current selection).
-      const base = e.shiftKey ? new Set(sel) : new Set<number>();
-      if (!e.shiftKey) this.clearSelection();
+      const base = new Set(e.shiftKey ? sel.partIds : []);
+      const baseWires = new Set(e.shiftKey ? sel.wireIds : []);
+      if (!e.shiftKey) sel.clear();
       this.drag = {
-        kind: 'marquee', startCol: cell.col, startRow: cell.row, base, active: false,
+        kind: 'marquee', startCol: cell.col, startRow: cell.row, base, baseWires, active: false,
         downX: e.clientX, downY: e.clientY,
       };
+    } else if (!e.shiftKey && isOnKnob(part, cell.col, cell.row)) {
+      sel.set([part.id]);
+      this.drag = { kind: 'knob', part, start: knobPosition(part) };
     } else {
       let narrowTo: number | null = null;
       if (e.shiftKey) {
-        if (sel.has(part.id)) {
-          sel.delete(part.id);
+        if (sel.partIds.delete(part.id)) {
           this.view.requestRender();
           return; // toggled out: nothing to drag
         }
-        sel.add(part.id);
-      } else if (!sel.has(part.id)) {
-        this.selectOnly(part.id);
-      } else if (sel.size > 1) {
+        sel.partIds.add(part.id);
+      } else if (!sel.partIds.has(part.id)) {
+        sel.set([part.id]);
+      } else if (sel.partIds.size > 1) {
         narrowTo = part.id;
       }
-      this.startMove(part, cell, e.clientX, e.clientY, narrowTo);
+      this.startMove(part, cell, e.clientX, e.clientY, narrowTo, !e.shiftKey);
+      if (!e.shiftKey && setPressed(part, true)) this.pressed = part;
     }
-    this.view.canvas.setPointerCapture(e.pointerId);
+    canvas.setPointerCapture(e.pointerId);
     this.updateCursor();
     this.view.requestRender();
   };
 
-  private startMove(anchor: PlacedPart, cell: { col: number; row: number }, x: number, y: number, narrowTo: number | null): void {
-    const parts = this.selectedParts();
+  private startMove(anchor: PlacedPart, cell: Cell, x: number, y: number, narrowTo: number | null, click: boolean): void {
+    const parts = this.selection.parts();
     for (const p of parts) this.scene.bringToFront(p.id);
+    const corners = this.scene.wiresWithin(this.selection.partIds).flatMap((w) => w.waypoints);
     this.drag = {
       kind: 'move', anchor, parts,
       offsetCol: cell.col - anchor.col,
       offsetRow: cell.row - anchor.row,
       starts: new Map(parts.map((p) => [p, { col: p.col, row: p.row }])),
-      narrowTo, moved: false, downX: x, downY: y,
+      corners: new Map(corners.map((c) => [c, { col: c.col, row: c.row }])),
+      narrowTo, click, moved: false, downX: x, downY: y,
     };
   }
 
@@ -137,7 +236,8 @@ export class Editor {
     if (this.placer.active) return;
     this.pointer = { x: e.clientX, y: e.clientY };
     if (this.view.isPanning) return;
-    if (this.drag) this.updateDrag(e.clientX, e.clientY);
+    if (this.wiring.active) this.wiring.move(e.clientX, e.clientY);
+    else if (this.drag) this.updateDrag(e.clientX, e.clientY);
     else this.refreshHover();
   };
 
@@ -145,7 +245,14 @@ export class Editor {
     const d = this.drag;
     if (!d) return;
     const cell = this.view.toCell(x, y);
-    const far = Math.hypot(x - d.downX, y - d.downY) >= DRAG_THRESHOLD;
+
+    if (d.kind === 'knob') {
+      const position = knobPositionAt(d.part, cell.col, cell.row);
+      // Ignore the jump across the gap at the bottom of the knob's travel.
+      if (position !== null && Math.abs(position - knobPosition(d.part)) < 0.6) setKnob(d.part, position);
+      this.view.requestRender();
+      return;
+    }
 
     if (d.kind === 'move') {
       const start = d.starts.get(d.anchor);
@@ -153,19 +260,18 @@ export class Editor {
       const dc = Math.round(cell.col - d.offsetCol) - start.col;
       const dr = Math.round(cell.row - d.offsetRow) - start.row;
       if (dc !== d.anchor.col - start.col || dr !== d.anchor.row - start.row) {
-        for (const p of d.parts) {
-          const s = d.starts.get(p);
-          if (!s) continue;
-          p.col = s.col + dc;
-          p.row = s.row + dr;
+        for (const [thing, s] of [...d.starts, ...d.corners]) {
+          thing.col = s.col + dc;
+          thing.row = s.row + dr;
         }
         d.moved = true;
+        this.releasePressed(); // it is being carried, not pushed
         this.view.requestRender();
       }
       return;
     }
 
-    if (!d.active && !far) return;
+    if (!d.active && Math.hypot(x - d.downX, y - d.downY) < DRAG_THRESHOLD) return;
     d.active = true;
     const box = {
       col: Math.min(d.startCol, cell.col),
@@ -174,25 +280,59 @@ export class Editor {
       rows: Math.abs(cell.row - d.startRow),
     };
     this.view.marquee = box;
-    // Live preview: the parts touched by the box join the base selection.
-    const sel = this.view.selected;
-    sel.clear();
-    for (const id of d.base) sel.add(id);
-    for (const p of this.scene.parts) if (boxesOverlap(box, footprint(p))) sel.add(p.id);
-    this.view.requestRender();
+    // Live preview: parts touched by the box and wires fully inside it join the base selection.
+    const parts = this.scene.parts.filter((p) => boxesOverlap(box, footprint(p))).map((p) => p.id);
+    const inside = (p: GridPoint): boolean =>
+      p.col >= box.col && p.col <= box.col + box.cols && p.row >= box.row && p.row <= box.row + box.rows;
+    const wires = this.scene.wires.filter((w) => wireRoute(this.scene, w)?.every(inside)).map((w) => w.id);
+    this.selection.set([...d.base, ...parts], [...d.baseWires, ...wires]);
   }
 
   private onCanvasUp = (e: PointerEvent): void => {
+    if (e.type === 'pointerup' && e.button !== 0) return;
+    const canvas = this.view.canvas;
+    if (this.wiring.active) {
+      if (e.type === 'pointerup') this.wiring.release(e.clientX, e.clientY);
+      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      this.updateCursor();
+      this.refreshHover();
+      return;
+    }
     const d = this.drag;
-    if (!d || (e.type === 'pointerup' && e.button !== 0)) return;
+    if (!d) return;
     if (e.type === 'pointerup') this.updateDrag(e.clientX, e.clientY);
-    if (d.kind === 'move' && !d.moved && d.narrowTo !== null) this.selectOnly(d.narrowTo);
+    if (d.kind === 'move' && !d.moved) {
+      if (d.narrowTo !== null) this.selection.set([d.narrowTo]);
+      if (d.click && e.type === 'pointerup' && !this.pressed) clickPart(d.anchor);
+    }
     this.endDrag();
-    if (this.view.canvas.hasPointerCapture(e.pointerId)) this.view.canvas.releasePointerCapture(e.pointerId);
+    if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
     this.refreshHover();
   };
 
+  private onDoubleClick = (e: MouseEvent): void => {
+    if (this.wiring.active || this.placer.active) return;
+    const cell = this.view.toCell(e.clientX, e.clientY);
+    this.editValue(this.scene.partAt(cell.col, cell.row));
+  };
+
+  private onWheel = (e: WheelEvent): boolean => {
+    if (this.drag || this.placer.active || this.wiring.active || e.ctrlKey) return false;
+    const cell = this.view.toCell(e.clientX, e.clientY);
+    const part = this.scene.partAt(cell.col, cell.row);
+    if (!part || !isOnKnob(part, cell.col, cell.row)) return false;
+    setKnob(part, knobPosition(part) - Math.sign(e.deltaY) * WHEEL_KNOB_STEP);
+    this.view.requestRender();
+    return true;
+  };
+
+  private releasePressed(): void {
+    if (this.pressed) setPressed(this.pressed, false);
+    this.pressed = null;
+  }
+
   private endDrag(): void {
+    this.releasePressed();
     this.drag = null;
     this.view.marquee = null;
     this.updateCursor();
@@ -204,12 +344,14 @@ export class Editor {
     const d = this.drag;
     if (!d) return;
     if (d.kind === 'move') {
-      for (const [p, s] of d.starts) {
-        p.col = s.col;
-        p.row = s.row;
+      for (const [thing, s] of [...d.starts, ...d.corners]) {
+        thing.col = s.col;
+        thing.row = s.row;
       }
+    } else if (d.kind === 'knob') {
+      setKnob(d.part, d.start);
     } else {
-      this.setSelection(d.base);
+      this.selection.set(d.base, d.baseWires);
     }
     this.endDrag();
   }
@@ -217,58 +359,59 @@ export class Editor {
   /** The camera moved under a still cursor: keep the dragged things under it. */
   private onCameraChange = (): void => {
     this.placer.refresh();
-    if (this.drag && this.pointer) this.updateDrag(this.pointer.x, this.pointer.y);
+    if (!this.pointer) return;
+    if (this.wiring.active) this.wiring.move(this.pointer.x, this.pointer.y);
+    else if (this.drag) this.updateDrag(this.pointer.x, this.pointer.y);
   };
 
-  // ---- Selection and hover ---------------------------------------------
-
-  private selectedParts(): PlacedPart[] {
-    // In draw order, so copies and moves keep the stacking.
-    return this.scene.parts.filter((p) => this.view.selected.has(p.id));
-  }
-
-  private setSelection(ids: Iterable<number>): void {
-    this.view.selected.clear();
-    for (const id of ids) this.view.selected.add(id);
-    this.view.requestRender();
-  }
-
-  private selectOnly(id: number): void {
-    this.setSelection([id]);
-  }
-
-  private clearSelection(): void {
-    this.setSelection([]);
-  }
+  // ---- Hover -----------------------------------------------------------
 
   private refreshHover(): void {
     const p = this.pointer;
-    if (!p || this.drag || this.placer.active) return;
-    const over = document.elementFromPoint(p.x, p.y) === this.view.canvas;
+    if (!p || this.drag || this.placer.active || this.wiring.active) return;
+    if (document.elementFromPoint(p.x, p.y) !== this.view.canvas) {
+      this.setHover(NO_HOVER);
+      return;
+    }
     const cell = this.view.toCell(p.x, p.y);
-    this.setHover(over ? (this.scene.partAt(cell.col, cell.row)?.id ?? null) : null);
+    const pin = pinAt(this.scene, cell.col, cell.row, pinRadius(this.view));
+    const wire = pin ? undefined : wireAt(this.scene, cell.col, cell.row, WIRE_GRAB / this.view.cellPx);
+    const part = pin || wire ? undefined : this.scene.partAt(cell.col, cell.row);
+    this.setHover({
+      pin: pin?.ref ?? null,
+      wireId: wire?.id ?? null,
+      partId: part?.id ?? null,
+      onKnob: part !== undefined && isOnKnob(part, cell.col, cell.row),
+    });
   }
 
-  private setHover(id: number | null): void {
-    if (this.view.hoverId === id) return;
-    this.view.hoverId = id;
+  private setHover(h: Hover): void {
+    const v = this.view;
+    const samePin = v.hoverPin?.partId === h.pin?.partId && v.hoverPin?.pinId === h.pin?.pinId;
+    if (v.hoverId === h.partId && v.hoverWireId === h.wireId && samePin && this.onKnob === h.onKnob) return;
+    v.hoverId = h.partId;
+    v.hoverWireId = h.wireId;
+    v.hoverPin = h.pin;
+    this.onKnob = h.onKnob;
     this.updateCursor();
-    this.view.requestRender();
+    v.requestRender();
   }
 
   private updateCursor(): void {
-    if (this.view.isPanning) return;
-    const moving = this.drag?.kind === 'move';
-    this.view.canvas.style.cursor = moving ? 'grabbing' : this.view.hoverId !== null ? 'grab' : '';
+    const v = this.view;
+    if (v.isPanning) return;
+    let cursor = '';
+    if (this.wiring.active || v.hoverPin) cursor = 'crosshair';
+    else if (this.drag?.kind === 'move') cursor = 'grabbing';
+    else if (this.drag?.kind === 'knob' || this.onKnob || v.hoverWireId !== null) cursor = 'pointer';
+    else if (v.hoverId !== null) cursor = 'grab';
+    v.canvas.style.cursor = cursor;
   }
 
   // ---- Commands --------------------------------------------------------
 
   private rotateSelected(): void {
-    const parts = this.selectedParts();
-    if (parts.length === 0) return;
-    if (parts.length === 1) this.scene.rotate(parts[0]);
-    else this.scene.rotateGroup(parts);
+    if (this.wiring.active || this.drag?.kind === 'knob' || !this.selection.rotate()) return;
     // Rotating mid-drag: continue the drag from the rotated positions.
     const d = this.drag;
     if (d?.kind === 'move' && this.pointer) {
@@ -276,30 +419,28 @@ export class Editor {
       const b = footprint(d.anchor);
       const col = Math.min(Math.max(cell.col, b.col + 0.5), b.col + b.cols - 0.5);
       const row = Math.min(Math.max(cell.row, b.row + 0.5), b.row + b.rows - 0.5);
-      this.startMove(d.anchor, { col, row }, d.downX, d.downY, null);
+      this.startMove(d.anchor, { col, row }, d.downX, d.downY, null, false);
       if (this.drag?.kind === 'move') this.drag.moved = d.moved;
     }
-    this.view.requestRender();
   }
 
   private deleteSelected(): void {
-    if (this.view.selected.size === 0) return;
-    if (this.drag?.kind === 'move') this.drag = null;
-    for (const id of this.view.selected) {
-      this.scene.remove(id);
-      if (this.view.hoverId === id) this.view.hoverId = null;
-    }
-    this.clearSelection();
-    this.updateCursor();
+    if (this.selection.empty) return;
+    if (this.drag) this.endDrag();
+    this.selection.remove();
+    this.setHover(NO_HOVER);
+    this.refreshHover();
   }
 
-  /** Copy the selection one cell down-right and select the copies. */
   private duplicateSelected(): void {
-    if (this.drag) return;
-    const copies = this.selectedParts().map((p) =>
-      this.scene.add({ typeId: p.typeId, rotation: p.rotation, col: p.col + 1, row: p.row + 1 }),
-    );
-    if (copies.length) this.setSelection(copies.map((p) => p.id));
+    if (!this.drag && !this.wiring.active) this.selection.duplicate();
+  }
+
+  /** Open the value popup for a part that has an editable value. */
+  private editValue(part: PlacedPart | undefined): void {
+    if (!part || !getPart(part.typeId)?.value || this.drag) return;
+    this.selection.set([part.id]);
+    this.valueEditor.open(part, this.view.toScreen(footprint(part)), this.view.requestRender);
   }
 
   private onKeyDown = (e: KeyboardEvent): void => {
@@ -307,20 +448,25 @@ export class Editor {
     if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
+    const busy = this.placer.active || this.wiring.active;
 
     if (e.key === 'Escape') {
       if (this.placer.active) this.placer.end();
+      else if (this.wiring.active) this.wiring.cancel();
       else if (this.drag) this.cancelDrag();
-      else this.clearSelection();
+      else this.selection.clear();
+      this.updateCursor();
     } else if (key === 'r' && !mod && !e.altKey) {
       if (this.placer.active) this.placer.rotate();
       else this.rotateSelected();
-    } else if ((e.key === 'Delete' || e.key === 'Backspace') && !this.placer.active) {
+    } else if (e.key === 'Backspace' && this.wiring.active) {
+      this.wiring.undo();
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && !busy) {
       this.deleteSelected();
     } else if (mod && key === 'd') {
       this.duplicateSelected();
     } else if (mod && key === 'a') {
-      if (!this.placer.active && !this.drag) this.setSelection(this.scene.parts.map((p) => p.id));
+      if (!busy && !this.drag) this.selection.selectAll();
     } else {
       return;
     }
@@ -331,10 +477,37 @@ export class Editor {
 
   private positionOverlays = (): void => {
     this.updateZoomReadout();
-    const box = boundsOf(this.selectedParts());
+    this.setStatus(this.wiring.active ? WIRING_HINT : this.sim.status());
+
+    const parts = this.selection.parts();
+    const box = this.selection.bounds();
     // Hide while something is actually being dragged (not on a plain click).
     const d = this.drag;
-    const busy = this.placer.active || (d !== null && (d.kind === 'move' ? d.moved : d.active));
-    this.toolbar.show(box && !busy ? this.view.toScreen(box) : null);
+    const dragging = d !== null && (d.kind === 'move' ? d.moved : d.kind === 'marquee' ? d.active : false);
+    const busy = this.placer.active || this.wiring.active || dragging;
+    this.toolbar.show(box && !busy ? this.view.toScreen(box) : null, {
+      rotate: parts.length > 0,
+      duplicate: parts.length > 0,
+      edit: parts.length === 1 && getPart(parts[0].typeId)?.value !== undefined,
+    });
+
+    const p = this.pointer;
+    const text = p && !this.placer.active && !dragging && !this.valueEditor.isOpen ? this.hoverText() : null;
+    this.readout.show(text, p?.x, p?.y);
   };
+
+  /** What the tooltip says about the thing under the cursor. */
+  private hoverText(): ReadoutText | null {
+    const v = this.view;
+    const d = this.drag;
+    if (d?.kind === 'knob') return describePart(d.part, this.sim);
+    if (d?.kind === 'marquee') return null;
+    const pinRef = v.draft ? v.draft.endPin : v.hoverPin;
+    const pin = pinRef && findPin(this.scene, pinRef);
+    if (pin) return describePin(pin, this.sim);
+    const wire = this.scene.findWire(v.hoverWireId);
+    if (wire) return describeWire(wire, this.sim);
+    const part = d?.kind === 'move' ? d.anchor : this.scene.find(v.hoverId);
+    return part ? describePart(part, this.sim) : null;
+  }
 }
