@@ -1,25 +1,54 @@
+import { screenToWorld, worldToScreen, zoomAround, type Camera } from './camera';
+import { footprint, type CellBox, type Placement, type Scene } from './model';
+import { getPart } from './parts';
+import { getSprite } from './sprites';
+
 export const GRID_SIZE = 20; // world units between minor lines
 const MAJOR_EVERY = 5; // every Nth line is drawn stronger
+const WHEEL_SPEED = 0.0015; // zoom factor exponent per wheel pixel
 
 const COLORS = {
   background: '#1e1f22',
   minor: '#2e3035',
   major: '#43464d',
+  select: '#4ea1ff',
+  selectFill: 'rgba(78, 161, 255, 0.08)',
+  hover: 'rgba(255, 255, 255, 0.28)',
+  marqueeFill: 'rgba(78, 161, 255, 0.12)',
 };
 
-export interface Camera {
-  x: number; // world position shown at the top-left corner of the canvas
-  y: number;
+/** Screen rectangle in CSS pixels, relative to the viewport. */
+export interface ScreenRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
 }
 
+/** Draws the grid and the scene. Owns the camera, wheel zoom and middle-mouse panning. */
 export class GridView {
-  readonly camera: Camera = { x: 0, y: 0 };
+  readonly camera: Camera = { x: 0, y: 0, zoom: 1 };
+  readonly selected = new Set<number>();
+  hoverId: number | null = null;
+  /** Part being placed from the menu, drawn translucent. */
+  ghost: Placement | null = null;
+  /** Selection rectangle being dragged, in (fractional) cells. */
+  marquee: CellBox | null = null;
+  /** Called after every frame (e.g. to position overlay buttons). */
+  readonly renderListeners: (() => void)[] = [];
+  /** Called when the camera pans or zooms, before the next frame. */
+  onCameraChange: (() => void) | null = null;
+
   private readonly ctx: CanvasRenderingContext2D;
-  private dragging = false;
+  private panning = false;
   private lastX = 0;
   private lastY = 0;
+  private frame = 0;
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
+  constructor(
+    readonly canvas: HTMLCanvasElement,
+    private readonly scene: Scene,
+  ) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('2D canvas is not supported');
     this.ctx = ctx;
@@ -30,40 +59,104 @@ export class GridView {
     canvas.addEventListener('pointercancel', this.onPointerUp);
     // Stop the browser's middle-click autoscroll.
     canvas.addEventListener('auxclick', (e) => e.preventDefault());
-    window.addEventListener('resize', this.render);
+    // Not passive: Ctrl+wheel must not zoom the page.
+    canvas.addEventListener('wheel', this.onWheel, { passive: false });
+    window.addEventListener('resize', this.requestRender);
 
     this.render();
   }
 
+  get isPanning(): boolean {
+    return this.panning;
+  }
+
+  requestRender = (): void => {
+    if (this.frame) return;
+    this.frame = requestAnimationFrame(() => {
+      this.frame = 0;
+      this.render();
+    });
+  };
+
+  /** Fractional grid cell under a viewport point. */
+  toCell(clientX: number, clientY: number): { col: number; row: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    const w = screenToWorld(this.camera, clientX - rect.left, clientY - rect.top);
+    return { col: w.x / GRID_SIZE, row: w.y / GRID_SIZE };
+  }
+
+  /** Viewport rectangle of a cell box. */
+  toScreen(box: CellBox): ScreenRect {
+    const rect = this.canvas.getBoundingClientRect();
+    const r = this.boxToCanvas(box);
+    return { left: rect.left + r.x, top: rect.top + r.y, right: rect.left + r.x + r.w, bottom: rect.top + r.y + r.h };
+  }
+
+  /** Zoom keeping the world point under the viewport point (clientX, clientY) in place. */
+  zoomAt(clientX: number, clientY: number, zoom: number): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const before = this.camera.zoom;
+    zoomAround(this.camera, clientX - rect.left, clientY - rect.top, zoom);
+    if (this.camera.zoom !== before) this.cameraChanged();
+  }
+
+  /** Zoom around the centre of the canvas (e.g. reset to 100%). */
+  setZoom(zoom: number): void {
+    const rect = this.canvas.getBoundingClientRect();
+    this.zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, zoom);
+  }
+
+  private cameraChanged(): void {
+    this.onCameraChange?.();
+    this.requestRender();
+  }
+
+  private onWheel = (e: WheelEvent): void => {
+    e.preventDefault();
+    if (this.panning) return;
+    const unit = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 800 : 1; // lines / pages to pixels
+    const delta = Math.max(-300, Math.min(300, e.deltaY * unit));
+    this.zoomAt(e.clientX, e.clientY, this.camera.zoom * Math.exp(-delta * WHEEL_SPEED));
+  };
+
   private onPointerDown = (e: PointerEvent): void => {
     if (e.button !== 1) return; // middle mouse button only
     e.preventDefault();
-    this.dragging = true;
+    this.panning = true;
     this.lastX = e.clientX;
     this.lastY = e.clientY;
     this.canvas.setPointerCapture(e.pointerId);
     this.canvas.style.cursor = 'grabbing';
+    this.requestRender();
   };
 
   private onPointerMove = (e: PointerEvent): void => {
-    if (!this.dragging) return;
+    if (!this.panning) return;
     // Dragging the grid right means the camera moves left in world space.
-    this.camera.x -= e.clientX - this.lastX;
-    this.camera.y -= e.clientY - this.lastY;
+    this.camera.x -= (e.clientX - this.lastX) / this.camera.zoom;
+    this.camera.y -= (e.clientY - this.lastY) / this.camera.zoom;
     this.lastX = e.clientX;
     this.lastY = e.clientY;
-    this.render();
+    this.cameraChanged();
   };
 
   private onPointerUp = (e: PointerEvent): void => {
-    if (!this.dragging || e.button !== 1) return;
-    this.dragging = false;
-    this.canvas.releasePointerCapture(e.pointerId);
+    if (!this.panning || (e.type === 'pointerup' && e.button !== 1)) return;
+    this.panning = false;
+    if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
     this.canvas.style.cursor = '';
+    this.requestRender();
   };
 
-  private render = (): void => {
-    const { canvas, ctx, camera } = this;
+  /** Canvas-relative CSS pixel rectangle of a cell box. */
+  private boxToCanvas(box: CellBox): { x: number; y: number; w: number; h: number } {
+    const p = worldToScreen(this.camera, box.col * GRID_SIZE, box.row * GRID_SIZE);
+    const s = GRID_SIZE * this.camera.zoom;
+    return { x: p.x, y: p.y, w: box.cols * s, h: box.rows * s };
+  }
+
+  private render(): void {
+    const { canvas, ctx } = this;
     const dpr = window.devicePixelRatio || 1;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
@@ -72,36 +165,131 @@ export class GridView {
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
     }
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = COLORS.background;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    this.drawGrid(dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    ctx.fillStyle = COLORS.background;
-    ctx.fillRect(0, 0, width, height);
+    for (const part of this.scene.parts) this.drawPart(part, dpr, false);
 
-    const firstCol = Math.floor(camera.x / GRID_SIZE);
-    const lastCol = Math.ceil((camera.x + width) / GRID_SIZE);
-    const firstRow = Math.floor(camera.y / GRID_SIZE);
-    const lastRow = Math.ceil((camera.y + height) / GRID_SIZE);
+    const hovered = this.scene.find(this.hoverId);
+    if (hovered && !this.selected.has(hovered.id)) this.outline(footprint(hovered), COLORS.hover, 1, 2);
+    for (const id of this.selected) {
+      const part = this.scene.find(id);
+      if (part) this.outline(footprint(part), COLORS.select, 1.5, 3, COLORS.selectFill);
+    }
+
+    if (this.ghost) {
+      this.drawPart(this.ghost, dpr, true);
+      ctx.setLineDash([4, 3]);
+      this.outline(footprint(this.ghost), COLORS.select, 1, 2);
+      ctx.setLineDash([]);
+    }
+
+    if (this.marquee) this.drawMarquee(this.marquee);
+
+    for (const listener of this.renderListeners) listener();
+  }
+
+  /** Grid lines in device pixels so they stay 1px sharp at any DPR and zoom. */
+  private drawGrid(dpr: number): void {
+    const { ctx, camera, canvas } = this;
+    const step = GRID_SIZE * camera.zoom * dpr; // device pixels between minor lines
+    const lineWidth = Math.max(1, Math.round(dpr));
+    const half = lineWidth % 2 ? 0.5 : 0;
+    const originX = -camera.x * camera.zoom * dpr; // device x of world 0
+    const originY = -camera.y * camera.zoom * dpr;
+    const firstCol = Math.floor(-originX / step);
+    const lastCol = Math.ceil((canvas.width - originX) / step);
+    const firstRow = Math.floor(-originY / step);
+    const lastRow = Math.ceil((canvas.height - originY) / step);
+    // Fade minor lines out when they get closer than ~12 CSS px; skip below ~5.
+    const minorAlpha = Math.min(1, Math.max(0, (step / dpr - 5) / 7));
 
     const strokeLines = (color: string, major: boolean): void => {
       ctx.strokeStyle = color;
       ctx.beginPath();
       for (let col = firstCol; col <= lastCol; col++) {
         if ((col % MAJOR_EVERY === 0) !== major) continue;
-        const x = Math.round(col * GRID_SIZE - camera.x) + 0.5;
+        const x = Math.round(originX + col * step) + half;
         ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
+        ctx.lineTo(x, canvas.height);
       }
       for (let row = firstRow; row <= lastRow; row++) {
         if ((row % MAJOR_EVERY === 0) !== major) continue;
-        const y = Math.round(row * GRID_SIZE - camera.y) + 0.5;
+        const y = Math.round(originY + row * step) + half;
         ctx.moveTo(0, y);
-        ctx.lineTo(width, y);
+        ctx.lineTo(canvas.width, y);
       }
       ctx.stroke();
     };
 
-    ctx.lineWidth = 1;
-    strokeLines(COLORS.minor, false);
+    ctx.lineWidth = lineWidth;
+    if (minorAlpha > 0) {
+      ctx.globalAlpha = minorAlpha;
+      strokeLines(COLORS.minor, false);
+      ctx.globalAlpha = 1;
+    }
     strokeLines(COLORS.major, true);
-  };
+  }
+
+  private drawPart(p: Placement, dpr: number, ghost: boolean): void {
+    const type = getPart(p.typeId);
+    if (!type) return;
+    const { ctx, camera } = this;
+    const cell = GRID_SIZE * camera.zoom; // CSS pixels per cell
+    const sprite = getSprite(type, Math.max(1, Math.round(cell * dpr)), this.requestRender);
+    if (!sprite) return;
+    const w = type.cols * cell;
+    const h = type.rows * cell;
+    // Snap the origin to device pixels so the bitmap maps 1:1.
+    const snap = (v: number): number => Math.round(v * dpr) / dpr;
+    const origin = worldToScreen(camera, p.col * GRID_SIZE, p.row * GRID_SIZE);
+    const shadow = Math.min(1, camera.zoom) * dpr;
+
+    ctx.save();
+    ctx.translate(snap(origin.x), snap(origin.y));
+    // Rotate around the cell box: the rotated box keeps its top-left at the origin.
+    if (p.rotation === 90) ctx.translate(h, 0);
+    else if (p.rotation === 180) ctx.translate(w, h);
+    else if (p.rotation === 270) ctx.translate(0, w);
+    ctx.rotate((p.rotation * Math.PI) / 180);
+    if (ghost) {
+      ctx.globalAlpha = 0.6;
+    } else {
+      // Shadow offsets ignore the transform, so the light stays top-left when rotated.
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+      ctx.shadowBlur = 4 * shadow;
+      ctx.shadowOffsetX = 1.5 * shadow;
+      ctx.shadowOffsetY = 2 * shadow;
+    }
+    ctx.drawImage(sprite, 0, 0, w, h);
+    ctx.restore();
+  }
+
+  private outline(box: CellBox, color: string, lineWidth: number, pad: number, fill?: string): void {
+    const { ctx } = this;
+    const r = this.boxToCanvas(box);
+    ctx.beginPath();
+    ctx.roundRect(r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad, 4);
+    if (fill) {
+      ctx.fillStyle = fill;
+      ctx.fill();
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+  }
+
+  private drawMarquee(box: CellBox): void {
+    const { ctx } = this;
+    const r = this.boxToCanvas(box);
+    ctx.fillStyle = COLORS.marqueeFill;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = COLORS.select;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(Math.round(r.x) + 0.5, Math.round(r.y) + 0.5, Math.round(r.w), Math.round(r.h));
+  }
 }
