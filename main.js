@@ -7,7 +7,7 @@ function createWindow() {
     height: 600,
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
-  win.loadFile(path.join(__dirname, 'index.html'));
+  win.loadFile(path.join(__dirname, 'dist', 'index.html'));
 }
 
 app.whenReady().then(() => {
