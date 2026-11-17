@@ -4,6 +4,8 @@
 // Contacts between touching pins are not stored: see contacts.ts.
 
 import { getPart, type PartState } from './parts';
+import { coveringCounters, isBoardType, nextBoardId, type BoardCounters } from './project/boardid';
+import { copyTree, defaultTree, type SourceFiles } from './project/filetree';
 
 export type { PartState };
 
@@ -12,6 +14,8 @@ export type Rotation = 0 | 90 | 180 | 270;
 export interface PlacedPart {
   id: number;
   typeId: string;
+  /** Boards only: stable id within the project, e.g. "uno-1"; names its source folder (see project/boardid.ts). */
+  boardId?: string;
   col: number; // grid cell of the top-left corner of the (rotated) cell box
   row: number;
   rotation: Rotation; // clockwise degrees
@@ -60,10 +64,13 @@ export interface Wire {
 
 /** Everything a project stores about the circuit. */
 export interface ProjectState {
-  version: 2;
+  /** 2: no source files (built-in examples); 3: with `files`. */
+  version: 2 | 3;
   parts: PlacedPart[];
   wires: Wire[];
   junctions: Junction[];
+  /** Source trees of the boards in `parts`, by boardId. */
+  files?: SourceFiles;
 }
 
 export function samePin(a: PinRef, b: PinRef): boolean {
@@ -145,22 +152,67 @@ export class Scene {
   readonly parts: PlacedPart[] = [];
   readonly wires: Wire[] = [];
   readonly junctions: Junction[] = [];
+  /** Source files of each board, by boardId. Kept in step with the board parts. */
+  files: SourceFiles = {};
   private nextId = 1; // shared by parts, wires and junctions
+  /** Last boardId number per type; only goes up (see project/boardid.ts). */
+  private counters: BoardCounters = {};
 
+  /** The boardId counters to save with the project (a copy). */
+  get boardCounters(): BoardCounters {
+    return { ...this.counters };
+  }
+
+  /** Add a part; a board gets a new boardId and the default source tree. */
   add(p: Placement): PlacedPart {
     const state = p.state ?? getPart(p.typeId)?.defaults;
-    const part: PlacedPart = { id: this.nextId++, typeId: p.typeId, col: p.col, row: p.row, rotation: p.rotation };
+    const boardId = isBoardType(p.typeId) ? nextBoardId(this.counters, p.typeId) : undefined;
+    const part: PlacedPart = {
+      id: this.nextId++, typeId: p.typeId, ...(boardId ? { boardId } : {}), col: p.col, row: p.row, rotation: p.rotation,
+    };
     if (state) part.state = { ...state };
+    if (boardId) this.files[boardId] = defaultTree();
     this.parts.push(part);
     return part;
   }
 
-  /** Replace the whole circuit, keeping the given ids (for loading a project). */
-  replace(parts: PlacedPart[], wires: Wire[], junctions: Junction[] = []): void {
+  /**
+   * Replace the whole circuit, keeping the given ids (for loading a
+   * project). `counters` are the saved boardId counters; they are raised
+   * to cover every boardId present.
+   */
+  replace(parts: PlacedPart[], wires: Wire[], junctions: Junction[] = [], files: SourceFiles = {}, counters: BoardCounters = {}): void {
     this.parts.splice(0, this.parts.length, ...parts);
     this.wires.splice(0, this.wires.length, ...wires);
     this.junctions.splice(0, this.junctions.length, ...junctions);
     this.nextId = [...parts, ...wires, ...junctions].reduce((max, x) => Math.max(max, x.id), 0) + 1;
+    this.files = files;
+    this.counters = coveringCounters(counters, [...parts.flatMap((p) => p.boardId ?? []), ...Object.keys(files)]);
+    this.syncBoards();
+  }
+
+  /**
+   * Like replace, for undo / redo: ids and boardId counters never go
+   * backwards, so a new part never takes the id or boardId of one that an
+   * undo removed (board runtimes and serial buffers are kept per id).
+   */
+  restore(parts: PlacedPart[], wires: Wire[], junctions: Junction[], files: SourceFiles = {}): void {
+    const next = this.nextId;
+    const counters = this.counters;
+    this.replace(parts, wires, junctions, files, counters);
+    this.nextId = Math.max(next, this.nextId);
+  }
+
+  /** Every board has a boardId and a tree; trees of boards that are gone are dropped. */
+  private syncBoards(): void {
+    const ids = new Set<string>();
+    for (const part of this.parts) {
+      if (!isBoardType(part.typeId)) continue;
+      if (!part.boardId || ids.has(part.boardId)) part.boardId = nextBoardId(this.counters, part.typeId);
+      ids.add(part.boardId);
+      if (!Object.hasOwn(this.files, part.boardId)) this.files[part.boardId] = defaultTree();
+    }
+    for (const id of Object.keys(this.files)) if (!ids.has(id)) delete this.files[id];
   }
 
   find(id: number | null): PlacedPart | undefined {
@@ -214,6 +266,7 @@ export class Scene {
       const w = this.wires[i];
       if (wires.has(w.id) || onPart(w.from) || onPart(w.to)) this.wires.splice(i, 1);
     }
+    this.syncBoards(); // a deleted board takes its files with it
     this.tidyJunctions();
   }
 
@@ -303,16 +356,19 @@ export class Scene {
   snapshot(partIds?: ReadonlySet<number>): ProjectState {
     const inner = partIds ? this.within(partIds) : { wires: this.wires, junctions: this.junctions };
     const parts = partIds ? this.parts.filter((p) => partIds.has(p.id)) : this.parts;
-    const state: ProjectState = { version: 2, parts, wires: inner.wires, junctions: inner.junctions };
+    const files = Object.fromEntries(parts.flatMap((p) => (p.boardId && this.files[p.boardId] ? [[p.boardId, this.files[p.boardId]]] : [])));
+    const state: ProjectState = { version: 3, parts, wires: inner.wires, junctions: inner.junctions, files };
     return JSON.parse(JSON.stringify(state)) as ProjectState;
   }
 
-  /** Add a copy of `state`, shifted by whole cells, under new ids. */
+  /** Add a copy of `state`, shifted by whole cells, under new ids. Boards get new boardIds and copies of their files. */
   insert(state: ProjectState, dCol = 0, dRow = 0): { parts: PlacedPart[]; wires: Wire[]; junctions: Junction[] } {
     const partIds = new Map<number, number>();
     const parts = state.parts.map((p) => {
       const part = this.add({ ...p, col: p.col + dCol, row: p.row + dRow });
       partIds.set(p.id, part.id);
+      const source = p.boardId && state.files && Object.hasOwn(state.files, p.boardId) ? state.files[p.boardId] : undefined;
+      if (part.boardId && source) this.files[part.boardId] = copyTree(source);
       return part;
     });
     const junctionIds = new Map<number, number>();

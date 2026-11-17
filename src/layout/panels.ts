@@ -1,6 +1,6 @@
-// The dockable windows beside the grid. The serial console is real (its
-// long-lived content comes from serialconsole.ts); code editor and file
-// explorer are placeholders until later tasks fill them in.
+// The dockable windows beside the grid. The serial console and the file
+// explorer are real (their long-lived content comes from serialconsole.ts and
+// fileexplorer.ts); the code editor is a placeholder until a later task.
 
 import type { IContentRenderer } from 'dockview';
 
@@ -18,7 +18,7 @@ export interface WindowSpec {
 export const WINDOWS: readonly WindowSpec[] = [
   { id: 'serial-console', title: 'Serial console', placeholder: 'Serial console' },
   { id: 'code-editor', title: 'Code editor', placeholder: 'Code editor: coming later' },
-  { id: 'file-explorer', title: 'File explorer', placeholder: 'File explorer: coming later' },
+  { id: 'file-explorer', title: 'File explorer', placeholder: 'File explorer' },
 ];
 
 export function findWindow(id: string): WindowSpec | undefined {

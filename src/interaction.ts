@@ -96,6 +96,9 @@ export class Editor {
   private pointer: { x: number; y: number } | null = null; // last position over the canvas
   /** Return true for key presses the grid must leave alone (e.g. aimed at another window). */
   ignoreKey: ((e: KeyboardEvent) => boolean) | null = null;
+  /** Ctrl+Z, and Ctrl+Y or Ctrl+Shift+Z, while the grid has the keyboard. */
+  onUndo: (() => void) | null = null;
+  onRedo: (() => void) | null = null;
 
   constructor(
     private readonly view: GridView,
@@ -153,14 +156,35 @@ export class Editor {
     this.placer.start(typeId, e);
   }
 
-  /** Drop everything in progress (drag, wire, placing, popup, selection), e.g. before a project loads. */
-  reset(): void {
+  /** A gesture is half done (dragging, drawing a wire, placing a part, typing a value). */
+  get busy(): boolean {
+    return this.placer.active || this.wiring.active || this.drag !== null || this.valueEditor.isOpen;
+  }
+
+  /** Drop the gesture in progress, putting back what a drag changed (e.g. before undo). */
+  cancelGesture(): void {
     this.placer.end();
     this.wiring.cancel();
     this.valueEditor.close();
-    this.endDrag();
-    this.selection.clear();
+    this.cancelDrag();
     this.setHover(NO_HOVER);
+  }
+
+  /** Drop everything in progress (drag, wire, placing, popup, selection), e.g. before a project loads. */
+  reset(): void {
+    this.cancelGesture();
+    this.selection.clear();
+  }
+
+  /** The circuit was replaced (undo / redo): keep the selected things that still exist. */
+  circuitRestored(): void {
+    const parts = new Set(this.scene.parts.map((p) => p.id));
+    const wires = new Set(this.scene.wires.map((w) => w.id));
+    this.selection.set(
+      [...this.selection.partIds].filter((id) => parts.has(id)),
+      [...this.selection.wireIds].filter((id) => wires.has(id)),
+    );
+    this.refreshHover();
   }
 
   /** Add a ready-made circuit below what is already there and show it. */
@@ -517,6 +541,10 @@ export class Editor {
       this.duplicateSelected();
     } else if (mod && key === 'a') {
       if (!busy && !this.drag) this.selection.selectAll();
+    } else if (mod && !e.altKey && (key === 'y' || (key === 'z' && e.shiftKey))) {
+      this.onRedo?.();
+    } else if (mod && !e.altKey && key === 'z') {
+      this.onUndo?.();
     } else {
       return;
     }

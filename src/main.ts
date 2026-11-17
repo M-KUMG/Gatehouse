@@ -5,6 +5,7 @@ import { EXAMPLES } from './examples';
 import { GridView } from './grid';
 import { Editor } from './interaction';
 import { DockLayout, isForOtherWindow } from './layout/dock';
+import { FILE_EXPLORER_ID, FileExplorer } from './layout/fileexplorer';
 import { SERIAL_CONSOLE_ID, SerialConsole } from './layout/serialconsole';
 import { createWindowsMenu } from './layout/windowsmenu';
 import { boundsOf } from './model';
@@ -34,7 +35,22 @@ const sim = new Simulation(scene);
 // Serial output of the boards; "Auto" shows the board panel's board. Made
 // before the layout, which may restore the console window straight away.
 const serialConsole = new SerialConsole(scene, sim, () => boardPanel.boardId);
-const layout = new DockLayout(dock, editorArea, { [SERIAL_CONSOLE_ID]: serialConsole.element });
+// File explorer: the source files of the boards. A change is recorded in the
+// undo history at once (settle) and the grid redraws (requestRender).
+const fileExplorer = new FileExplorer({
+  project,
+  autoBoard: () => boardPanel.boardId,
+  changed: () => {
+    controller.history.settle();
+    view.requestRender();
+  },
+  undo: () => controller.history.undo(),
+  redo: () => controller.history.redo(),
+});
+const layout = new DockLayout(dock, editorArea, {
+  [SERIAL_CONSOLE_ID]: serialConsole.element,
+  [FILE_EXPLORER_ID]: fileExplorer.element,
+});
 const view = new GridView(canvas, scene, project.camera);
 // Overlays beside the selection follow the canvas when windows move around it.
 layout.api.onDidLayoutChange(view.requestRender);
@@ -55,6 +71,20 @@ const controller = new ProjectController(
       if (!file.camera && box) view.centerOn(box);
       view.cameraChanged();
     },
+    // Undo / redo. Board runtimes follow the parts through sim.update(): a
+    // board that comes back starts stopped with empty serial buffers, a
+    // changed program reloads (stopped), a board that is gone loses its
+    // emulator; an untouched board keeps running.
+    busy: () => editor.busy,
+    beforeRestore: () => {
+      editor.cancelGesture();
+      sim.update(); // drop runtimes of boards deleted since the last frame
+    },
+    afterRestore: () => {
+      editor.circuitRestored();
+      sim.update();
+      view.requestRender();
+    },
   },
   editorArea,
 );
@@ -66,9 +96,15 @@ const boardPanel = new BoardPanel(scene, view, sim, clock, editorArea, (partId) 
 });
 view.renderListeners.push(() => boardPanel.update());
 view.renderListeners.push(() => serialConsole.update()); // after the panel: Auto follows its board
+view.renderListeners.push(() => fileExplorer.update()); // Auto follows the board panel's board
 layout.onChange(() => serialConsole.update());
-// Every edit is followed by a frame, so this notices all of them.
+layout.onChange(() => fileExplorer.update());
+// Every edit is followed by a frame, so this notices all of them; the
+// history then records the edit once no gesture is in progress.
 view.renderListeners.push(() => project.checkForChanges());
+view.renderListeners.push(() => controller.history.settle());
+editor.onUndo = () => controller.history.undo();
+editor.onRedo = () => controller.history.redo();
 // Fixed column right of the dock; the dock reflows when it folds.
 createPalette(
   app,

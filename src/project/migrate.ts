@@ -3,6 +3,8 @@
 // PROJECT_VERSION and add one `{ from: N, up }` entry to MIGRATIONS.
 
 import { APP_NAME } from '../app';
+import { isBoardType, nextBoardId, type BoardCounters } from './boardid';
+import { defaultTree, type SourceFiles } from './filetree';
 import { PROJECT_VERSION, ProjectError } from './format';
 
 export type RawDocument = Record<string, unknown>;
@@ -23,8 +25,32 @@ const addJunctions: Migration = {
   up: (doc) => ('junctions' in doc ? doc : { ...doc, junctions: [] }),
 };
 
+/**
+ * v2 -> v3: v3 gives every board a boardId and a source tree. Boards get
+ * ids in draw order ("uno-1", "uno-2", ...) and the default tree; other
+ * parts are untouched. Malformed parts are left for validation to report.
+ */
+const addBoardFiles: Migration = {
+  from: 2,
+  up: (doc) => {
+    const counters: BoardCounters = {};
+    const files: SourceFiles = {};
+    const parts = !Array.isArray(doc.parts)
+      ? doc.parts
+      : doc.parts.map((p: unknown) => {
+          if (typeof p !== 'object' || p === null || Array.isArray(p)) return p;
+          const { id, typeId, ...rest } = p as RawDocument;
+          if (typeof typeId !== 'string' || !isBoardType(typeId) || 'boardId' in rest) return p;
+          const boardId = nextBoardId(counters, typeId);
+          files[boardId] = defaultTree();
+          return { id, typeId, boardId, ...rest };
+        });
+    return { ...doc, parts, files, boardCounters: counters };
+  },
+};
+
 /** All known steps, oldest first. */
-export const MIGRATIONS: readonly Migration[] = [addJunctions];
+export const MIGRATIONS: readonly Migration[] = [addJunctions, addBoardFiles];
 
 /** The oldest version any chain of steps can start from. */
 function oldestSupported(current: number, migrations: readonly Migration[]): number {

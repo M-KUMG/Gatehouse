@@ -1,5 +1,6 @@
 // New / Open / Save / Save as, their shortcuts, the unsaved-changes guard,
-// autosave and the offer to restore it at start-up.
+// autosave, the offer to restore it at start-up, and the undo history
+// (reset on every load; its shortcuts live in the editor, see interaction.ts).
 
 import { APP_NAME } from '../app';
 import { ask, toast } from './dialog';
@@ -9,6 +10,7 @@ import { ProjectError, stringifyProject, type ProjectFile } from './format';
 import type { Project } from './project';
 import { readProject } from './read';
 import { readAutosave, startAutosave } from './autosave';
+import { UndoManager, type UndoHooks } from './undo';
 
 /** What the rest of the app does around a load. */
 export interface LoadHooks {
@@ -26,12 +28,13 @@ export class ProjectController {
   /** The file Save writes to, once known. */
   private target: SaveTarget | null = null;
   private busy = false;
-  /** New / Open / Save and the project name. */
+  /** New / Open / Save / Undo / Redo and the project name. */
   readonly fileBar: FileBar;
+  readonly history: UndoManager;
 
   constructor(
     private readonly project: Project,
-    private readonly hooks: LoadHooks,
+    private readonly hooks: LoadHooks & UndoHooks,
     /** Where the file bar goes (the grid's area). */
     fileBarParent: HTMLElement,
   ) {
@@ -39,7 +42,11 @@ export class ProjectController {
       newProject: () => void this.newProject(),
       open: () => void this.open(),
       save: () => void this.save(false),
+      undo: () => this.history.undo(),
+      redo: () => this.history.redo(),
     });
+    this.history = new UndoManager(project, hooks);
+    this.history.onChange(() => this.fileBar.showHistory(this.history.canUndo, this.history.canRedo));
     project.onChange(this.refresh);
     this.refresh();
 
@@ -64,6 +71,7 @@ export class ProjectController {
       this.target = null;
       this.hooks.beforeLoad();
       this.project.clear();
+      this.history.reset();
       this.hooks.afterLoad(this.project.serialize());
     });
   }
@@ -105,6 +113,7 @@ export class ProjectController {
   private load(file: ProjectFile, dirty: boolean): void {
     this.hooks.beforeLoad();
     this.project.load(file, dirty);
+    this.history.reset();
     this.hooks.afterLoad(file);
   }
 

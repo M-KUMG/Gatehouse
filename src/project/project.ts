@@ -1,12 +1,12 @@
-// The one object that owns the editor's document: the circuit (Scene), the
-// camera and the project name. The grid, editor and simulation read and
+// The one object that owns the editor's document: the circuit (Scene, with
+// the boards' source files), the camera and the project name. The grid, editor and simulation read and
 // change the Scene and camera in place; this object turns them into a
 // ProjectFile and back, and tells listeners when the circuit changed (for
 // the unsaved-changes marker and autosave). No DOM here.
 
 import { clampZoom, type Camera } from '../camera';
 import { Scene } from '../model';
-import { DEFAULT_PROJECT_NAME, PROJECT_FORMAT, PROJECT_VERSION, emptyProject, type ProjectFile } from './format';
+import { DEFAULT_PROJECT_NAME, PROJECT_FORMAT, PROJECT_VERSION, emptyProject, type Circuit, type ProjectFile } from './format';
 
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
@@ -44,14 +44,24 @@ export class Project {
   serialize(): ProjectFile {
     const { x, y, zoom } = this.camera;
     return {
-      format: PROJECT_FORMAT,
-      version: PROJECT_VERSION,
-      name: this.currentName,
-      camera: { x, y, zoom },
-      parts: copy(this.scene.parts),
-      wires: copy(this.scene.wires),
-      junctions: copy(this.scene.junctions),
+      format: PROJECT_FORMAT, version: PROJECT_VERSION, name: this.currentName, camera: { x, y, zoom },
+      ...this.circuit(), boardCounters: this.scene.boardCounters,
     };
+  }
+
+  /** Just the circuit, as in serialize() (a deep copy). */
+  circuit(): Circuit {
+    const s = this.scene;
+    return { parts: copy(s.parts), wires: copy(s.wires), junctions: copy(s.junctions), files: copy(s.files) };
+  }
+
+  /**
+   * Put back a circuit from circuit() (undo / redo). Camera, name and the
+   * saved state stay; returning to the saved circuit makes it clean again.
+   */
+  restore(circuit: Circuit): void {
+    this.scene.restore(copy(circuit.parts), copy(circuit.wires), copy(circuit.junctions), copy(circuit.files));
+    this.checkForChanges();
   }
 
   /**
@@ -60,7 +70,7 @@ export class Project {
    * `dirty` marks the loaded content as not saved (e.g. a restored autosave).
    */
   load(file: ProjectFile, dirty = false): void {
-    this.scene.replace(copy(file.parts), copy(file.wires), copy(file.junctions));
+    this.scene.replace(copy(file.parts), copy(file.wires), copy(file.junctions), copy(file.files), copy(file.boardCounters));
     const cam = file.camera ?? { x: 0, y: 0, zoom: 1 };
     this.camera.x = cam.x;
     this.camera.y = cam.y;
@@ -94,9 +104,12 @@ export class Project {
     this.notify();
   }
 
-  /** What counts as an edit: the circuit, not the camera or the name. */
+  /**
+   * What counts as an edit: the circuit and the board files, not the
+   * camera, the name or the boardId counters (which only go up).
+   */
   private signature(): string {
-    return JSON.stringify([this.scene.parts, this.scene.wires, this.scene.junctions]);
+    return JSON.stringify([this.scene.parts, this.scene.wires, this.scene.junctions, this.scene.files]);
   }
 
   private notify(): void {

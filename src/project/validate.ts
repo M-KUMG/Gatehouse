@@ -9,6 +9,7 @@ import {
 } from '../model';
 import { getPart, type PartState } from '../parts';
 import { PROJECT_FORMAT, PROJECT_VERSION, ProjectError, type CameraState, type ProjectFile } from './format';
+import { boardsAndFiles, partBoardId } from './validateboards';
 
 type Obj = Record<string, unknown>;
 
@@ -106,13 +107,16 @@ function partState(v: unknown, typeId: string, where: string): PartState {
 
 function part(v: unknown, where: string): PlacedPart {
   const o = obj(v, where);
-  onlyKeys(o, ['id', 'typeId', 'col', 'row', 'rotation', 'state'], where);
+  onlyKeys(o, ['id', 'typeId', 'boardId', 'col', 'row', 'rotation', 'state'], where);
   const id = int(o, 'id', where);
   const typeId = str(o, 'typeId', where);
   if (!getPart(typeId)) fail(`${where} uses an unknown part type "${typeId}". It may need a newer version of the app.`);
+  const boardId = partBoardId(o, typeId, where);
   const rotation = int(o, 'rotation', where);
   if (!ROTATIONS.includes(rotation)) fail(`${where}.rotation must be 0, 90, 180 or 270 (got ${rotation}).`);
-  const out: PlacedPart = { id, typeId, col: int(o, 'col', where), row: int(o, 'row', where), rotation: rotation as Rotation };
+  const out: PlacedPart = {
+    id, typeId, ...(boardId ? { boardId } : {}), col: int(o, 'col', where), row: int(o, 'row', where), rotation: rotation as Rotation,
+  };
   if (o.state !== undefined) out.state = partState(o.state, typeId, `${where}.state`);
   return out;
 }
@@ -173,7 +177,7 @@ function camera(v: unknown): CameraState {
 
 /** Validate a document that is already at PROJECT_VERSION. */
 export function validateProject(doc: Obj): ProjectFile {
-  onlyKeys(doc, ['format', 'version', 'name', 'savedAt', 'camera', 'parts', 'wires', 'junctions'], 'The project');
+  onlyKeys(doc, ['format', 'version', 'name', 'savedAt', 'camera', 'parts', 'wires', 'junctions', 'files', 'boardCounters'], 'The project');
   if (doc.format !== PROJECT_FORMAT) fail(`"format" must be "${PROJECT_FORMAT}".`);
   if (doc.version !== PROJECT_VERSION) fail(`"version" must be ${PROJECT_VERSION}.`);
 
@@ -216,6 +220,7 @@ export function validateProject(doc: Obj): ProjectFile {
     if (count < 3) fail(`junctions[${i}] (id ${j.id}) has ${count} wire${count === 1 ? '' : 's'}; a junction joins 3 or more.`);
   });
 
+  const boards = boardsAndFiles(parts, doc.files, doc.boardCounters);
   const name = str(doc, 'name', 'The project');
   const savedAt = doc.savedAt === undefined ? undefined : str(doc, 'savedAt', 'The project');
   const view = doc.camera === undefined ? undefined : camera(doc.camera);
@@ -229,5 +234,7 @@ export function validateProject(doc: Obj): ProjectFile {
     parts,
     wires,
     junctions,
+    files: boards.files,
+    boardCounters: boards.boardCounters,
   };
 }

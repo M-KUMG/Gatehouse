@@ -74,12 +74,12 @@ describe('project files', () => {
     const p = new Project();
     p.load(readProject(V1_FIXTURE));
     const file = p.serialize();
-    expect(Object.keys(file)).toEqual(['format', 'version', 'name', 'camera', 'parts', 'wires', 'junctions']);
+    expect(Object.keys(file)).toEqual(['format', 'version', 'name', 'camera', 'parts', 'wires', 'junctions', 'files', 'boardCounters']);
     expect(Object.keys(file.wires[0])).toEqual(['id', 'from', 'to', 'waypoints']);
   });
 
   it('rejects files from a newer version with a clear message', () => {
-    expect(errorOf(variant((d) => (d.version = PROJECT_VERSION + 1)))).toMatch(/newer version.*v3.*up to v2/);
+    expect(errorOf(variant((d) => (d.version = PROJECT_VERSION + 1)))).toMatch(/newer version.*v4.*up to v3/);
   });
 
   it('rejects things that are not project files', () => {
@@ -204,16 +204,16 @@ describe('migrations', () => {
     expect(migrate(doc)).toEqual(doc);
   });
 
-  it('upgrades a v1 file to v2 by adding an empty junction list, nothing else', () => {
+  it('upgrades a v1 file (no boards) by adding an empty junction list and no board files', () => {
     const v1 = JSON.parse(V1_FIXTURE);
     const out = migrate(v1);
-    expect(out).toEqual({ ...v1, version: 2, junctions: [] });
+    expect(out).toEqual({ ...v1, version: 3, junctions: [], files: {}, boardCounters: {} });
     expect(v1.version).toBe(1);
-    // The loaded v1 file saves as v2 with the same parts and wires.
+    // The loaded v1 file saves as v3 with the same parts and wires.
     const p = new Project();
     p.load(readProject(V1_FIXTURE));
     const file = p.serialize();
-    expect(file.version).toBe(2);
+    expect(file.version).toBe(3);
     expect(file.junctions).toEqual([]);
     expect(file.wires).toEqual(v1.wires);
     expect(file.parts).toEqual(v1.parts);

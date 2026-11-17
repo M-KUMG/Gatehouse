@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && node scripts/third-party-licenses.mjs THIRD_PARTY_LICENSES.txt dist/THIRD_PARTY_LICENSES.txt",
+    "build": "tsc && vite build && node scripts/third-party-licenses.mjs THIRD_PARTY_LICENSES.txt dist/THIRD_PARTY_LICENSES.txt && node -e \"require('fs').copyFileSync('NOTICE', 'dist/NOTICE')\"",
     "typecheck": "tsc",
     "test": "vitest run",
     "start": "npm run build && electron .",

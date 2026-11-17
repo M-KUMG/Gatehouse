@@ -1,0 +1,151 @@
+Gatehouse: notices for third-party code that is not an npm package
+=================================================================
+
+Gatehouse itself is MIT licensed (see LICENSE). Third-party npm packages
+are listed in THIRD_PARTY_LICENSES.txt. This file covers code that came
+into Gatehouse another way.
+
+
+Built-in "Blink" program (src/mcu/programs/blink.ts)
+----------------------------------------------------
+
+The Intel HEX data in src/mcu/programs/blink.ts (BLINK_HEX) is the compiled
+form of src/mcu/programs/blink.c, which is original Gatehouse code. It was
+built with WinAVR 20100110 (avr-gcc 4.3.3, avr-libc 1.6.7):
+
+    avr-gcc -mmcu=atmega328p -Os -DF_CPU=16000000UL -o blink.elf blink.c
+    avr-objcopy -O ihex -R .eeprom blink.elf blink.hex
+
+The linker adds standard start-up code to every such program, so the hex
+also contains compiled code that is not ours (checked with the linker map):
+
+  - crtm328p.o from avr-libc: the interrupt vector table and the start-up
+    code that sets up the stack and calls main(). Licence: the avr-libc
+    licence below.
+  - _copy_data.o, _clear_bss.o and _exit.o from GCC's libgcc.a (avr5):
+    copying initialised data to RAM, clearing .bss, and the stop loop after
+    main() returns. See "GCC runtime library (libgcc)" below.
+
+Gatehouse ships this hex in its built JavaScript, so the notices below go
+with every copy of the built app (the web build and the Electron app).
+
+
+avr-libc licence
+----------------
+
+Copied verbatim from the "avr-libc License" section of the avr-libc user
+manual installed with WinAVR 20100110
+(C:\WinAVR\doc\avr-libc\avr-libc-user-manual\index.html):
+
+avr-libc can be freely used and redistributed, provided the following license conditions are met.
+
+Portions of avr-libc are Copyright (c) 1999-2008
+Werner Boellmann,
+Dean Camera,
+Pieter Conradie,
+Brian Dean,
+Keith Gudger,
+Wouter van Gulik,
+Bjoern Haase,
+Steinar Haugen,
+Peter Jansen,
+Reinhard Jessich,
+Magnus Johansson,
+Harald Kipp,
+Carlos Lamas,
+Cliff Lawson,
+Artur Lipowski,
+Marek Michalkiewicz,
+Todd C. Miller,
+Rich Neswold,
+Colin O'Flynn,
+Bob Paddock,
+Andrey Pashchenko,
+Reiner Patommel,
+Florin-Viorel Petrov,
+Alexander Popov,
+Michael Rickman,
+Theodore A. Roth,
+Juergen Schilling,
+Philip Soeberg,
+Anatoly Sokolov,
+Nils Kristian Strom,
+Michael Stumpf,
+Stefan Swanepoel,
+Helmut Wallner,
+Eric B. Weddington,
+Joerg Wunsch,
+Dmitry Xmelkov,
+Atmel Corporation,
+egnite Software GmbH,
+The Regents of the University of California.
+All rights reserved.
+
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions are met:
+
+   * Redistributions of source code must retain the above copyright
+     notice, this list of conditions and the following disclaimer.
+
+   * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in
+     the documentation and/or other materials provided with the
+     distribution.
+
+   * Neither the name of the copyright holders nor the names of
+     contributors may be used to endorse or promote products derived
+     from this software without specific prior written permission.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+   POSSIBILITY OF SUCH DAMAGE.
+
+
+GCC runtime library (libgcc)
+----------------------------
+
+The libgcc pieces listed above come from GCC (Copyright Free Software
+Foundation, Inc.), which is licensed under the GNU General Public License
+with an exception that allows linking its runtime code into programs
+without those programs becoming covered by the GPL. GCC 4.3.3 is older than
+the "GCC Runtime Library Exception" (GCC 4.4 and later, file
+COPYING.RUNTIME); in the 4.3 series the exception was written into the
+header of each runtime source file.
+
+Not found: the WinAVR install used to build the hex contains neither a
+COPYING.RUNTIME file nor the source of the AVR libgcc (libgcc.S), so the
+exact exception wording of the files linked here could not be copied from
+it and is not reproduced here. For comparison only, the same toolchain
+release has these exceptions in files that were found:
+
+  - GCC's own headers installed with it, for example
+    C:\WinAVR\lib\gcc\avr\4.3.3\include\stdarg.h, say:
+
+    "As a special exception, if you include this header file into source
+     files compiled by GCC, this header file does not by itself cause
+     the resulting executable to be covered by the GNU General Public
+     License.  This exception does not however invalidate any other
+     reasons why the executable file might be covered by the GNU General
+     Public License."
+
+  - The GCC 4.3.2 start-up file for the AVR32 port, gcc/config/avr32/crtn.asm
+    (in C:\WinAVR\source\avr32\gcc\4.3.2\30-gcc-4.3.2-avr32.patch), says:
+
+    "In addition to the permissions in the GNU General Public License, the
+     Free Software Foundation gives you unlimited permission to link the
+     compiled version of this file with other programs, and to distribute
+     those programs without any restriction coming from the use of this
+     file.  (The General Public License restrictions do apply in other
+     respects; for example, they cover modification of the file, and
+     distribution when not linked into another program.)"
+
+To do: copy the exception text from the header of gcc/config/avr/libgcc.S
+in the GCC 4.3.3 source release into this section.

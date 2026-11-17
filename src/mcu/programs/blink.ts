@@ -1,7 +1,8 @@
 // Built-in example program "Blink" for the Arduino Uno: pin 13 on for 1 s,
 // off for 1 s, and a line on the serial port (9600 baud) at each change.
 // Compiled from blink.c (next to this file, see its header for the command)
-// with avr-gcc; the program and this hex are original Gatehouse code.
+// with avr-gcc. The program is original Gatehouse code; the hex also holds
+// avr-libc and libgcc start-up code, whose notices are in NOTICE.
 
 export const BLINK_NAME = 'Blink';
 

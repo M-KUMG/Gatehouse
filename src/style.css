@@ -317,7 +317,7 @@ html, body {
   position: absolute;
   left: 10px;
   top: 10px;
-  z-index: 6;
+  z-index: 7; /* above the board panel (6) so the Windows menu is not hidden by it */
   display: flex;
   align-items: center;
   gap: 4px;
@@ -344,9 +344,14 @@ html, body {
   cursor: pointer;
 }
 
-.file-button:hover {
+.file-button:hover:not(:disabled) {
   border-color: #4ea1ff;
   color: #d8dbe0;
+}
+
+.file-button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .project-name {
