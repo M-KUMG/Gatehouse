@@ -4,7 +4,9 @@
 import { MAX_ZOOM, MIN_ZOOM } from '../camera';
 import { HexError, parseIntelHex } from '../mcu/hex';
 import type { BoardProgram } from '../mcu/board';
-import type { GridPoint, PinRef, PlacedPart, Rotation, Wire } from '../model';
+import {
+  endKey, isPinEnd, sameEnd, type GridPoint, type Junction, type PinRef, type PlacedPart, type Rotation, type Wire, type WireEnd,
+} from '../model';
 import { getPart, type PartState } from '../parts';
 import { PROJECT_FORMAT, PROJECT_VERSION, ProjectError, type CameraState, type ProjectFile } from './format';
 
@@ -134,13 +136,29 @@ function pinRef(v: unknown, parts: ReadonlyMap<number, PlacedPart>, where: strin
   return { partId, pinId };
 }
 
-function wire(v: unknown, parts: ReadonlyMap<number, PlacedPart>, where: string): Wire {
+function junction(v: unknown, where: string): Junction {
+  const o = obj(v, where);
+  onlyKeys(o, ['id', 'col', 'row'], where);
+  return { id: int(o, 'id', where), col: int(o, 'col', where), row: int(o, 'row', where) };
+}
+
+/** A wire end: a pin ({ partId, pinId }) or a junction ({ junctionId }). */
+function wireEnd(v: unknown, parts: ReadonlyMap<number, PlacedPart>, junctions: ReadonlySet<number>, where: string): WireEnd {
+  const o = obj(v, where);
+  if (!('junctionId' in o)) return pinRef(o, parts, where);
+  onlyKeys(o, ['junctionId'], where);
+  const junctionId = int(o, 'junctionId', where);
+  if (!junctions.has(junctionId)) fail(`${where} is connected to junction ${junctionId}, which is not in the project.`);
+  return { junctionId };
+}
+
+function wire(v: unknown, parts: ReadonlyMap<number, PlacedPart>, junctions: ReadonlySet<number>, where: string): Wire {
   const o = obj(v, where);
   onlyKeys(o, ['id', 'from', 'to', 'waypoints'], where);
   const id = int(o, 'id', where);
-  const from = pinRef(o.from, parts, `${where}.from`);
-  const to = pinRef(o.to, parts, `${where}.to`);
-  if (from.partId === to.partId && from.pinId === to.pinId) fail(`${where} connects a pin to itself.`);
+  const from = wireEnd(o.from, parts, junctions, `${where}.from`);
+  const to = wireEnd(o.to, parts, junctions, `${where}.to`);
+  if (sameEnd(from, to)) fail(`${where} connects ${isPinEnd(from) ? 'a pin' : 'a junction'} to itself.`);
   const waypoints = list(o.waypoints, `${where}.waypoints`).map((p, i) => point(p, `${where}.waypoints[${i}]`));
   return { id, from, to, waypoints };
 }
@@ -155,11 +173,11 @@ function camera(v: unknown): CameraState {
 
 /** Validate a document that is already at PROJECT_VERSION. */
 export function validateProject(doc: Obj): ProjectFile {
-  onlyKeys(doc, ['format', 'version', 'name', 'savedAt', 'camera', 'parts', 'wires'], 'The project');
+  onlyKeys(doc, ['format', 'version', 'name', 'savedAt', 'camera', 'parts', 'wires', 'junctions'], 'The project');
   if (doc.format !== PROJECT_FORMAT) fail(`"format" must be "${PROJECT_FORMAT}".`);
   if (doc.version !== PROJECT_VERSION) fail(`"version" must be ${PROJECT_VERSION}.`);
 
-  const ids = new Set<number>(); // parts and wires share one id space
+  const ids = new Set<number>(); // parts, wires and junctions share one id space
   const claim = (id: number, where: string): void => {
     if (id < 1) fail(`${where}.id must be 1 or more (got ${id}).`);
     if (ids.has(id)) fail(`${where}.id ${id} is used more than once.`);
@@ -172,14 +190,30 @@ export function validateProject(doc: Obj): ProjectFile {
     return out;
   });
   const byId = new Map(parts.map((p) => [p.id, p]));
+  const points = new Map<string, number>();
+  const junctions = list(doc.junctions, 'junctions').map((j, i) => {
+    const out = junction(j, `junctions[${i}]`);
+    claim(out.id, `junctions[${i}]`);
+    const at = `${out.col},${out.row}`;
+    const other = points.get(at);
+    if (other !== undefined) fail(`junctions[${i}] is at the same point (${at}) as junctions[${other}].`);
+    points.set(at, i);
+    return out;
+  });
+  const junctionIds = new Set(junctions.map((j) => j.id));
   const seen = new Set<string>();
   const wires = list(doc.wires, 'wires').map((w, i) => {
-    const out = wire(w, byId, `wires[${i}]`);
+    const out = wire(w, byId, junctionIds, `wires[${i}]`);
     claim(out.id, `wires[${i}]`);
-    const ends = [`${out.from.partId}.${out.from.pinId}`, `${out.to.partId}.${out.to.pinId}`].sort().join('|');
-    if (seen.has(ends)) fail(`wires[${i}] duplicates another wire between the same two pins.`);
+    const ends = [endKey(out.from), endKey(out.to)].sort().join('|');
+    if (seen.has(ends)) fail(`wires[${i}] duplicates another wire between the same two ends.`);
     seen.add(ends);
     return out;
+  });
+  // A junction only exists where three or more wires meet (see Scene.tidyJunctions).
+  junctions.forEach((j, i) => {
+    const count = wires.filter((w) => [w.from, w.to].some((e) => !isPinEnd(e) && e.junctionId === j.id)).length;
+    if (count < 3) fail(`junctions[${i}] (id ${j.id}) has ${count} wire${count === 1 ? '' : 's'}; a junction joins 3 or more.`);
   });
 
   const name = str(doc, 'name', 'The project');
@@ -194,5 +228,6 @@ export function validateProject(doc: Obj): ProjectFile {
     ...(view ? { camera: view } : {}),
     parts,
     wires,
+    junctions,
   };
 }

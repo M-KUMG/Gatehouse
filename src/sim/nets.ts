@@ -12,7 +12,11 @@ export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readon
   npn: ['c', 'b', 'e'],
   ground: ['gnd'],
   open: [],
+  node: ['n'],
 };
+
+/** The one pin of a `node` model (a wire junction). */
+export const NODE_PIN = 'n';
 
 /** Pin names of a model, in a fixed order. */
 export function modelPins(model: ComponentModel): readonly string[] {

@@ -32,8 +32,27 @@ export interface SliceResult {
   drives: string;
   /** Changes within the slice, in order. */
   events: PinEvent[];
-  /** Bytes the program sent on its serial port (USART) during the slice. */
-  serial: number[];
+  /**
+   * Bytes the program sent during the slice, by serial port id (see
+   * BoardSpec.serialPorts). Only ports that sent something are present.
+   */
+  serial: SerialBytes;
+}
+
+/** Bytes per serial port id. */
+export type SerialBytes = Record<string, number[]>;
+
+/**
+ * One serial port a kind of board offers (an AVR USART, an RP2040 UART, a
+ * USB CDC port...). Data only: the serial console lists these, e.g. a Mega
+ * would have four entries ("Serial", "Serial1".."Serial3"), a Pico three
+ * ("UART0", "UART1", "USB serial").
+ */
+export interface SerialPortDef {
+  /** Stable id, used as the key in SliceResult.serial and the serial store. */
+  id: string;
+  /** Shown to the person, e.g. "Serial (USART0)". */
+  name: string;
 }
 
 /** What the circuit feeds back to the pins, per io pin (in `io` order). */
@@ -74,6 +93,8 @@ export interface BoardSpec {
   flashBytes: number;
   io: readonly IoPinDef[];
   electrical: BoardElectrical;
+  /** Serial ports, in the order the console lists them (first = default). */
+  serialPorts: readonly SerialPortDef[];
   /** A new emulator, reset, with `flash` as its program memory. */
   create(flash: Uint8Array): BoardEmulator;
 }
@@ -89,4 +110,9 @@ export interface BoardEmulator {
   /** Execute at least `cycles` CPU cycles (whole instructions; the overshoot is made up next time). */
   run(cycles: number): SliceResult;
   setInputs(inputs: BoardInputs): void;
+  /**
+   * Baud rate the program set up on a serial port (from the chip's baud
+   * registers), or null when the port is not enabled or the rate is unknown.
+   */
+  serialBaud(port: string): number | null;
 }

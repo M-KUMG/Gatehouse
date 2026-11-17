@@ -183,3 +183,11 @@ export const PARTS: readonly PartType[] = [
 export function getPart(id: string): PartType | undefined {
   return PARTS.find((p) => p.id === id);
 }
+
+/**
+ * Short name of a placed board, e.g. "Arduino Uno #4": the type name and the
+ * part id, which stays the same while the part exists (also across saving).
+ */
+export function boardLabel(part: { id: number; typeId: string }): string {
+  return `${getPart(part.typeId)?.name ?? 'Board'} #${part.id}`;
+}

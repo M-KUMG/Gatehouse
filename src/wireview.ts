@@ -1,25 +1,28 @@
 // Canvas drawing of wires, pins, the wire being drawn and warning badges.
 // Called by GridView with the canvas in CSS pixels.
 
+import { MIN_FLOW_AMPS, type FlowPhases } from './animation';
 import type { Point } from './camera';
+import { findContacts } from './contacts';
 import type { GridView } from './grid';
-import { footprint, samePin, type GridPoint, type PinRef, type Scene } from './model';
+import { anchorPoint, isTap, type Anchor } from './junctions';
+import { endKey, footprint, isPinEnd, samePin, type GridPoint, type Scene, type WireEnd } from './model';
 import { getPart } from './parts';
-import { findPin, pinsOf, routeFrom, wireRoute, type Pin } from './pins';
+import { endPoint, pinsOf, routeFrom, wireRoute, type Pin } from './pins';
 
-/** A wire being drawn: fixed start, corners so far, and the end under the cursor. */
+/** A wire being drawn: fixed start, corners so far, the end under the cursor and what it would attach to. */
 export interface WireDraft {
-  from: PinRef;
+  from: Anchor;
   waypoints: GridPoint[];
   end: GridPoint;
-  endPin: PinRef | null;
+  /** Pin, junction or wire point the wire would end on if released here. */
+  target: Anchor | null;
 }
 
 const SELECT = '#4ea1ff';
 const CASING = 'rgba(12, 13, 15, 0.85)';
 const LOW = [98, 134, 164]; // wire colour at 0 V...
 const HIGH = [240, 124, 70]; // ...and at the highest voltage in the circuit
-const MIN_FLOW_AMPS = 1e-5; // below this no current is animated
 
 function wireWidth(view: GridView): number {
   return Math.min(6, Math.max(1.5, 2.6 * view.camera.zoom));
@@ -48,13 +51,32 @@ function toCanvas(view: GridView, path: readonly GridPoint[]): Point[] {
   return path.map((p) => view.cellToCanvas(p.col, p.row));
 }
 
-/** Draws every wire. Returns true while current is flowing (the dashes need more frames). */
-export function drawWires(view: GridView, ctx: CanvasRenderingContext2D, scene: Scene, timeMs: number): boolean {
+function junctionDot(view: GridView, ctx: CanvasRenderingContext2D, at: GridPoint, radius: number, color: string): void {
+  const p = view.cellToCanvas(at.col, at.row);
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, radius, 0, 2 * Math.PI);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = CASING;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+/**
+ * Draws every wire, the solder blobs at wire ends and the junction dots
+ * (three or more wire ends at a pin, junction nodes, and points where pins
+ * touch each other or lie on a wire). Returns the largest wire current, so
+ * the caller knows whether the current dashes need more frames.
+ */
+export function drawWires(view: GridView, ctx: CanvasRenderingContext2D, scene: Scene, flow: FlowPhases): number {
   const width = wireWidth(view);
   const radius = 0.3 * view.cellPx;
   const sim = view.sim;
-  const ends = new Map<string, { pin: PinRef; count: number; color: string }>();
-  let animating = false;
+  const maxVolts = sim?.maxVoltage ?? 0;
+  const ends = new Map<string, { end: WireEnd; count: number; color: string }>();
+  const target = view.draft?.target;
+  const highlighted = target && isTap(target) ? target.wireId : view.hoverWireId;
+  let maxAmps = 0;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
@@ -62,13 +84,13 @@ export function drawWires(view: GridView, ctx: CanvasRenderingContext2D, scene: 
     const path = wireRoute(scene, wire);
     if (!path) continue;
     const pts = toCanvas(view, path);
-    const color = voltageColor(sim?.pinVoltage(wire.from), sim?.maxVoltage ?? 0);
+    const color = voltageColor(sim?.pinVoltage(wire.from), maxVolts);
     trace(ctx, pts, radius);
     if (view.selectedWires.has(wire.id)) {
       ctx.strokeStyle = 'rgba(78, 161, 255, 0.55)';
       ctx.lineWidth = width + 7;
       ctx.stroke();
-    } else if (view.hoverWireId === wire.id) {
+    } else if (highlighted === wire.id) {
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
       ctx.lineWidth = width + 6;
       ctx.stroke();
@@ -81,11 +103,11 @@ export function drawWires(view: GridView, ctx: CanvasRenderingContext2D, scene: 
     ctx.stroke();
 
     const amps = sim?.wireCurrent(wire.id) ?? 0;
+    maxAmps = Math.max(maxAmps, Math.abs(amps));
     if (Math.abs(amps) >= MIN_FLOW_AMPS) {
       // Bright dashes drifting the way conventional current flows; faster for more current.
       const period = width * 5.5;
-      const speed = view.camera.zoom * (12 + 14 * Math.log10(Math.abs(amps) / MIN_FLOW_AMPS));
-      const shift = ((timeMs / 1000) * speed) % period;
+      const shift = flow.phase(wire.id, amps) * period;
       ctx.setLineDash([width * 1.2, period - width * 1.2]);
       ctx.lineDashOffset = amps > 0 ? -shift : shift;
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
@@ -93,31 +115,48 @@ export function drawWires(view: GridView, ctx: CanvasRenderingContext2D, scene: 
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.lineDashOffset = 0;
-      animating = true;
     }
 
-    for (const pin of [wire.from, wire.to]) {
-      const key = `${pin.partId}:${pin.pinId}`;
-      const end = ends.get(key);
-      if (end) end.count++;
-      else ends.set(key, { pin, count: 1, color });
+    for (const end of [wire.from, wire.to]) {
+      const key = endKey(end);
+      const known = ends.get(key);
+      if (known) known.count++;
+      else ends.set(key, { end, count: 1, color });
     }
   }
 
-  // Solder blob where a wire meets a pin; a bigger junction dot where three or more meet.
-  for (const { pin, count, color } of ends.values()) {
-    const at = findPin(scene, pin);
-    if (!at) continue;
-    const p = view.cellToCanvas(at.col, at.row);
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, count >= 3 ? width * 1.45 : width * 0.8, 0, 2 * Math.PI);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.strokeStyle = CASING;
-    ctx.lineWidth = 1;
-    ctx.stroke();
+  // Solder blob where a wire meets a pin; a bigger junction dot where three or more meet, and on every junction node.
+  const big = width * 1.45;
+  for (const { end, count, color } of ends.values()) {
+    const at = endPoint(scene, end);
+    if (at) junctionDot(view, ctx, at, count >= 3 || !isPinEnd(end) ? big : width * 0.8, color);
   }
-  return animating;
+  // Pins touching pins, and pins lying on a wire, are connected there too.
+  for (const point of findContacts(scene).points) {
+    junctionDot(view, ctx, point, big, voltageColor(sim?.pinVoltage(point.end), maxVolts));
+  }
+  return maxAmps;
+}
+
+/** A ring and dot where a wire would attach: `filled` for a target that a release connects to. */
+function attachMark(view: GridView, ctx: CanvasRenderingContext2D, at: GridPoint, filled: boolean): void {
+  const p = view.cellToCanvas(at.col, at.row);
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 7, 0, 2 * Math.PI);
+  ctx.fillStyle = filled ? 'rgba(78, 161, 255, 0.3)' : 'rgba(78, 161, 255, 0.12)';
+  ctx.fill();
+  ctx.strokeStyle = SELECT;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, filled ? 3.2 : 2.4, 0, 2 * Math.PI);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+}
+
+/** Where pressing and dragging on the hovered wire would start a new wire. */
+export function drawTapHint(view: GridView, ctx: CanvasRenderingContext2D): void {
+  if (view.hoverTap && !view.draft) attachMark(view, ctx, view.hoverTap, false);
 }
 
 function drawPinDot(view: GridView, ctx: CanvasRenderingContext2D, pin: Pin, highlight: boolean): void {
@@ -143,12 +182,14 @@ function drawPinDot(view: GridView, ctx: CanvasRenderingContext2D, pin: Pin, hig
 /** Pin dots: on the hovered part, and on every part while a wire is being drawn. */
 export function drawPins(view: GridView, ctx: CanvasRenderingContext2D, scene: Scene): void {
   const draft = view.draft;
-  const active = draft?.endPin ?? view.hoverPin;
+  const asPin = (a: Anchor | null | undefined) => (a && !isTap(a) && isPinEnd(a) ? a : null);
+  const active = draft ? asPin(draft.target) : view.hoverPin;
+  const start = asPin(draft?.from);
   for (const part of scene.parts) {
     const show = draft !== null || part.id === view.hoverId || part.id === view.hoverPin?.partId;
     if (!show) continue;
     for (const pin of pinsOf(part)) {
-      const highlight = (active !== null && samePin(pin.ref, active)) || (draft !== null && samePin(pin.ref, draft.from));
+      const highlight = (active !== null && samePin(pin.ref, active)) || (start !== null && samePin(pin.ref, start));
       drawPinDot(view, ctx, pin, highlight);
     }
   }
@@ -156,9 +197,9 @@ export function drawPins(view: GridView, ctx: CanvasRenderingContext2D, scene: S
 
 export function drawDraft(view: GridView, ctx: CanvasRenderingContext2D, scene: Scene): void {
   const draft = view.draft;
-  const from = draft && findPin(scene, draft.from);
+  const from = draft && anchorPoint(scene, draft.from);
   if (!draft || !from) return;
-  const to = draft.endPin && findPin(scene, draft.endPin);
+  const to = draft.target && anchorPoint(scene, draft.target);
   const pts = toCanvas(view, routeFrom(from, draft.waypoints, to ?? draft.end, to ?? null));
   const width = wireWidth(view);
   ctx.lineCap = 'round';
@@ -177,6 +218,9 @@ export function drawDraft(view: GridView, ctx: CanvasRenderingContext2D, scene: 
     ctx.arc(p.x, p.y, Math.max(2, width * 0.7), 0, 2 * Math.PI);
     ctx.fill();
   }
+  // Starting on, or about to end on, a wire or junction: mark the point (pins are marked by drawPins).
+  if (isTap(draft.from) || !isPinEnd(draft.from)) attachMark(view, ctx, from, true);
+  if (to && draft.target && (isTap(draft.target) || !isPinEnd(draft.target))) attachMark(view, ctx, to, true);
 }
 
 /** A red "!" on parts that carry more current than they should. */

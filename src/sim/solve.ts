@@ -101,6 +101,7 @@ function buildElements(input: SimInput, netOf: (part: number, pin: string) => nu
       }
       case 'ground':
       case 'open':
+      case 'node': // only joins the wires on its net
         break;
     }
   }

@@ -2,7 +2,7 @@
 // pin or wire.
 
 import { formatSI } from './format';
-import type { PlacedPart, Wire } from './model';
+import type { JunctionRef, PlacedPart, Wire } from './model';
 import { getPart } from './parts';
 import type { Pin } from './pins';
 import type { Simulation } from './simulation';
@@ -52,6 +52,11 @@ export function describePin(pin: Pin, sim: Simulation): ReadoutText {
     title: `${getPart(pin.part.typeId)?.name ?? 'Part'} · pin ${pin.def.name}`,
     lines: volts === undefined ? [] : [formatSI(volts, 'V')],
   };
+}
+
+export function describeJunction(end: JunctionRef, sim: Simulation): ReadoutText {
+  const volts = sim.pinVoltage(end);
+  return { title: 'Wire junction', lines: volts === undefined ? [] : [formatSI(volts, 'V')] };
 }
 
 export function describeWire(wire: Wire, sim: Simulation): ReadoutText {

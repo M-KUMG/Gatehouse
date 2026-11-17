@@ -54,6 +54,12 @@
   inset: 0;
 }
 
+/* Windows with real content (the content fills the wrapper). */
+.gh-window-host {
+  position: absolute;
+  inset: 0;
+}
+
 /* Placeholder windows. */
 .gh-window {
   position: absolute;

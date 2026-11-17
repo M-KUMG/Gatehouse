@@ -29,6 +29,8 @@ export type ComponentModel =
   | { kind: 'ground' }
   /** Conducts nothing (e.g. a burned-out part). No pins of its own. */
   | { kind: 'open' }
+  /** A point where wires meet (a wire junction): no resistance, it only joins nets. Pin: n. */
+  | { kind: 'node' }
   /**
    * A microcontroller board. Its `gnd` pin is a reference like a ground
    * part (a USB-powered board shares the computer's ground). Each rail pin

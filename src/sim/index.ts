@@ -2,7 +2,7 @@
 
 export { BC547, RED_LED } from './devices';
 export { linkCurrents } from './flow';
-export { modelPins, terminalKey } from './nets';
+export { NODE_PIN, modelPins, terminalKey } from './nets';
 export { solveCircuit } from './solve';
 export type {
   ComponentModel, PartResult, PinDrive, Reference, SimComponent, SimInput, SimResult, Terminal,

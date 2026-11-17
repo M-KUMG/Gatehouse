@@ -1,12 +1,13 @@
 // Panel for a microcontroller board (top-left of the grid, under the file bar): its
-// program (Open .hex), Run / Pause / Reset, simulated time and speed, and
-// the serial output. It follows the board last selected.
+// program (Open .hex), Run / Pause / Reset, simulated time and speed, and a
+// link to the Serial console window (which shows the serial output). It
+// follows the board last selected; the console's "Auto" choice follows it too.
 
 import type { BoardClock } from './boardclock';
 import type { GridView } from './grid';
 import { HexError, parseIntelHex } from './mcu/hex';
 import type { PlacedPart, Scene } from './model';
-import { getPart } from './parts';
+import { boardLabel, getPart } from './parts';
 import type { Simulation } from './simulation';
 
 export class BoardPanel {
@@ -17,12 +18,11 @@ export class BoardPanel {
   private readonly resetButton = button('Reset', 'Restart the program from the beginning');
   private readonly openButton = button('Open .hex…', 'Load a compiled program (Intel HEX, e.g. from the Arduino IDE "Export compiled binary")');
   private readonly status = document.createElement('div');
-  private readonly serial = document.createElement('pre');
+  private readonly consoleLink = document.createElement('button');
   private readonly fileInput = document.createElement('input');
   private partId: number | null = null;
   /** A failed Open .hex, shown until the next load or board change. */
   private loadError: string | null = null;
-  private shown = '';
 
   constructor(
     private readonly scene: Scene,
@@ -31,21 +31,22 @@ export class BoardPanel {
     private readonly clock: BoardClock,
     /** Where the panel goes (the grid's area). */
     parent: HTMLElement,
+    /** Open (or bring forward) the Serial console showing this board. */
+    openConsole: (partId: number) => void,
   ) {
     const el = this.el;
     el.className = 'board-panel';
     this.title.className = 'board-title';
     this.program.className = 'board-program';
     this.status.className = 'board-status';
-    this.serial.className = 'board-serial';
-    this.serial.title = 'Serial output (what the program sends with Serial.print)';
+    this.consoleLink.type = 'button';
+    this.consoleLink.className = 'board-link';
+    this.consoleLink.textContent = 'Serial console';
+    this.consoleLink.title = 'Show what this board sends on its serial port (Serial.print) in the Serial console window';
     const buttons = document.createElement('div');
     buttons.className = 'board-buttons';
     buttons.append(this.runButton, this.resetButton, this.openButton);
-    const serialLabel = document.createElement('div');
-    serialLabel.className = 'board-label';
-    serialLabel.textContent = 'Serial output';
-    el.append(this.title, this.program, buttons, this.status, serialLabel, this.serial);
+    el.append(this.title, this.program, buttons, this.status, this.consoleLink);
     this.fileInput.type = 'file';
     this.fileInput.accept = '.hex,.ihx,.ihex,text/plain';
     this.fileInput.style.display = 'none';
@@ -61,6 +62,14 @@ export class BoardPanel {
     });
     this.openButton.addEventListener('click', () => this.fileInput.click());
     this.fileInput.addEventListener('change', () => void this.openFile());
+    this.consoleLink.addEventListener('click', () => {
+      if (this.partId !== null) openConsole(this.partId);
+    });
+  }
+
+  /** The board the panel shows (also what the console's "Auto" follows), or null. */
+  get boardId(): number | null {
+    return this.partId;
   }
 
   /** Call after every frame. */
@@ -74,7 +83,7 @@ export class BoardPanel {
     const type = getPart(part.typeId);
     const rt = this.sim.boards.get(part.id);
     const program = part.state?.program;
-    this.title.textContent = type?.name ?? 'Board';
+    this.title.textContent = type ? boardLabel(part) : 'Board';
     this.program.textContent = program ? `Program: ${program.name}` : 'No program loaded';
     this.runButton.textContent = rt?.running ? 'Pause' : 'Run';
     this.runButton.disabled = !rt?.emulator;
@@ -91,14 +100,6 @@ export class BoardPanel {
     }
     this.status.textContent = text;
     this.status.classList.toggle('error', error !== null);
-
-    const serial = rt?.serial ?? '';
-    if (serial !== this.shown) {
-      const atBottom = this.serial.scrollTop + this.serial.clientHeight >= this.serial.scrollHeight - 4;
-      this.serial.textContent = serial;
-      this.shown = serial;
-      if (atBottom) this.serial.scrollTop = this.serial.scrollHeight;
-    }
   }
 
   /** The selected board, else the one shown before (if it still exists), else the first board. */

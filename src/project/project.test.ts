@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EXAMPLES } from '../examples';
+import { connect } from '../junctions';
 import { PROJECT_VERSION, ProjectError, stringifyProject } from './format';
 import { migrate, type Migration } from './migrate';
 import { Project } from './project';
@@ -73,12 +74,12 @@ describe('project files', () => {
     const p = new Project();
     p.load(readProject(V1_FIXTURE));
     const file = p.serialize();
-    expect(Object.keys(file)).toEqual(['format', 'version', 'name', 'camera', 'parts', 'wires']);
+    expect(Object.keys(file)).toEqual(['format', 'version', 'name', 'camera', 'parts', 'wires', 'junctions']);
     expect(Object.keys(file.wires[0])).toEqual(['id', 'from', 'to', 'waypoints']);
   });
 
   it('rejects files from a newer version with a clear message', () => {
-    expect(errorOf(variant((d) => (d.version = PROJECT_VERSION + 1)))).toMatch(/newer version.*v2.*up to v1/);
+    expect(errorOf(variant((d) => (d.version = PROJECT_VERSION + 1)))).toMatch(/newer version.*v3.*up to v2/);
   });
 
   it('rejects things that are not project files', () => {
@@ -131,7 +132,7 @@ describe('project files', () => {
     const uno = b.scene.parts.find((p) => p.typeId === 'uno')!;
     expect(uno.state?.program?.name).toBe('Blink');
     expect(Object.keys(uno.state ?? {})).toEqual(['program']); // nothing about running
-    expect(b.scene.wires.some((w) => w.from.pinId === 'd13' || w.to.pinId === 'd13')).toBe(true);
+    expect(b.scene.wires.some((w) => [w.from, w.to].some((e) => 'pinId' in e && e.pinId === 'd13'))).toBe(true);
   });
 
   it('rejects a board program that is not valid Intel HEX, and programs on other parts', () => {
@@ -199,7 +200,81 @@ describe('migrations', () => {
   });
 
   it('leaves current files alone', () => {
-    const doc = JSON.parse(V1_FIXTURE);
+    const doc = { ...JSON.parse(V1_FIXTURE), version: PROJECT_VERSION, junctions: [] };
     expect(migrate(doc)).toEqual(doc);
+  });
+
+  it('upgrades a v1 file to v2 by adding an empty junction list, nothing else', () => {
+    const v1 = JSON.parse(V1_FIXTURE);
+    const out = migrate(v1);
+    expect(out).toEqual({ ...v1, version: 2, junctions: [] });
+    expect(v1.version).toBe(1);
+    // The loaded v1 file saves as v2 with the same parts and wires.
+    const p = new Project();
+    p.load(readProject(V1_FIXTURE));
+    const file = p.serialize();
+    expect(file.version).toBe(2);
+    expect(file.junctions).toEqual([]);
+    expect(file.wires).toEqual(v1.wires);
+    expect(file.parts).toEqual(v1.parts);
+  });
+});
+
+describe('junctions in project files (v2)', () => {
+  /** A project with a resistor divider tapped in the middle of a wire: one junction. */
+  function tapped(): Project {
+    const p = new Project();
+    const s = p.scene;
+    const r1 = s.add({ typeId: 'resistor', col: 0, row: 0, rotation: 0 });
+    const r2 = s.add({ typeId: 'resistor', col: 10, row: 0, rotation: 0 });
+    const r3 = s.add({ typeId: 'resistor', col: 4, row: 6, rotation: 90 });
+    const w = s.addWire({ partId: r1.id, pinId: 'b' }, { partId: r2.id, pinId: 'a' })!;
+    // r3 (rotated) has pin a at its top; join it to the middle of w at (7, 1).
+    expect(connect(s, { wireId: w.id, col: 7, row: 1 }, { partId: r3.id, pinId: 'a' }, [])).not.toBeNull();
+    expect(s.junctions).toHaveLength(1);
+    return p;
+  }
+
+  it('round-trips: serialize -> load -> serialize is unchanged', () => {
+    const a = tapped();
+    const first = a.serialize();
+    expect(first.junctions).toEqual([{ id: a.scene.junctions[0].id, col: 7, row: 1 }]);
+    const b = new Project();
+    b.load(readProject(stringifyProject(first)));
+    expect(b.serialize()).toEqual(first);
+    expect(stringifyProject(b.serialize())).toBe(stringifyProject(first));
+  });
+
+  /** The tapped project as a document, changed by `edit`, back to text. */
+  const edited = (edit: (doc: any) => void): string => {
+    const doc = JSON.parse(stringifyProject(tapped().serialize()));
+    edit(doc);
+    return JSON.stringify(doc);
+  };
+
+  it('rejects dangling junction references', () => {
+    expect(errorOf(edited((d) => (d.wires[0].to = { junctionId: 999 })))).toMatch(
+      /wires\[0\]\.to is connected to junction 999, which is not in the project/,
+    );
+    expect(errorOf(edited((d) => (d.junctions = [])))).toMatch(/junction \d+, which is not in the project/);
+    expect(errorOf(edited((d) => (d.wires[0].to = { junctionId: 'x' })))).toMatch(/junctionId must be a number/);
+  });
+
+  it('rejects junctions with too few wires, duplicates and loops', () => {
+    expect(errorOf(edited((d) => d.wires.pop()))).toMatch(/junctions\[0\] \(id \d+\) has 2 wires; a junction joins 3 or more/);
+    expect(errorOf(edited((d) => d.junctions.push({ ...d.junctions[0], id: 500 })))).toMatch(
+      /junctions\[1\] is at the same point \(7,1\) as junctions\[0\]/,
+    );
+    expect(errorOf(edited((d) => (d.junctions[0].id = d.parts[0].id)))).toMatch(/is used more than once/);
+    expect(errorOf(edited((d) => d.wires.push({ ...d.wires[2], id: 600 })))).toMatch(/duplicates another wire between the same two ends/);
+    expect(errorOf(edited((d) => (d.wires[0].from = d.wires[0].to)))).toMatch(/connects a junction to itself/);
+    expect(errorOf(edited((d) => (d.junctions[0].extra = 1)))).toMatch(/junctions\[0\] has an unknown field "extra"/);
+  });
+
+  it('a rejected v2 file leaves the current project untouched', () => {
+    const p = tapped();
+    const before = p.serialize();
+    expect(() => p.load(readProject(edited((d) => (d.wires[1].from = { junctionId: 42 }))))).toThrow(ProjectError);
+    expect(p.serialize()).toEqual(before);
   });
 });

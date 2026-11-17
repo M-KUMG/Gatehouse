@@ -7,7 +7,7 @@
 
 import { PinState, type AVRIOPort } from 'avr8js';
 import type {
-  BoardElectrical, BoardEmulator, BoardInputs, BoardSpec, DriveCode, IoPinDef, PinEvent, SliceResult,
+  BoardElectrical, BoardEmulator, BoardInputs, BoardSpec, DriveCode, IoPinDef, PinEvent, SerialPortDef, SliceResult,
 } from '../board';
 import { ATMEGA328P_FLASH_BYTES, Atmega328p } from './atmega328p';
 
@@ -37,6 +37,10 @@ export const UNO_ELECTRICAL: BoardElectrical = {
   highAbove: 3.0,
   lowBelow: 1.5,
 };
+
+/** The Uno's one serial port: USART0 on d0 (RX) / d1 (TX), also the USB link. */
+export const UNO_SERIAL: SerialPortDef = { id: 'usart0', name: 'Serial (USART0)' };
+export const UNO_SERIAL_PORTS: readonly SerialPortDef[] = [UNO_SERIAL];
 
 const CODES: Record<PinState, DriveCode> = {
   [PinState.High]: 'H',
@@ -80,7 +84,8 @@ export class UnoEmulator implements BoardEmulator {
     const start = this.chip.cycles;
     const drives = this.lastDrives;
     this.chip.run(cycles);
-    const result: SliceResult = { start, end: this.chip.cycles, drives, events: this.events, serial: this.serial };
+    const serial = this.serial.length > 0 ? { [UNO_SERIAL.id]: this.serial } : {};
+    const result: SliceResult = { start, end: this.chip.cycles, drives, events: this.events, serial };
     this.events = [];
     this.serial = [];
     return result;
@@ -95,6 +100,12 @@ export class UnoEmulator implements BoardEmulator {
     this.inputs = [...inputs.digital];
   }
 
+  serialBaud(port: string): number | null {
+    const usart = this.chip.usart;
+    if (port !== UNO_SERIAL.id || !(usart.txEnable || usart.rxEnable)) return null;
+    return usart.baudRate;
+  }
+
   private onPortChange = (): void => {
     const drives = this.drives();
     if (drives === this.lastDrives) return;
@@ -107,5 +118,6 @@ export const UNO_SPEC: BoardSpec = {
   flashBytes: ATMEGA328P_FLASH_BYTES,
   io: UNO_IO,
   electrical: UNO_ELECTRICAL,
+  serialPorts: UNO_SERIAL_PORTS,
   create: (flash) => new UnoEmulator(flash),
 };

@@ -1,10 +1,11 @@
+import { FlowPhases, frameSeconds, needsAnimation } from './animation';
 import { ART_CELL } from './art/common';
 import { screenToWorld, worldToScreen, zoomAround, type Camera, type Point } from './camera';
-import { footprint, type CellBox, type PinRef, type Placement, type Scene } from './model';
+import { footprint, type CellBox, type GridPoint, type PinRef, type Placement, type Scene } from './model';
 import { getPart } from './parts';
 import type { SimView } from './simulation';
 import { getSprite, partLook } from './sprites';
-import { drawDraft, drawPins, drawWarnings, drawWires, type WireDraft } from './wireview';
+import { drawDraft, drawPins, drawTapHint, drawWarnings, drawWires, type WireDraft } from './wireview';
 
 export const GRID_SIZE = 20; // world units between minor lines
 const MAJOR_EVERY = 5; // every Nth line is drawn stronger
@@ -35,6 +36,8 @@ export class GridView {
   hoverId: number | null = null;
   hoverWireId: number | null = null;
   hoverPin: PinRef | null = null;
+  /** Grid point on the hovered wire where a wire would attach (press and drag there to start one). */
+  hoverTap: GridPoint | null = null;
   /** Wire being drawn. */
   draft: WireDraft | null = null;
   /** Latest simulation results, for glow, wire colours and warnings. */
@@ -55,6 +58,10 @@ export class GridView {
   private lastX = 0;
   private lastY = 0;
   private frame = 0;
+  /** Timestamp of the previous frame while animating, else null. */
+  private lastFrame: number | null = null;
+  /** Phase of the current dashes per wire (visual only). */
+  private readonly flow = new FlowPhases();
 
   constructor(
     readonly canvas: HTMLCanvasElement,
@@ -78,19 +85,42 @@ export class GridView {
     // docked windows and the parts menu: redraw whenever its own box changes.
     new ResizeObserver(this.requestRender).observe(canvas);
 
-    this.render();
+    this.onFrame(performance.now());
   }
 
   get isPanning(): boolean {
     return this.panning;
   }
 
+  /**
+   * Draw on the next animation frame (once, however often it is asked).
+   * While something moves on its own (current dashes, a running board) each
+   * frame asks for the next one; when nothing moves the loop stops, so an
+   * idle grid costs nothing. Browsers pause animation frames in hidden tabs.
+   */
   requestRender = (): void => {
     if (this.frame) return;
-    this.frame = requestAnimationFrame(() => {
-      this.frame = 0;
-      this.render();
-    });
+    this.frame = requestAnimationFrame(this.onFrame);
+  };
+
+  private onFrame = (now: number): void => {
+    this.frame = 0;
+    const animate = this.render(now);
+    // Ask for the next frame before the listeners run, so a failing overlay cannot stop the animation.
+    if (animate) {
+      this.lastFrame = now;
+      this.requestRender();
+    } else {
+      this.lastFrame = null;
+    }
+    // One failing listener must not skip the others (autosave and the unsaved marker are listeners too).
+    for (const listener of this.renderListeners) {
+      try {
+        listener();
+      } catch (e) {
+        console.error(e);
+      }
+    }
   };
 
   /** Fractional grid cell under a viewport point. */
@@ -189,7 +219,8 @@ export class GridView {
     return { x: p.x, y: p.y, w: box.cols * s, h: box.rows * s };
   }
 
-  private render(): void {
+  /** Draw one frame at time `now` (ms). Returns true when it needs a next frame to keep moving. */
+  private render(now: number): boolean {
     const { canvas, ctx } = this;
     this.sim?.update();
     const dpr = window.devicePixelRatio || 1;
@@ -208,7 +239,9 @@ export class GridView {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     for (const part of this.scene.parts) this.drawPart(part, dpr, false);
-    const animating = drawWires(this, ctx, this.scene, performance.now());
+    this.flow.begin(frameSeconds(this.lastFrame, now));
+    const maxWireAmps = drawWires(this, ctx, this.scene, this.flow);
+    this.flow.end();
 
     const hovered = this.scene.find(this.hoverId);
     if (hovered && !this.selected.has(hovered.id)) this.outline(footprint(hovered), COLORS.hover, 1, 2);
@@ -220,6 +253,7 @@ export class GridView {
     drawPins(this, ctx, this.scene);
     drawWarnings(this, ctx, this.scene);
     drawDraft(this, ctx, this.scene);
+    drawTapHint(this, ctx);
 
     if (this.ghost) {
       this.drawPart(this.ghost, dpr, true);
@@ -229,9 +263,7 @@ export class GridView {
     }
 
     if (this.marquee) this.drawMarquee(this.marquee);
-
-    for (const listener of this.renderListeners) listener();
-    if (animating) this.requestRender(); // keep the current dashes moving
+    return needsAnimation({ maxWireAmps, boardRunning: this.sim?.boardsRunning ?? false });
   }
 
   /** Grid lines in device pixels so they stay 1px sharp at any DPR and zoom. */

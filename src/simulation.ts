@@ -4,7 +4,8 @@
 // mixed-signal bridge, which also owns the simulated clock; without boards
 // a circuit is solved once, exactly as a plain DC circuit.
 
-import type { PinRef, Scene } from './model';
+import { endTerminal, findContacts } from './contacts';
+import type { Scene, WireEnd } from './model';
 import { MixedSignal } from './mcu/mixedsignal';
 import { BoardRuntimes, type BoardPartInfo } from './mcu/runtime';
 import { getPart } from './parts';
@@ -17,23 +18,26 @@ export interface SimView {
   /** Bring the result up to date with the scene. Cheap when nothing changed. */
   update(): void;
   partResult(partId: number): PartResult | undefined;
-  /** Volts at a pin, or undefined before the first solve. */
-  pinVoltage(ref: PinRef): number | undefined;
-  /** Amps flowing along the wire from its `from` pin to its `to` pin (0 when unknown). */
+  /** Volts at a pin or junction, or undefined before the first solve. */
+  pinVoltage(end: WireEnd): number | undefined;
+  /** Amps flowing along the wire from its `from` end to its `to` end (0 when unknown). */
   wireCurrent(wireId: number): number;
   /** Largest voltage magnitude in the circuit. */
   readonly maxVoltage: number;
+  /** A board is running (the picture changes every frame). */
+  readonly boardsRunning: boolean;
 }
 
-/** The scene's electrical content; positions and wire corners do not matter. */
+/**
+ * The scene's electrical content: parts, wires (links[i] is wireIds[i]),
+ * junctions as `node` components, the parts' internal links, and the
+ * contacts of touching pins and pins lying on wires (derived from positions).
+ */
 export function buildNetlist(scene: Scene): { input: SimInput; wireIds: number[] } {
   const input: SimInput = { components: [], links: [] };
   const wireIds: number[] = [];
   for (const wire of scene.wires) {
-    input.links.push([
-      { part: wire.from.partId, pin: wire.from.pinId },
-      { part: wire.to.partId, pin: wire.to.pinId },
-    ]);
+    input.links.push([endTerminal(wire.from), endTerminal(wire.to)]);
     wireIds.push(wire.id);
   }
   for (const part of scene.parts) {
@@ -44,6 +48,8 @@ export function buildNetlist(scene: Scene): { input: SimInput; wireIds: number[]
       input.links.push([{ part: part.id, pin: a }, { part: part.id, pin: b }]);
     }
   }
+  for (const j of scene.junctions) input.components.push({ id: j.id, model: { kind: 'node' } });
+  input.links.push(...findContacts(scene).links);
   return { input, wireIds };
 }
 
@@ -136,10 +142,14 @@ export class Simulation implements SimView {
     return this.result?.parts[partId];
   }
 
-  pinVoltage(ref: PinRef): number | undefined {
+  get boardsRunning(): boolean {
+    return this.boards.anyRunning;
+  }
+
+  pinVoltage(end: WireEnd): number | undefined {
     const r = this.result;
     if (!r || !r.converged) return undefined;
-    const net = r.nets[terminalKey({ part: ref.partId, pin: ref.pinId })];
+    const net = r.nets[terminalKey(endTerminal(end))];
     return net === undefined ? undefined : r.voltages[net];
   }
 

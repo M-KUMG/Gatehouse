@@ -1,13 +1,12 @@
 // Live state of the boards in the scene, which is not saved: the emulator
-// built from each board's program, whether it runs, and its serial output.
-// Kept in step with the scene by sync(). No DOM.
+// built from each board's program, whether it runs, and its serial output
+// (in the serial store, per board and port). Kept in step with the scene by
+// sync(). No DOM.
 
-import type { BoardProgram, BoardSpec } from './board';
+import type { BoardProgram, BoardSpec, SerialBytes } from './board';
 import { HexError, parseIntelHex } from './hex';
 import type { BoardSlot } from './mixedsignal';
-
-/** Serial text kept per board; older text is dropped. */
-const SERIAL_LIMIT = 20_000;
+import { SerialStore } from './serialstore';
 
 export interface BoardRuntime extends BoardSlot {
   spec: BoardSpec;
@@ -15,7 +14,6 @@ export interface BoardRuntime extends BoardSlot {
   program: BoardProgram | null;
   /** Its flash image, for resets. */
   flash: Uint8Array | null;
-  serial: string;
   /** Why the program could not be loaded. */
   error: string | null;
 }
@@ -30,6 +28,8 @@ export interface BoardPartInfo {
 export class BoardRuntimes {
   /** Bumped whenever an emulator is created, replaced or reset. */
   version = 0;
+  /** Serial output per board and port; buffers go with their board (reset, new program, deleted). */
+  readonly serial = new SerialStore();
   private readonly byId = new Map<number, BoardRuntime>();
 
   /** Match the runtimes to the board parts (in order); returns them in that order. */
@@ -38,6 +38,7 @@ export class BoardRuntimes {
     for (const id of this.byId.keys()) {
       if (!keep.has(id)) {
         this.byId.delete(id);
+        this.serial.removeBoard(id);
         this.version++;
       }
     }
@@ -46,7 +47,7 @@ export class BoardRuntimes {
       if (!rt) {
         rt = {
           partId: p.id, spec: p.spec, io: p.spec.io, electrical: p.spec.electrical,
-          emulator: null, running: false, program: null, flash: null, serial: '', error: null,
+          emulator: null, running: false, program: null, flash: null, error: null,
         };
         this.byId.set(p.id, rt);
         this.version++;
@@ -60,6 +61,7 @@ export class BoardRuntimes {
   /** Forget every board (e.g. before another project loads): all start stopped again. */
   clear(): void {
     this.byId.clear();
+    this.serial.clearAll();
     this.version++;
   }
 
@@ -86,15 +88,14 @@ export class BoardRuntimes {
     const rt = this.byId.get(id);
     if (!rt?.flash) return;
     rt.emulator = rt.spec.create(rt.flash);
-    rt.serial = '';
+    this.serial.clear(id);
     this.version++;
   }
 
-  addSerial(id: number, bytes: readonly number[]): void {
-    const rt = this.byId.get(id);
-    if (!rt) return;
-    const text = rt.serial + bytes.map((b) => String.fromCharCode(b)).join('');
-    rt.serial = text.length > SERIAL_LIMIT ? text.slice(text.length - SERIAL_LIMIT) : text;
+  /** Store what a board sent (bytes per port id). */
+  addSerial(id: number, bytes: SerialBytes): void {
+    if (!this.byId.has(id)) return;
+    for (const [port, data] of Object.entries(bytes)) this.serial.write(id, port, data);
   }
 
   /** Build the emulator for a (new) program; a stopped board stays stopped. */
@@ -103,7 +104,7 @@ export class BoardRuntimes {
     rt.emulator = null;
     rt.flash = null;
     rt.running = false;
-    rt.serial = '';
+    this.serial.clear(rt.partId);
     rt.error = null;
     if (program) {
       try {

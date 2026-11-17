@@ -5,21 +5,22 @@
 
 import { clickPart, isOnKnob, knobPosition, knobPositionAt, setKnob, setPressed } from './controls';
 import type { GridView } from './grid';
-import { boundsOf, boxesOverlap, footprint, type GridPoint, type PinRef, type PlacedPart, type ProjectState, type Scene } from './model';
+import { isTap, type WireTap } from './junctions';
+import { boundsOf, boxesOverlap, footprint, isPinEnd, type GridPoint, type PinRef, type PlacedPart, type ProjectState, type Scene } from './model';
 import { getPart } from './parts';
-import { findPin, pinAt, wireAt, wireRoute } from './pins';
+import { findPin, pinAt, wirePointAt, wireRoute } from './pins';
 import { Placer } from './placing';
-import { Readout, describePart, describePin, describeWire, type ReadoutText } from './readout';
+import { Readout, describeJunction, describePart, describePin, describeWire, type ReadoutText } from './readout';
 import { Selection } from './selection';
 import type { Simulation } from './simulation';
 import { Toolbar, createStatusLine, createZoomReadout } from './toolbar';
 import { ValueEditor } from './valueedit';
-import { WireTool, pinRadius } from './wiring';
+import { WireTool, pinRadius, wireGrab } from './wiring';
 
 const DRAG_THRESHOLD = 3; // CSS pixels before a press becomes a drag
-const WIRE_GRAB = 5; // CSS pixels around a wire that still hit it
 const WHEEL_KNOB_STEP = 0.05; // knob travel per wheel notch
-const WIRING_HINT = 'Wiring: click a pin to finish · click the grid to add a corner · Backspace removes it · Esc cancels';
+const WIRING_HINT =
+  'Wiring: click a pin or a wire to finish · click the grid to add a corner · Backspace removes it · Esc cancels';
 
 interface Cell {
   col: number;
@@ -61,14 +62,24 @@ interface Turning {
   start: number; // position to go back to on Escape
 }
 
+/** Pressed on a wire: a click selects it, dragging starts a new wire from the point. */
+interface Tapping {
+  kind: 'tap';
+  tap: WireTap;
+  downX: number;
+  downY: number;
+}
+
 interface Hover {
   partId: number | null;
   wireId: number | null;
+  /** Grid point on the hovered wire where a new wire would attach. */
+  tap: GridPoint | null;
   pin: PinRef | null;
   onKnob: boolean;
 }
 
-const NO_HOVER: Hover = { partId: null, wireId: null, pin: null, onKnob: false };
+const NO_HOVER: Hover = { partId: null, wireId: null, tap: null, pin: null, onKnob: false };
 
 export class Editor {
   private readonly selection: Selection;
@@ -79,7 +90,7 @@ export class Editor {
   private readonly valueEditor = new ValueEditor();
   private readonly updateZoomReadout: () => void;
   private readonly setStatus: (text: string) => void;
-  private drag: Moving | Marquee | Turning | null = null;
+  private drag: Moving | Marquee | Turning | Tapping | null = null;
   private pressed: PlacedPart | null = null; // push button held down by the mouse
   private onKnob = false;
   private pointer: { x: number; y: number } | null = null; // last position over the canvas
@@ -191,10 +202,17 @@ export class Editor {
       return;
     }
 
-    const wire = wireAt(this.scene, cell.col, cell.row, WIRE_GRAB / this.view.cellPx);
-    if (wire) {
-      if (!e.shiftKey) sel.set([], [wire.id]);
-      else if (!sel.wireIds.delete(wire.id)) sel.wireIds.add(wire.id);
+    const hit = wirePointAt(this.scene, cell.col, cell.row, wireGrab(this.view));
+    if (hit) {
+      const id = hit.wire.id;
+      if (!e.shiftKey) {
+        sel.set([], [id]);
+        // Dragging away from here draws a new wire from this point instead.
+        this.drag = { kind: 'tap', tap: { wireId: id, ...hit.point }, downX: e.clientX, downY: e.clientY };
+        canvas.setPointerCapture(e.pointerId);
+      } else if (!sel.wireIds.delete(id)) {
+        sel.wireIds.add(id);
+      }
       this.view.requestRender();
       return;
     }
@@ -236,7 +254,9 @@ export class Editor {
   private startMove(anchor: PlacedPart, cell: Cell, x: number, y: number, narrowTo: number | null, click: boolean): void {
     const parts = this.selection.parts();
     for (const p of parts) this.scene.bringToFront(p.id);
-    const corners = this.scene.wiresWithin(this.selection.partIds).flatMap((w) => w.waypoints);
+    // Corners of the wires between the moving parts, and junctions only those wires use, move along.
+    const inner = this.scene.within(this.selection.partIds);
+    const corners: GridPoint[] = [...inner.wires.flatMap((w) => w.waypoints), ...inner.junctions];
     this.drag = {
       kind: 'move', anchor, parts,
       offsetCol: cell.col - anchor.col,
@@ -260,6 +280,17 @@ export class Editor {
     const d = this.drag;
     if (!d) return;
     const cell = this.view.toCell(x, y);
+
+    if (d.kind === 'tap') {
+      if (Math.hypot(x - d.downX, y - d.downY) < DRAG_THRESHOLD) return;
+      // Dragged off the wire's point: draw a new wire from there (release finishes or adds a corner, as from a pin).
+      this.drag = null;
+      this.selection.clear();
+      this.setHover(NO_HOVER);
+      this.wiring.start(d.tap, x, y);
+      this.updateCursor();
+      return;
+    }
 
     if (d.kind === 'knob') {
       const position = knobPositionAt(d.part, cell.col, cell.row);
@@ -365,7 +396,7 @@ export class Editor {
       }
     } else if (d.kind === 'knob') {
       setKnob(d.part, d.start);
-    } else {
+    } else if (d.kind === 'marquee') {
       this.selection.set(d.base, d.baseWires);
     }
     this.endDrag();
@@ -390,11 +421,12 @@ export class Editor {
     }
     const cell = this.view.toCell(p.x, p.y);
     const pin = pinAt(this.scene, cell.col, cell.row, pinRadius(this.view));
-    const wire = pin ? undefined : wireAt(this.scene, cell.col, cell.row, WIRE_GRAB / this.view.cellPx);
-    const part = pin || wire ? undefined : this.scene.partAt(cell.col, cell.row);
+    const hit = pin ? null : wirePointAt(this.scene, cell.col, cell.row, wireGrab(this.view));
+    const part = pin || hit ? undefined : this.scene.partAt(cell.col, cell.row);
     this.setHover({
       pin: pin?.ref ?? null,
-      wireId: wire?.id ?? null,
+      wireId: hit?.wire.id ?? null,
+      tap: hit?.point ?? null,
       partId: part?.id ?? null,
       onKnob: part !== undefined && isOnKnob(part, cell.col, cell.row),
     });
@@ -403,9 +435,11 @@ export class Editor {
   private setHover(h: Hover): void {
     const v = this.view;
     const samePin = v.hoverPin?.partId === h.pin?.partId && v.hoverPin?.pinId === h.pin?.pinId;
-    if (v.hoverId === h.partId && v.hoverWireId === h.wireId && samePin && this.onKnob === h.onKnob) return;
+    const sameTap = v.hoverTap?.col === h.tap?.col && v.hoverTap?.row === h.tap?.row;
+    if (v.hoverId === h.partId && v.hoverWireId === h.wireId && sameTap && samePin && this.onKnob === h.onKnob) return;
     v.hoverId = h.partId;
     v.hoverWireId = h.wireId;
+    v.hoverTap = h.tap;
     v.hoverPin = h.pin;
     this.onKnob = h.onKnob;
     this.updateCursor();
@@ -518,10 +552,12 @@ export class Editor {
     const d = this.drag;
     if (d?.kind === 'knob') return describePart(d.part, this.sim);
     if (d?.kind === 'marquee') return null;
-    const pinRef = v.draft ? v.draft.endPin : v.hoverPin;
+    const target = v.draft?.target ?? null;
+    if (target && !isTap(target) && !isPinEnd(target)) return describeJunction(target, this.sim);
+    const pinRef = v.draft ? (target && !isTap(target) && isPinEnd(target) ? target : null) : v.hoverPin;
     const pin = pinRef && findPin(this.scene, pinRef);
     if (pin) return describePin(pin, this.sim);
-    const wire = this.scene.findWire(v.hoverWireId);
+    const wire = this.scene.findWire(target && isTap(target) ? target.wireId : v.draft ? null : v.hoverWireId);
     if (wire) return describeWire(wire, this.sim);
     const part = d?.kind === 'move' ? d.anchor : this.scene.find(v.hoverId);
     return part ? describePart(part, this.sim) : null;

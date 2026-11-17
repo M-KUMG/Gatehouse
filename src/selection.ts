@@ -73,14 +73,16 @@ export class Selection {
     return true;
   }
 
-  /** Delete the selected wires and parts (a part takes its wires with it). */
+  /**
+   * Delete the selected wires and parts (a part takes its wires with it).
+   * Junctions left with fewer than three wires are tidied (Scene.tidyJunctions).
+   */
   remove(): void {
-    for (const id of this.wireIds) this.scene.removeWire(id);
-    for (const id of this.partIds) this.scene.remove(id);
+    this.scene.removeMany(this.partIds, this.wireIds);
     this.clear();
   }
 
-  /** Copy the selected parts, and the wires between them, one cell down-right. */
+  /** Copy the selected parts, and the wires and junctions between them, one cell down-right. */
   duplicate(): void {
     if (this.partIds.size === 0) return;
     const copy = this.scene.insert(this.scene.snapshot(this.partIds), 1, 1);

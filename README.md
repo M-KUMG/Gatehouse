@@ -25,6 +25,7 @@ The full roadmap, decisions and honest status are in [`docs/PLAN.md`](docs/PLAN.
 ## Using it
 
 - Drag a part from the menu on the right onto the grid. Press a part's pin and drag to another pin to wire them; click grid points for bends, `Esc` cancels.
+- A wire can also end on (or, by pressing and dragging, start from) any point of another wire: a junction dot joins them. Parts whose pins touch, or a pin placed on a wire, are connected without a wire.
 - Click to select, drag to move, drag on empty space for a selection box, `Shift`+click to add to the selection. Middle mouse button drags the grid, the wheel zooms.
 - Keys: `R` rotate, `Delete` remove, `Ctrl+D` duplicate, `Ctrl+A` select all, `Esc` clear.
 - Switches and buttons toggle on click; double-click a part to edit its value (such as a resistor's ohms).

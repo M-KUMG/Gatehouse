@@ -1,7 +1,9 @@
 // Geometry of pins and wires, all in grid cells: where a part's pins are
 // after rotation, which way they point, and the path a wire takes.
 
-import { footprint, type CellBox, type GridPoint, type PinRef, type PlacedPart, type Rotation, type Scene, type Wire } from './model';
+import {
+  footprint, isPinEnd, type CellBox, type GridPoint, type PinRef, type PlacedPart, type Rotation, type Scene, type Wire, type WireEnd,
+} from './model';
 import { getPart, type PinDef, type PartType } from './parts';
 
 export interface Pin {
@@ -98,8 +100,20 @@ function corner(a: GridPoint, b: GridPoint, aDir: GridPoint | null, bDir: GridPo
   return horizontalFirst ? { col: b.col, row: a.row } : { col: a.col, row: b.row };
 }
 
-/** Full path from a pin through the waypoints to an end point (a pin when `to` is given). */
-export function routeFrom(from: Pin, waypoints: readonly GridPoint[], end: GridPoint, to: Pin | null): GridPoint[] {
+/** Where a wire end sits; `dir` is the pin's lead direction (null for a junction or a free point). */
+export interface EndPoint extends GridPoint {
+  dir: GridPoint | null;
+}
+
+/** Position of a wire end, or null when its part or junction is gone. */
+export function endPoint(scene: Scene, end: WireEnd): EndPoint | null {
+  if (isPinEnd(end)) return findPin(scene, end);
+  const j = scene.findJunction(end.junctionId);
+  return j ? { col: j.col, row: j.row, dir: null } : null;
+}
+
+/** Full path from a wire end through the waypoints to an end point (a wire end when `to` is given). */
+export function routeFrom(from: EndPoint, waypoints: readonly GridPoint[], end: GridPoint, to: EndPoint | null): GridPoint[] {
   const stops: GridPoint[] = [from, ...waypoints, end];
   const path: GridPoint[] = [{ col: from.col, row: from.row }];
   for (let i = 1; i < stops.length; i++) {
@@ -113,11 +127,67 @@ export function routeFrom(from: Pin, waypoints: readonly GridPoint[], end: GridP
   return path;
 }
 
-/** Path of a wire, or null when one of its parts is gone. */
+/** Path of a wire, or null when one of its ends is gone. */
 export function wireRoute(scene: Scene, wire: Wire): GridPoint[] | null {
-  const from = findPin(scene, wire.from);
-  const to = findPin(scene, wire.to);
+  const from = endPoint(scene, wire.from);
+  const to = endPoint(scene, wire.to);
   return from && to ? routeFrom(from, wire.waypoints, to, to) : null;
+}
+
+/** Every grid point a path passes, in order, from its first point to its last. */
+export function pathPoints(path: readonly GridPoint[]): GridPoint[] {
+  if (path.length === 0) return [];
+  const out: GridPoint[] = [{ col: path[0].col, row: path[0].row }];
+  for (let s = 1; s < path.length; s++) {
+    const a = path[s - 1];
+    const b = path[s];
+    const dc = Math.sign(b.col - a.col);
+    const dr = Math.sign(b.row - a.row);
+    const steps = dc !== 0 && dr !== 0 ? 1 : Math.abs(b.col - a.col) + Math.abs(b.row - a.row);
+    for (let k = 1; k <= steps; k++) {
+      out.push(k === steps ? { col: b.col, row: b.row } : { col: a.col + dc * k, row: a.row + dr * k });
+    }
+  }
+  return out;
+}
+
+/** Index of the path segment (1-based: from path[s - 1] to path[s]) that a grid point lies on, or -1. */
+export function segmentAt(path: readonly GridPoint[], p: GridPoint): number {
+  for (let s = 1; s < path.length; s++) {
+    const a = path[s - 1];
+    const b = path[s];
+    const onCol = a.col === b.col && p.col === a.col && p.row >= Math.min(a.row, b.row) && p.row <= Math.max(a.row, b.row);
+    const onRow = a.row === b.row && p.row === a.row && p.col >= Math.min(a.col, b.col) && p.col <= Math.max(a.col, b.col);
+    if (onCol || onRow) return s;
+  }
+  return -1;
+}
+
+/** Grid point of a segment nearest to a (fractional) cell point. */
+function nearestGridPoint(col: number, row: number, a: GridPoint, b: GridPoint): GridPoint {
+  const clamp = (v: number, x: number, y: number): number => Math.min(Math.max(x, y), Math.max(Math.min(x, y), v));
+  if (a.row === b.row) return { col: clamp(Math.round(col), a.col, b.col), row: a.row };
+  if (a.col === b.col) return { col: a.col, row: clamp(Math.round(row), a.row, b.row) };
+  return Math.hypot(col - a.col, row - a.row) <= Math.hypot(col - b.col, row - b.row) ? a : b;
+}
+
+/** Top-most wire within `tolerance` cells of a point, and the grid point on it nearest to the point. */
+export function wirePointAt(scene: Scene, col: number, row: number, tolerance: number): { wire: Wire; point: GridPoint } | null {
+  for (let i = scene.wires.length - 1; i >= 0; i--) {
+    const path = wireRoute(scene, scene.wires[i]);
+    if (!path) continue;
+    let best: GridPoint | null = null;
+    let bestDist = tolerance;
+    for (let s = 1; s < path.length; s++) {
+      const d = distanceToSegment(col, row, path[s - 1], path[s]);
+      if (d <= bestDist) {
+        bestDist = d;
+        best = nearestGridPoint(col, row, path[s - 1], path[s]);
+      }
+    }
+    if (best) return { wire: scene.wires[i], point: { col: best.col, row: best.row } };
+  }
+  return null;
 }
 
 function distanceToSegment(col: number, row: number, a: GridPoint, b: GridPoint): number {

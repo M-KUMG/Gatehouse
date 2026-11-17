@@ -1,5 +1,6 @@
-// The dockable windows beside the grid. Each is a placeholder for now; the
-// later tasks fill them in (serial console, code editor, file explorer).
+// The dockable windows beside the grid. The serial console is real (its
+// long-lived content comes from serialconsole.ts); code editor and file
+// explorer are placeholders until later tasks fill them in.
 
 import type { IContentRenderer } from 'dockview';
 
@@ -10,12 +11,12 @@ export interface WindowSpec {
   /** Panel id and component name (stable: it is stored in saved layouts). */
   id: string;
   title: string;
-  /** Text shown until the real window exists. */
+  /** Text shown when the app provides no content for the window (yet). */
   placeholder: string;
 }
 
 export const WINDOWS: readonly WindowSpec[] = [
-  { id: 'serial-console', title: 'Serial console', placeholder: 'Serial console: coming next' },
+  { id: 'serial-console', title: 'Serial console', placeholder: 'Serial console' },
   { id: 'code-editor', title: 'Code editor', placeholder: 'Code editor: coming later' },
   { id: 'file-explorer', title: 'File explorer', placeholder: 'File explorer: coming later' },
 ];
@@ -34,6 +35,17 @@ export function placeholderRenderer(spec: WindowSpec): IContentRenderer {
   text.textContent = spec.placeholder;
   element.append(text);
   return { element, init: () => {} };
+}
+
+/**
+ * Content of a real window: like the editor below, a fresh wrapper adopts
+ * the window's one long-lived element, which keeps its state while closed.
+ */
+export function contentRenderer(spec: WindowSpec, content: HTMLElement): IContentRenderer {
+  const element = document.createElement('div');
+  element.className = 'gh-window-host';
+  element.dataset.ghWindow = spec.id;
+  return { element, init: () => element.append(content) };
 }
 
 /**

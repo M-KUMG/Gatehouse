@@ -50,6 +50,7 @@ export class Project {
       camera: { x, y, zoom },
       parts: copy(this.scene.parts),
       wires: copy(this.scene.wires),
+      junctions: copy(this.scene.junctions),
     };
   }
 
@@ -59,7 +60,7 @@ export class Project {
    * `dirty` marks the loaded content as not saved (e.g. a restored autosave).
    */
   load(file: ProjectFile, dirty = false): void {
-    this.scene.replace(copy(file.parts), copy(file.wires));
+    this.scene.replace(copy(file.parts), copy(file.wires), copy(file.junctions));
     const cam = file.camera ?? { x: 0, y: 0, zoom: 1 };
     this.camera.x = cam.x;
     this.camera.y = cam.y;
@@ -95,7 +96,7 @@ export class Project {
 
   /** What counts as an edit: the circuit, not the camera or the name. */
   private signature(): string {
-    return JSON.stringify([this.scene.parts, this.scene.wires]);
+    return JSON.stringify([this.scene.parts, this.scene.wires, this.scene.junctions]);
   }
 
   private notify(): void {

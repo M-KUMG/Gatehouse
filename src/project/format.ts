@@ -1,8 +1,8 @@
 // The project file: one self-contained JSON document holding only source
-// data (parts, wires, camera). Nothing derived (wire routes, simulation
+// data (parts, wires, junctions, camera). Nothing derived (wire routes, simulation
 // results, images) is stored; it is all recomputed after loading.
 
-import type { PlacedPart, Wire } from '../model';
+import type { Junction, PlacedPart, Wire } from '../model';
 
 /**
  * Marks a JSON document as a project file. A stable file-format id, not the
@@ -10,8 +10,12 @@ import type { PlacedPart, Wire } from '../model';
  */
 export const PROJECT_FORMAT = 'gatehouse-project';
 
-/** The version this app writes. Older files are migrated up to it on load. */
-export const PROJECT_VERSION = 1;
+/**
+ * The version this app writes. Older files are migrated up to it on load.
+ * v1: parts and pin-to-pin wires. v2: adds `junctions`; wire ends may be a
+ * junction ({ junctionId }) instead of a pin.
+ */
+export const PROJECT_VERSION = 2;
 
 export const DEFAULT_PROJECT_NAME = 'Untitled';
 
@@ -32,6 +36,8 @@ export interface ProjectFile {
   /** Draw order: last is on top. Part types are referenced by their stable string id. */
   parts: PlacedPart[];
   wires: Wire[];
+  /** Points where three or more wires meet. Contacts of touching pins are not stored (derived from positions). */
+  junctions: Junction[];
 }
 
 /** Something wrong with a project file, worded for the person opening it. */
@@ -43,7 +49,7 @@ export class ProjectError extends Error {
 }
 
 export function emptyProject(name = DEFAULT_PROJECT_NAME): ProjectFile {
-  return { format: PROJECT_FORMAT, version: PROJECT_VERSION, name, parts: [], wires: [] };
+  return { format: PROJECT_FORMAT, version: PROJECT_VERSION, name, parts: [], wires: [], junctions: [] };
 }
 
 /** The file's text: readable and diff-friendly. */

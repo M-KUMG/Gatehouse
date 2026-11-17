@@ -15,7 +15,7 @@ import {
   type IContentRenderer,
   type IDockviewPanel,
 } from 'dockview';
-import { EDITOR_ID, editorRenderer, findWindow, placeholderRenderer } from './panels';
+import { EDITOR_ID, contentRenderer, editorRenderer, findWindow, placeholderRenderer } from './panels';
 import { browserStorage, clearLayout, loadLayout, saveLayout, type LayoutStorage } from './persist';
 
 const THEME: DockviewTheme = { ...themeDark, name: 'gatehouse', className: `${themeDark.className} gh-dock` };
@@ -29,6 +29,8 @@ export class DockLayout {
   constructor(
     host: HTMLElement,
     private readonly editorArea: HTMLElement,
+    /** Long-lived content of the windows that are built, by window id (others show their placeholder). */
+    private readonly contents: Readonly<Record<string, HTMLElement>> = {},
     private readonly storage: LayoutStorage | null = browserStorage(),
   ) {
     this.api = createDockview(host, {
@@ -83,7 +85,8 @@ export class DockLayout {
     if (name === EDITOR_ID) return editorRenderer(this.editorArea);
     const spec = findWindow(name);
     if (!spec) throw new Error(`Unknown window "${name}"`);
-    return placeholderRenderer(spec);
+    const content = this.contents[name];
+    return content ? contentRenderer(spec, content) : placeholderRenderer(spec);
   }
 
   private restore(): void {

@@ -22,7 +22,7 @@
 //   Inputs therefore lag outputs by at most one slice (1 ms).
 
 import { solveCircuit, type PartResult, type PinDrive, type SimInput, type SimResult } from '../sim';
-import type { BoardElectrical, BoardEmulator, DriveCode, IoPinDef } from './board';
+import type { BoardElectrical, BoardEmulator, DriveCode, IoPinDef, SerialBytes } from './board';
 
 /** Simulated time between pin feedback steps. */
 export const SLICE_SECONDS = 0.001;
@@ -133,10 +133,10 @@ export class MixedSignal {
   /**
    * Advance the timeline by `seconds` of simulated time, in whole slices
    * (a remainder is kept for the next call). Returns the serial bytes each
-   * board sent, by part id.
+   * board sent, by part id and serial port id.
    */
-  advance(seconds: number): Map<number, number[]> {
-    const serial = new Map<number, number[]>();
+  advance(seconds: number): Map<number, SerialBytes> {
+    const serial = new Map<number, SerialBytes>();
     this.pending += seconds;
     while (this.pending >= SLICE_SECONDS - 1e-12) {
       this.pending -= SLICE_SECONDS;
@@ -150,7 +150,7 @@ export class MixedSignal {
     return this.instant?.parts[partId]?.volts?.[pinId];
   }
 
-  private slice(serial: Map<number, number[]>): void {
+  private slice(serial: Map<number, SerialBytes>): void {
     const dt = SLICE_SECONDS;
     // Run every board and collect its pin changes as (time offset, slot, drives).
     const current = this.currentDrives();
@@ -161,7 +161,12 @@ export class MixedSignal {
       current[i] = run.drives;
       const span = Math.max(1, run.end - run.start);
       for (const e of run.events) changes.push({ at: (Math.min(Math.max(e.cycle - run.start, 0), span) / span) * dt, slot: i, drives: e.drives });
-      if (run.serial.length > 0) serial.set(s.partId, [...(serial.get(s.partId) ?? []), ...run.serial]);
+      for (const [port, bytes] of Object.entries(run.serial)) {
+        if (bytes.length === 0) continue;
+        let byPort = serial.get(s.partId);
+        if (!byPort) serial.set(s.partId, (byPort = {}));
+        (byPort[port] ??= []).push(...bytes);
+      }
     });
     changes.sort((a, b) => a.at - b.at || a.slot - b.slot); // stable: keeps each board's own order
 

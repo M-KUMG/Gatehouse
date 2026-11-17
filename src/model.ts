@@ -1,6 +1,7 @@
-// The circuit being edited: placed parts and the wires between their pins.
-// Everything stored is plain serializable data (see ProjectState), so a
-// project file can hold it as-is later.
+// The circuit being edited: placed parts, the wires between their pins and
+// the junction nodes where wires meet. Everything stored is plain
+// serializable data (see ProjectState), so a project file holds it as-is.
+// Contacts between touching pins are not stored: see contacts.ts.
 
 import { getPart, type PartState } from './parts';
 
@@ -30,23 +31,64 @@ export interface PinRef {
   pinId: string;
 }
 
-/** A wire from pin to pin. It follows its parts; the waypoints stay where they were put. */
+/** One junction node: wires attach to it like to a pin. */
+export interface JunctionRef {
+  junctionId: number;
+}
+
+/** What a wire end is attached to: a part's pin or a junction node. */
+export type WireEnd = PinRef | JunctionRef;
+
+/**
+ * A point where three or more wires meet (made by ending a wire on another
+ * wire, which splits that wire in two here). Stored, unlike the implicit
+ * contacts of touching pins, which are derived from positions.
+ */
+export interface Junction {
+  id: number;
+  col: number;
+  row: number;
+}
+
+/** A wire between two ends. It follows its parts; the waypoints stay where they were put. */
 export interface Wire {
   id: number;
-  from: PinRef;
-  to: PinRef;
+  from: WireEnd;
+  to: WireEnd;
   waypoints: GridPoint[];
 }
 
 /** Everything a project stores about the circuit. */
 export interface ProjectState {
-  version: 1;
+  version: 2;
   parts: PlacedPart[];
   wires: Wire[];
+  junctions: Junction[];
 }
 
 export function samePin(a: PinRef, b: PinRef): boolean {
   return a.partId === b.partId && a.pinId === b.pinId;
+}
+
+export function isPinEnd(end: WireEnd): end is PinRef {
+  return 'partId' in end;
+}
+
+/** Stable text key of an end, e.g. "3:anode" or "j12". */
+export function endKey(end: WireEnd): string {
+  return isPinEnd(end) ? `${end.partId}:${end.pinId}` : `j${end.junctionId}`;
+}
+
+export function sameEnd(a: WireEnd, b: WireEnd): boolean {
+  return endKey(a) === endKey(b);
+}
+
+export function copyEnd(end: WireEnd): WireEnd {
+  return isPinEnd(end) ? { partId: end.partId, pinId: end.pinId } : { junctionId: end.junctionId };
+}
+
+function touchesJunction(wire: Wire, id: number): boolean {
+  return [wire.from, wire.to].some((e) => !isPinEnd(e) && e.junctionId === id);
 }
 
 /** A part's position without identity (also used for the placement ghost). */
@@ -102,7 +144,8 @@ export class Scene {
   /** Draw order: last is on top. */
   readonly parts: PlacedPart[] = [];
   readonly wires: Wire[] = [];
-  private nextId = 1; // shared by parts and wires
+  readonly junctions: Junction[] = [];
+  private nextId = 1; // shared by parts, wires and junctions
 
   add(p: Placement): PlacedPart {
     const state = p.state ?? getPart(p.typeId)?.defaults;
@@ -113,10 +156,11 @@ export class Scene {
   }
 
   /** Replace the whole circuit, keeping the given ids (for loading a project). */
-  replace(parts: PlacedPart[], wires: Wire[]): void {
+  replace(parts: PlacedPart[], wires: Wire[], junctions: Junction[] = []): void {
     this.parts.splice(0, this.parts.length, ...parts);
     this.wires.splice(0, this.wires.length, ...wires);
-    this.nextId = [...parts, ...wires].reduce((max, x) => Math.max(max, x.id), 0) + 1;
+    this.junctions.splice(0, this.junctions.length, ...junctions);
+    this.nextId = [...parts, ...wires, ...junctions].reduce((max, x) => Math.max(max, x.id), 0) + 1;
   }
 
   find(id: number | null): PlacedPart | undefined {
@@ -125,25 +169,24 @@ export class Scene {
 
   /** Remove a part and every wire attached to it. */
   remove(id: number): void {
-    const i = this.parts.findIndex((p) => p.id === id);
-    if (i < 0) return;
-    this.parts.splice(i, 1);
-    for (let w = this.wires.length - 1; w >= 0; w--) {
-      const wire = this.wires[w];
-      if (wire.from.partId === id || wire.to.partId === id) this.wires.splice(w, 1);
-    }
+    this.removeMany([id], []);
   }
 
-  /** Connect two pins. Returns null for a wire to the same pin or one that already exists. */
-  addWire(from: PinRef, to: PinRef, waypoints: readonly GridPoint[] = []): Wire | null {
-    if (samePin(from, to)) return null;
-    const exists = this.wires.some(
-      (w) => (samePin(w.from, from) && samePin(w.to, to)) || (samePin(w.from, to) && samePin(w.to, from)),
-    );
-    if (exists) return null;
-    const wire: Wire = { id: this.nextId++, from: { ...from }, to: { ...to }, waypoints: waypoints.map((p) => ({ ...p })) };
+  /** Connect two ends. Returns null for a wire from an end to itself or one that already exists. */
+  addWire(from: WireEnd, to: WireEnd, waypoints: readonly GridPoint[] = []): Wire | null {
+    if (sameEnd(from, to) || this.wireBetween(from, to)) return null;
+    const wire: Wire = {
+      id: this.nextId++, from: copyEnd(from), to: copyEnd(to), waypoints: waypoints.map((p) => ({ col: p.col, row: p.row })),
+    };
     this.wires.push(wire);
     return wire;
+  }
+
+  /** A wire joining these two ends (either way round), if any, other than those in `except`. */
+  wireBetween(a: WireEnd, b: WireEnd, except?: ReadonlySet<Wire>): Wire | undefined {
+    return this.wires.find(
+      (w) => !except?.has(w) && ((sameEnd(w.from, a) && sameEnd(w.to, b)) || (sameEnd(w.from, b) && sameEnd(w.to, a))),
+    );
   }
 
   findWire(id: number | null): Wire | undefined {
@@ -151,43 +194,155 @@ export class Scene {
   }
 
   removeWire(id: number): void {
-    const i = this.wires.findIndex((w) => w.id === id);
-    if (i >= 0) this.wires.splice(i, 1);
+    this.removeMany([], [id]);
   }
 
-  /** Wires with both ends on the given parts. */
-  wiresWithin(partIds: ReadonlySet<number>): Wire[] {
-    return this.wires.filter((w) => partIds.has(w.from.partId) && partIds.has(w.to.partId));
+  /**
+   * Remove parts (with their wires) and wires in one go, then tidy the
+   * junctions that lost wires (see tidyJunctions). Removing everything
+   * first matters: tidying merges wires, which would otherwise change
+   * wires that are still to be removed.
+   */
+  removeMany(partIds: Iterable<number>, wireIds: Iterable<number>): void {
+    const parts = new Set(partIds);
+    const wires = new Set(wireIds);
+    for (let i = this.parts.length - 1; i >= 0; i--) {
+      if (parts.has(this.parts[i].id)) this.parts.splice(i, 1);
+    }
+    const onPart = (e: WireEnd): boolean => isPinEnd(e) && parts.has(e.partId);
+    for (let i = this.wires.length - 1; i >= 0; i--) {
+      const w = this.wires[i];
+      if (wires.has(w.id) || onPart(w.from) || onPart(w.to)) this.wires.splice(i, 1);
+    }
+    this.tidyJunctions();
   }
 
-  /** A deep copy of the circuit, or of some parts and the wires between them. */
+  addJunction(col: number, row: number): Junction {
+    const junction: Junction = { id: this.nextId++, col, row };
+    this.junctions.push(junction);
+    return junction;
+  }
+
+  findJunction(id: number): Junction | undefined {
+    return this.junctions.find((j) => j.id === id);
+  }
+
+  junctionAt(col: number, row: number): Junction | undefined {
+    return this.junctions.find((j) => j.col === col && j.row === row);
+  }
+
+  /** Wires attached to a junction. */
+  wiresAt(junctionId: number): Wire[] {
+    return this.wires.filter((w) => touchesJunction(w, junctionId));
+  }
+
+  /**
+   * A junction is kept only while three or more wires meet at it. With two
+   * left, the two wires become one again (through the junction's point, so
+   * nothing moves on screen); with one or none left, the junction and the
+   * dead-end wire go. Repeats until nothing changes.
+   */
+  tidyJunctions(): void {
+    for (let changed = true; changed; ) {
+      changed = false;
+      for (const junction of [...this.junctions]) {
+        const attached = this.wiresAt(junction.id);
+        if (attached.length >= 3) continue;
+        changed = true;
+        if (attached.length === 2 && this.mergeAt(junction, attached[0], attached[1])) continue;
+        // A stub, or two halves that would only repeat an existing wire or loop back: drop them.
+        for (const w of attached) this.wires.splice(this.wires.indexOf(w), 1);
+        this.junctions.splice(this.junctions.indexOf(junction), 1);
+      }
+    }
+  }
+
+  /** Join wires `a` and `b`, which meet at `junction`, into `a`. False when the result would be pointless. */
+  private mergeAt(junction: Junction, a: Wire, b: Wire): boolean {
+    // The far end of a wire and its corners in order from there to the junction.
+    const towards = (w: Wire): { other: WireEnd; points: GridPoint[] } =>
+      !isPinEnd(w.to) && w.to.junctionId === junction.id
+        ? { other: w.from, points: w.waypoints }
+        : { other: w.to, points: [...w.waypoints].reverse() };
+    const first = towards(a);
+    const second = towards(b);
+    if (sameEnd(first.other, second.other) || this.wireBetween(first.other, second.other, new Set([a, b]))) return false;
+    a.from = first.other;
+    a.to = second.other;
+    a.waypoints = [...first.points, { col: junction.col, row: junction.row }, ...[...second.points].reverse()];
+    this.wires.splice(this.wires.indexOf(b), 1);
+    this.junctions.splice(this.junctions.indexOf(junction), 1);
+    return true;
+  }
+
+  /**
+   * What moves, rotates and is copied with a set of parts: the wires with
+   * both ends on them, and the junctions whose every wire leads to them
+   * (directly or through other such junctions).
+   */
+  within(partIds: ReadonlySet<number>): { wires: Wire[]; junctions: Junction[] } {
+    const inside = new Set(this.junctions.map((j) => j.id));
+    const isIn = (e: WireEnd): boolean => (isPinEnd(e) ? partIds.has(e.partId) : inside.has(e.junctionId));
+    for (let changed = true; changed; ) {
+      changed = false;
+      for (const w of this.wires) {
+        if (isIn(w.from) === isIn(w.to)) continue;
+        // One end leaves the set: the junction at the other end cannot come along.
+        for (const e of [w.from, w.to]) {
+          if (!isPinEnd(e) && inside.delete(e.junctionId)) changed = true;
+        }
+      }
+    }
+    return {
+      wires: this.wires.filter((w) => isIn(w.from) && isIn(w.to)),
+      junctions: this.junctions.filter((j) => inside.has(j.id)),
+    };
+  }
+
+  /** A deep copy of the circuit, or of some parts and the wires and junctions between them. */
   snapshot(partIds?: ReadonlySet<number>): ProjectState {
+    const inner = partIds ? this.within(partIds) : { wires: this.wires, junctions: this.junctions };
     const parts = partIds ? this.parts.filter((p) => partIds.has(p.id)) : this.parts;
-    const wires = partIds ? this.wiresWithin(partIds) : this.wires;
-    return JSON.parse(JSON.stringify({ version: 1, parts, wires })) as ProjectState;
+    const state: ProjectState = { version: 2, parts, wires: inner.wires, junctions: inner.junctions };
+    return JSON.parse(JSON.stringify(state)) as ProjectState;
   }
 
   /** Add a copy of `state`, shifted by whole cells, under new ids. */
-  insert(state: ProjectState, dCol = 0, dRow = 0): { parts: PlacedPart[]; wires: Wire[] } {
-    const ids = new Map<number, number>();
+  insert(state: ProjectState, dCol = 0, dRow = 0): { parts: PlacedPart[]; wires: Wire[]; junctions: Junction[] } {
+    const partIds = new Map<number, number>();
     const parts = state.parts.map((p) => {
       const part = this.add({ ...p, col: p.col + dCol, row: p.row + dRow });
-      ids.set(p.id, part.id);
+      partIds.set(p.id, part.id);
       return part;
     });
+    const junctionIds = new Map<number, number>();
+    const junctions = state.junctions.map((j) => {
+      const junction = this.addJunction(j.col + dCol, j.row + dRow);
+      junctionIds.set(j.id, junction.id);
+      return junction;
+    });
+    const map = (e: WireEnd): WireEnd | null => {
+      if (isPinEnd(e)) {
+        const partId = partIds.get(e.partId);
+        return partId === undefined ? null : { partId, pinId: e.pinId };
+      }
+      const junctionId = junctionIds.get(e.junctionId);
+      return junctionId === undefined ? null : { junctionId };
+    };
     const wires: Wire[] = [];
     for (const w of state.wires) {
-      const from = ids.get(w.from.partId);
-      const to = ids.get(w.to.partId);
-      if (from === undefined || to === undefined) continue;
-      const wire = this.addWire(
-        { partId: from, pinId: w.from.pinId },
-        { partId: to, pinId: w.to.pinId },
-        w.waypoints.map((p) => ({ col: p.col + dCol, row: p.row + dRow })),
-      );
+      const from = map(w.from);
+      const to = map(w.to);
+      if (!from || !to) continue;
+      const wire = this.addWire(from, to, w.waypoints.map((p) => ({ col: p.col + dCol, row: p.row + dRow })));
       if (wire) wires.push(wire);
     }
-    return { parts, wires };
+    this.tidyJunctions(); // changes something only for an inconsistent state
+    return {
+      parts,
+      wires: wires.filter((w) => this.wires.includes(w)),
+      junctions: junctions.filter((j) => this.junctions.includes(j)),
+    };
   }
 
   bringToFront(id: number): void {
@@ -224,13 +379,12 @@ export class Scene {
     // New top-left of the (h x w) box; trunc cancels out over rotations, so no drift.
     const left = box.col + Math.trunc((w - h) / 2);
     const top = box.row + Math.trunc((h - w) / 2);
-    // Corners of the wires between these parts turn with them.
-    for (const wire of this.wiresWithin(new Set(parts.map((p) => p.id)))) {
-      for (const point of wire.waypoints) {
-        const dy = point.row - box.row;
-        point.row = top + (point.col - box.col);
-        point.col = left + h - dy;
-      }
+    // Corners of the wires between these parts, and their junctions, turn with them.
+    const inner = this.within(new Set(parts.map((p) => p.id)));
+    for (const point of [...inner.wires.flatMap((wire) => wire.waypoints), ...inner.junctions]) {
+      const dy = point.row - box.row;
+      point.row = top + (point.col - box.col);
+      point.col = left + h - dy;
     }
     for (const part of parts) {
       const b = footprint(part);

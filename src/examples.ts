@@ -24,7 +24,7 @@ export const EXAMPLES: readonly Example[] = [
     name: 'LED + switch',
     hint: '9 V battery, switch, 330 Ω resistor and LED. Click the switch.',
     state: {
-      version: 1,
+      version: 2,
       parts: [
         part(1, 'battery9v', 0, 2),
         part(2, 'switch', 7, 2),
@@ -40,13 +40,14 @@ export const EXAMPLES: readonly Example[] = [
         wire(14, '4.cathode', '6.gnd'),
         wire(15, '1.neg', '5.gnd'),
       ],
+      junctions: [],
     },
   },
   {
     name: 'Transistor switch',
     hint: 'A push button drives a BC547 that switches the LED. Hold the button.',
     state: {
-      version: 1,
+      version: 2,
       parts: [
         part(1, 'battery9v', 0, 0),
         part(2, 'ground', 5, 3),
@@ -67,13 +68,14 @@ export const EXAMPLES: readonly Example[] = [
         wire(17, '6.b', '7.c', [[17, -5]]),
         wire(18, '7.e', '8.gnd'),
       ],
+      junctions: [],
     },
   },
   {
     name: 'Uno blink',
     hint: 'Arduino Uno with the Blink program: pin 13 → 220 Ω → LED → GND. Select the board and press Run.',
     state: {
-      version: 1,
+      version: 2,
       parts: [
         part(1, 'uno', 0, 0, 0, { program: { name: BLINK_NAME, hex: BLINK_HEX } }),
         part(2, 'resistor', 4, -5, 90, { value: 220 }),
@@ -84,6 +86,7 @@ export const EXAMPLES: readonly Example[] = [
         wire(12, '2.a', '3.anode'),
         wire(13, '3.cathode', '1.gnd3'),
       ],
+      junctions: [],
     },
   },
 ];

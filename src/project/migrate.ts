@@ -1,6 +1,6 @@
 // Upgrading files written by older versions of the app. Each step turns a
-// version N document into version N + 1; to introduce v2, bump
-// PROJECT_VERSION and add one `{ from: 1, up }` entry to MIGRATIONS.
+// version N document into version N + 1; to introduce a new version, bump
+// PROJECT_VERSION and add one `{ from: N, up }` entry to MIGRATIONS.
 
 import { APP_NAME } from '../app';
 import { PROJECT_VERSION, ProjectError } from './format';
@@ -14,8 +14,17 @@ export interface Migration {
   up(doc: RawDocument): RawDocument;
 }
 
-/** All known steps, oldest first. Empty while v1 is the only version. */
-export const MIGRATIONS: readonly Migration[] = [];
+/**
+ * v1 -> v2: v2 adds wire junctions. A v1 file has none, and its pin-to-pin
+ * wires are already valid v2 wires, so the step only adds the empty list.
+ */
+const addJunctions: Migration = {
+  from: 1,
+  up: (doc) => ('junctions' in doc ? doc : { ...doc, junctions: [] }),
+};
+
+/** All known steps, oldest first. */
+export const MIGRATIONS: readonly Migration[] = [addJunctions];
 
 /** The oldest version any chain of steps can start from. */
 function oldestSupported(current: number, migrations: readonly Migration[]): number {

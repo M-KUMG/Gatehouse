@@ -17,7 +17,7 @@ function runBlink(seconds: number): { edges: { t: number; level: string }[]; ser
     for (const e of r.events) {
       if (e.drives[D13] !== last) edges.push({ t: e.cycle / UNO_CLOCK_HZ, level: (last = e.drives[D13]) });
     }
-    serial += String.fromCharCode(...r.serial);
+    serial += String.fromCharCode(...(r.serial.usart0 ?? []));
   }
   return { edges, serial };
 }

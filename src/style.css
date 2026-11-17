@@ -447,7 +447,7 @@ html, body {
   color: #fff;
 }
 
-/* Microcontroller board: program, Run / Pause / Reset, serial output (top-left of the grid). */
+/* Microcontroller board: program, Run / Pause / Reset, link to the serial console (top-left of the grid). */
 .board-panel {
   position: absolute;
   left: 10px;
@@ -515,26 +515,19 @@ html, body {
   color: #ff8a80;
 }
 
-.board-label {
-  margin-bottom: 3px;
-  color: #9aa0aa;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.board-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #4ea1ff;
+  font: inherit;
+  cursor: pointer;
 }
 
-.board-serial {
-  height: 120px;
-  margin: 0;
-  padding: 5px 6px;
-  overflow: auto;
-  border: 1px solid #3a3d44;
-  border-radius: 4px;
-  background: #18191c;
-  color: #cfe8cf;
-  font: 11.5px/1.35 ui-monospace, Consolas, monospace;
-  white-space: pre-wrap;
-  word-break: break-all;
+.board-link:hover,
+.board-link:focus-visible {
+  text-decoration: underline;
+  outline: none;
 }
 
 /* Windows menu in the file bar. */

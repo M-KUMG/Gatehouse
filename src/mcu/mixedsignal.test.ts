@@ -43,7 +43,7 @@ class ScriptedBoard implements BoardEmulator {
   }
   run(cycles: number): SliceResult {
     const start = this.cycles;
-    const result: SliceResult = { start, end: start + cycles, drives: this.drives(), events: [], serial: [] };
+    const result: SliceResult = { start, end: start + cycles, drives: this.drives(), events: [], serial: {} };
     let last = result.drives;
     for (let c = start + 1; c <= start + cycles; c++) {
       this.cycles = c;
@@ -54,6 +54,9 @@ class ScriptedBoard implements BoardEmulator {
   }
   setInputs(inputs: BoardInputs): void {
     this.inputs = inputs;
+  }
+  serialBaud(): number | null {
+    return null;
   }
 }
 
@@ -210,7 +213,7 @@ describe('mixed-signal bridge', () => {
     runtimes.run(slots[0].partId);
     const serial = ms.advance(0.5);
     expect(ms.result!.parts[led].current).toBeGreaterThan(0.012); // on
-    expect(String.fromCharCode(...serial.get(slots[0].partId)!)).toBe('Blink: LED on pin 13\r\nLED on\r\n');
+    expect(String.fromCharCode(...serial.get(slots[0].partId)!.usart0)).toBe('Blink: LED on pin 13\r\nLED on\r\n');
     ms.advance(1.0);
     expect(ms.result!.parts[led].current).toBeLessThan(1e-6); // off
     expect(UNO_SPEC.io).toBe(UNO_IO);
