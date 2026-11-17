@@ -121,6 +121,36 @@ describe('project files', () => {
     expect(p.serialize()).toEqual(before);
   });
 
+  it('round-trips a project with an Arduino Uno and its program', () => {
+    const a = new Project();
+    a.scene.insert(EXAMPLES.find((e) => e.name === 'Uno blink')!.state, 2, 3);
+    const text = stringifyProject(a.serialize());
+    const b = new Project();
+    b.load(readProject(text));
+    expect(b.serialize()).toEqual(a.serialize());
+    const uno = b.scene.parts.find((p) => p.typeId === 'uno')!;
+    expect(uno.state?.program?.name).toBe('Blink');
+    expect(Object.keys(uno.state ?? {})).toEqual(['program']); // nothing about running
+    expect(b.scene.wires.some((w) => w.from.pinId === 'd13' || w.to.pinId === 'd13')).toBe(true);
+  });
+
+  it('rejects a board program that is not valid Intel HEX, and programs on other parts', () => {
+    const withUno = (edit: (program: { name: string; hex: string }) => void): string =>
+      variant((d) => {
+        const program = { name: 'Blink', hex: ':0400100001020304E2\n:00000001FF\n' };
+        edit(program);
+        d.parts.push({ id: 40, typeId: 'uno', col: 0, row: 20, rotation: 0, state: { program } });
+      });
+    expect(() => readProject(withUno(() => undefined))).not.toThrow();
+    expect(errorOf(withUno((p) => (p.hex = ':0400100001020304E3\n:00000001FF\n')))).toMatch(
+      /parts\[5\]\.state\.program\.hex is not a valid program\. Line 1 has a wrong checksum/,
+    );
+    expect(errorOf(withUno((p) => ((p as { name: unknown }).name = 3)))).toMatch(/program\.name must be text/);
+    expect(errorOf(variant((d) => (d.parts[2].state.program = { name: 'x', hex: '' })))).toMatch(
+      /a resistor part cannot hold a program/,
+    );
+  });
+
   it('tracks unsaved changes', () => {
     const p = new Project();
     let changes = 0;

@@ -1,4 +1,6 @@
 import './style.css';
+import { BoardClock } from './boardclock';
+import { BoardPanel } from './boardpanel';
 import { EXAMPLES } from './examples';
 import { GridView } from './grid';
 import { Editor } from './interaction';
@@ -20,6 +22,10 @@ const view = new GridView(canvas, scene, project.camera);
 const sim = new Simulation(scene);
 view.sim = sim;
 const editor = new Editor(view, scene, sim);
+// Boards run on animation frames while one is running; the panel shows the selected board.
+const clock = new BoardClock(sim, view.requestRender);
+const boardPanel = new BoardPanel(scene, view, sim, clock);
+view.renderListeners.push(() => boardPanel.update());
 // Every edit is followed by a frame, so this notices all of them.
 view.renderListeners.push(() => project.checkForChanges());
 createPalette(
@@ -28,7 +34,10 @@ createPalette(
   EXAMPLES.map((ex) => ({ name: ex.name, hint: ex.hint, run: () => editor.loadExample(ex.state) })),
 );
 new ProjectController(project, {
-  beforeLoad: () => editor.reset(),
+  beforeLoad: () => {
+    editor.reset();
+    sim.boards.clear(); // a loaded project starts with every board stopped
+  },
   afterLoad: (file) => {
     const box = boundsOf(scene.parts);
     if (!file.camera && box) view.centerOn(box);

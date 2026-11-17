@@ -9,6 +9,7 @@ Living notes so later sessions keep the same context. Add a line to "Done" after
 - Wheel zoom around the cursor (25%-400%, readout bottom-left resets to 100%), selection box + Shift+click multi-select (move/rotate/duplicate/delete as a group, Ctrl+A, Esc), floating rotate/duplicate/delete toolbar, fixed missed-drop/first-click bug.
 - Pins, wires between pins, more parts (9V battery, push button, toggle switch, potentiometer, ground), DC circuit simulation (MNA solver in src/sim with 20 unit tests), LED glow, hover readouts, example circuit. Open decisions: DC only (no timing yet); solver runs on the main thread, move to a Web Worker later. The agent that built this hit a usage limit during its own testing, so verification was done by the owner by hand.
 - Save/Open/New projects (src/project): versioned JSON file `gatehouse-project` v1 with a `migrate()` step list and strict all-or-nothing validation, File System Access API with download/file-input fallback, Ctrl+S / Ctrl+Shift+S / Ctrl+O, unsaved dot + guards, localStorage autosave with restore offer. `Project` owns scene + camera (serialize/load/onChange). Not browser-tested by the agent.
+- First microcontroller: "Arduino Uno" part (20x15 cells, pins d0-d13, a0-a5, 5v, 3v3, gnd/gnd2/gnd3, vin, aref) running real AVR code with avr8js (src/mcu: Intel HEX parser, ATmega328P wrapper, board runtimes) and a one-file mixed-signal bridge (src/mcu/mixedsignal.ts); board panel with Open .hex, Run/Pause/Reset, serial output, board time and speed; built-in Blink program and "Uno blink" example. Not browser-tested by the agent.
 
 ## Vision
 Simulator for Arduino (AVR) and Raspberry Pi Pico (RP2040) boards plus circuits, running real firmware on emulated CPUs. Web app and Electron app from one codebase. University project, non-commercial, built entirely with Claude (teacher requirement).
@@ -32,7 +33,9 @@ Wanted features:
 ## Open decisions
 - How compiling works for the demo (see above). Idea: a small research task to check if `avr-gcc` runs as WebAssembly. RP2040 option: MicroPython, no compile needed.
 - Analog solver: write a small solver, or ngspice via WebAssembly (needed for accurate transistors).
-- Mixed-signal sync between digital firmware and analog circuit (hardest part).
+- Mixed-signal sync between digital firmware and analog circuit. First version (src/mcu/mixedsignal.ts): fixed 1 ms slices of simulated time; pin changes are cycle-stamped, each distinct pin setup is DC-solved once (cached) and results are time-weighted, then smoothed over 10 ms (PWM shows as a mean brightness, a first approximation); inputs/ADC are fed back at slice ends (up to 1 ms lag). Output = vcc/0 V behind 25 ohm, INPUT_PULLUP = 30 kohm to vcc, input = 100 Mohm; thresholds >3 V high, <1.5 V low. The board's gnd is a 0 V reference like a ground part. Revisit with a transient solver (SimInput.time is already there).
+- Emulation runs on the main thread (BoardClock, requestAnimationFrame) through a plain-data BoardEmulator interface (run(cycles) -> SliceResult, setInputs), so it can move to a Web Worker later; it is not in one yet because the bridge needs synchronous solves between slices. Time comes only from CPU cycles; the wall clock only picks how many slices to run per frame (speed shown as e.g. 1.00x).
+- Built-in Blink hex: our own C program (src/mcu/programs/blink.c, Arduino-style millis on Timer0, serial at 9600) compiled locally with WinAVR avr-gcc 4.3.3; not the Arduino core. Real Arduino sketches load via Open .hex.
 - Updates for the bundled Electron app (installer vs auto-update).
 
 ## Suggested order (one small task each)

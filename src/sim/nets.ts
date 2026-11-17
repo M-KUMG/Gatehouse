@@ -2,8 +2,8 @@
 
 import type { ComponentModel, Reference, SimInput, Terminal } from './types';
 
-/** Pin names of each model, in a fixed order. */
-export const MODEL_PINS: Record<ComponentModel['kind'], readonly string[]> = {
+/** Pin names of each fixed-pin model, in a fixed order. */
+export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readonly string[]> = {
   battery: ['pos', 'neg'],
   resistor: ['a', 'b'],
   switch: ['a', 'b'],
@@ -13,6 +13,17 @@ export const MODEL_PINS: Record<ComponentModel['kind'], readonly string[]> = {
   ground: ['gnd'],
   open: [],
 };
+
+/** Pin names of a model, in a fixed order. */
+export function modelPins(model: ComponentModel): readonly string[] {
+  if (model.kind === 'board') return ['gnd', ...Object.keys(model.rails), ...Object.keys(model.io)];
+  return MODEL_PINS[model.kind];
+}
+
+/** Models whose `gnd` pin is a 0 V reference. */
+function isReference(model: ComponentModel): boolean {
+  return model.kind === 'ground' || model.kind === 'board';
+}
 
 export function terminalKey(t: Terminal): string {
   return `${t.part}:${t.pin}`;
@@ -60,8 +71,8 @@ export function buildNets(input: SimInput): Nets {
   let reference: Reference = 'empty';
   for (const c of input.components) {
     known.add(c.id);
-    for (const pin of MODEL_PINS[c.model.kind]) idOf({ part: c.id, pin });
-    if (c.model.kind === 'ground') {
+    for (const pin of modelPins(c.model)) idOf({ part: c.id, pin });
+    if (isReference(c.model)) {
       const id = idOf({ part: c.id, pin: 'gnd' });
       if (ground >= 0) union(ground, id);
       else ground = id;

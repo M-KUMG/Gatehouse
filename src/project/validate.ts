@@ -2,6 +2,8 @@
 // ProjectFile or throws a ProjectError that says what is wrong and where.
 
 import { MAX_ZOOM, MIN_ZOOM } from '../camera';
+import { HexError, parseIntelHex } from '../mcu/hex';
+import type { BoardProgram } from '../mcu/board';
 import type { GridPoint, PinRef, PlacedPart, Rotation, Wire } from '../model';
 import { getPart, type PartState } from '../parts';
 import { PROJECT_FORMAT, PROJECT_VERSION, ProjectError, type CameraState, type ProjectFile } from './format';
@@ -58,12 +60,31 @@ function bool(o: Obj, key: string, where: string): boolean {
 
 const ROTATIONS: readonly number[] = [0, 90, 180, 270];
 
+/** A board's program: a name and Intel HEX text that must load into the board's flash. */
+function program(v: unknown, typeId: string, where: string): BoardProgram {
+  const spec = getPart(typeId)?.board;
+  if (!spec) fail(`${where}: a ${typeId} part cannot hold a program.`);
+  const o = obj(v, where);
+  onlyKeys(o, ['name', 'hex'], where);
+  const name = str(o, 'name', where);
+  const hex = str(o, 'hex', where);
+  try {
+    parseIntelHex(hex, spec.flashBytes);
+  } catch (e) {
+    if (e instanceof HexError) fail(`${where}.hex is not a valid program. ${e.message}`);
+    throw e;
+  }
+  return { name, hex };
+}
+
 function partState(v: unknown, typeId: string, where: string): PartState {
   const o = obj(v, where);
-  onlyKeys(o, ['closed', 'position', 'value', 'burned'], where);
+  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'program'], where);
   const state: PartState = {};
   for (const key of Object.keys(o)) {
-    if (key === 'closed' || key === 'burned') {
+    if (key === 'program') {
+      state.program = program(o.program, typeId, `${where}.program`);
+    } else if (key === 'closed' || key === 'burned') {
       state[key] = bool(o, key, where);
     } else if (key === 'position') {
       const p = num(o, key, where);

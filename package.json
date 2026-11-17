@@ -19,5 +19,8 @@
   },
   "allowScripts": {
     "electron@33.4.11": true
+  },
+  "dependencies": {
+    "avr8js": "0.21.1"
   }
 }

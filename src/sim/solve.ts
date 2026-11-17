@@ -12,12 +12,20 @@ import { buildNets } from './nets';
 import type { PartResult, SimInput, SimResult } from './types';
 
 const MAX_ITERATIONS = 200;
+/** Output resistance of a board's supply rails (USB 5 V, 3.3 V regulator). */
+const RAIL_OHMS = 0.05;
 const ABS_TOL = 1e-7;
 const REL_TOL = 1e-6;
 
 // Primitive elements. Node numbers: 0 is the reference, k > 0 is unknown k - 1.
 interface Resistor { part: number; a: number; b: number; g: number; pinA: string; pinB: string }
-interface Source { part: number; pos: number; neg: number; volts: number; r: number; branch: number }
+interface Source {
+  part: number; pos: number; neg: number; volts: number; r: number; branch: number;
+  /** Set for a board's supply rail: the board pin it drives. */
+  pin?: string;
+}
+/** Norton form of a Thevenin source: conductance g from `node` to `ref`, pushing g * volts into `node`. */
+interface Drive { part: number; node: number; ref: number; g: number; volts: number }
 interface Diode {
   part: number; anode: number; cathode: number;
   /** Node between the series resistance and the junction (the anode itself when rs is 0). */
@@ -36,11 +44,14 @@ interface Elements {
   sources: Source[];
   diodes: Diode[];
   npns: Npn[];
+  drives: Drive[];
   nodes: number; // including the reference and internal nodes
 }
 
 function buildElements(input: SimInput, netOf: (part: number, pin: string) => number, netCount: number): Elements {
-  const el: Elements = { resistors: [], sources: [], diodes: [], npns: [], nodes: netCount };
+  const el: Elements = {
+    resistors: [], sources: [], diodes: [], npns: [], drives: [], nodes: netCount,
+  };
   const resistor = (part: number, pinA: string, pinB: string, ohms: number): void => {
     el.resistors.push({ part, a: netOf(part, pinA), b: netOf(part, pinB), g: 1 / ohms, pinA, pinB });
   };
@@ -78,6 +89,16 @@ function buildElements(input: SimInput, netOf: (part: number, pin: string) => nu
           is: m.is, bf: m.bf, br: m.br, vCrit: criticalVoltage(m.is, VT), vbe: 0, vbc: 0,
         });
         break;
+      case 'board': {
+        const gnd = netOf(id, 'gnd');
+        for (const [pin, volts] of Object.entries(m.rails)) {
+          el.sources.push({ part: id, pos: netOf(id, pin), neg: gnd, volts, r: RAIL_OHMS, branch: 0, pin });
+        }
+        for (const [pin, d] of Object.entries(m.io)) {
+          el.drives.push({ part: id, node: netOf(id, pin), ref: gnd, g: 1 / Math.max(d.ohms, 1e-3), volts: d.volts });
+        }
+        break;
+      }
       case 'ground':
       case 'open':
         break;
@@ -133,6 +154,10 @@ function assemble(el: Elements, size: number): { a: Float64Array[]; z: Float64Ar
 
   for (let n = 1; n < el.nodes; n++) a[n - 1][n - 1] += GMIN;
   for (const r of el.resistors) addG(r.a, r.b, r.g);
+  for (const d of el.drives) {
+    addG(d.node, d.ref, d.g);
+    addI(d.ref, d.node, d.g * d.volts);
+  }
 
   for (const s of el.sources) {
     // Branch current I flows into the positive terminal: v+ - v- - r I = volts.
@@ -174,6 +199,7 @@ function assemble(el: Elements, size: number): { a: Float64Array[]; z: Float64Ar
 export function solveCircuit(input: SimInput): SimResult {
   const nets = buildNets(input);
   const result: SimResult = {
+    time: input.time ?? 0,
     converged: true,
     iterations: 0,
     reference: nets.reference,
@@ -225,6 +251,7 @@ export function solveCircuit(input: SimInput): SimResult {
 
   for (let n = 1; n < nets.count; n++) result.voltages[n] = volt(n);
   collectResults(input, el, volt, x, result);
+  collectBoards(input, el, netOf, volt, x, result);
   return result;
 }
 
@@ -255,6 +282,7 @@ function collectResults(
     }
   }
   for (const s of el.sources) {
+    if (s.pin !== undefined) continue; // a board rail: reported per board
     const into = x[s.branch];
     const v = volt(s.pos) - volt(s.neg);
     parts[s.part] = { voltage: v, current: -into, power: -into * v, pins: { pos: into, neg: -into } };
@@ -273,5 +301,41 @@ function collectResults(
     const ib = m.ib + GMIN * (vbe + vbc);
     const vce = volt(q.c) - volt(q.e);
     parts[q.part] = { voltage: vce, current: ic, power: vce * ic + vbe * ib, pins: { c: ic, b: ib, e: -(ic + ib) } };
+  }
+}
+
+/** Per board: volts and current at every pin, and what it delivers to the circuit. */
+function collectBoards(
+  input: SimInput, el: Elements, netOf: (part: number, pin: string) => number,
+  volt: (n: number) => number, x: Float64Array, result: SimResult,
+): void {
+  for (const { id, model: m } of input.components) {
+    if (m.kind !== 'board') continue;
+    const volts: Record<string, number> = {};
+    const p = result.parts[id];
+    p.volts = volts;
+    if (!result.converged) continue;
+    const gnd = volt(netOf(id, 'gnd'));
+    const pinVolts = (pin: string): number => volt(netOf(id, pin)) - gnd;
+    let delivered = 0;
+    let power = 0;
+    const add = (pin: string, into: number): void => {
+      const v = pinVolts(pin);
+      p.pins[pin] = into;
+      volts[pin] = v;
+      delivered -= into;
+      power -= into * v;
+    };
+    for (const s of el.sources) {
+      if (s.part === id && s.pin !== undefined) add(s.pin, x[s.branch]);
+    }
+    for (const [pin, d] of Object.entries(m.io)) {
+      add(pin, (pinVolts(pin) - d.volts) / Math.max(d.ohms, 1e-3));
+    }
+    p.pins.gnd = delivered;
+    volts.gnd = 0;
+    p.current = delivered;
+    p.power = power;
+    p.voltage = Math.max(0, ...Object.values(m.rails)); // the main supply
   }
 }

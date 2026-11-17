@@ -1,5 +1,6 @@
 // Ready-made circuits, stored exactly like a project would store them.
 
+import { BLINK_HEX, BLINK_NAME } from './mcu/programs/blink';
 import type { PlacedPart, ProjectState, Rotation, Wire } from './model';
 import type { PartState } from './parts';
 
@@ -65,6 +66,23 @@ export const EXAMPLES: readonly Example[] = [
         wire(16, '5.cathode', '6.a'),
         wire(17, '6.b', '7.c', [[17, -5]]),
         wire(18, '7.e', '8.gnd'),
+      ],
+    },
+  },
+  {
+    name: 'Uno blink',
+    hint: 'Arduino Uno with the Blink program: pin 13 → 220 Ω → LED → GND. Select the board and press Run.',
+    state: {
+      version: 1,
+      parts: [
+        part(1, 'uno', 0, 0, 0, { program: { name: BLINK_NAME, hex: BLINK_HEX } }),
+        part(2, 'resistor', 4, -5, 90, { value: 220 }),
+        part(3, 'led', 3, -10),
+      ],
+      wires: [
+        wire(11, '1.d13', '2.b'),
+        wire(12, '2.a', '3.anode'),
+        wire(13, '3.cathode', '1.gnd3'),
       ],
     },
   },

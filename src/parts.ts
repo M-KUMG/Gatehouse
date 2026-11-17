@@ -12,7 +12,10 @@ import { PUSH_BUTTON_ART, PUSH_BUTTON_PRESSED_SVG } from './art/pushbutton';
 import { RESISTOR_ART, resistorArt } from './art/resistor';
 import { TOGGLE_ART, TOGGLE_ON_SVG } from './art/toggle';
 import { TRANSISTOR_ART } from './art/transistor';
+import { UNO_ART, UNO_BOTTOM, UNO_TOP, drawUnoLeds, type HeaderPin } from './art/uno';
 import { ART_CELL } from './art/common';
+import type { BoardProgram, BoardSpec } from './mcu/board';
+import { UNO_SPEC } from './mcu/avr/uno';
 import { BC547, RED_LED, type ComponentModel, type PartResult } from './sim';
 
 /** What a placed part remembers besides its position. Plain serializable data. */
@@ -25,6 +28,8 @@ export interface PartState {
   value?: number;
   /** Destroyed by too much current. */
   burned?: boolean;
+  /** Boards: the loaded program. Whether it runs is not saved. */
+  program?: BoardProgram;
 }
 
 export interface PinDef {
@@ -62,6 +67,8 @@ export interface PartType {
   overlay?(ctx: CanvasRenderingContext2D, state: PartState, result: PartResult | undefined): void;
   /** Electrical model; its pin names are this part's pin ids. */
   sim?(state: PartState): ComponentModel;
+  /** A microcontroller board: runs programs (see src/mcu). */
+  board?: BoardSpec;
 }
 
 const DEFAULT_OHMS = 220;
@@ -73,6 +80,21 @@ export function ledBrightness(amps: number): number {
   if (!(amps > 0.0003)) return 0;
   return Math.min(1, Math.log(amps / 0.0003) / Math.log(0.015 / 0.0003));
 }
+
+/** Readout name of an Uno header pin, e.g. "D13 (LED L)", "D9 (PWM)". */
+function unoPinName(p: HeaderPin): string {
+  if (p.id.startsWith('d')) {
+    const n = Number(p.id.slice(1));
+    const extra = n === 13 ? ' (LED L)' : n === 0 ? ' (RX)' : n === 1 ? ' (TX)' : p.label.startsWith('~') ? ' (PWM)' : '';
+    return `D${n}${extra}`;
+  }
+  return p.label;
+}
+
+const UNO_PINS = [
+  ...UNO_TOP.map((p) => ({ id: p.id, name: unoPinName(p), x: p.x, y: 0 })),
+  ...UNO_BOTTOM.map((p) => ({ id: p.id, name: unoPinName(p), x: p.x, y: UNO_ART.rows })),
+];
 
 export const PARTS: readonly PartType[] = [
   {
@@ -146,6 +168,15 @@ export const PARTS: readonly PartType[] = [
       { id: 'e', name: 'Emitter', x: 3, y: 4 },
     ],
     sim: () => BC547,
+  },
+  {
+    id: 'uno', name: 'Arduino Uno', ...UNO_ART,
+    pins: UNO_PINS,
+    links: [['gnd', 'gnd2'], ['gnd', 'gnd3']],
+    board: UNO_SPEC,
+    // io pins are filled in by the mixed-signal bridge (src/mcu/mixedsignal.ts).
+    sim: () => ({ kind: 'board', rails: { ...UNO_SPEC.electrical.rails }, io: {} }),
+    overlay: (ctx, _s, r) => drawUnoLeds(ctx, (r?.volts?.d13 ?? 0) / UNO_SPEC.electrical.vcc, r !== undefined),
   },
 ];
 

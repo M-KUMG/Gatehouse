@@ -407,3 +407,90 @@ html, body {
   background: #2f5f99;
   color: #fff;
 }
+
+/* Microcontroller board: program, Run / Pause / Reset, serial output (top-left). */
+.board-panel {
+  position: fixed;
+  left: 10px;
+  top: 52px;
+  z-index: 6;
+  width: 290px;
+  box-sizing: border-box;
+  padding: 8px 10px 10px;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  background: rgba(37, 39, 44, 0.92);
+  color: #c3c7ce;
+  font: 12px/1.4 system-ui, sans-serif;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+
+.board-title {
+  color: #e6e8ec;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.board-program {
+  margin-bottom: 6px;
+  color: #9aa0aa;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.board-button {
+  padding: 4px 10px;
+  border: 1px solid #3a3d44;
+  border-radius: 5px;
+  background: #2b2e34;
+  color: #d8dbe0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.board-button:hover:not(:disabled) {
+  border-color: #4ea1ff;
+}
+
+.board-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.board-status {
+  margin: 6px 0;
+  color: #9aa0aa;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-status.error {
+  color: #ff8a80;
+}
+
+.board-label {
+  margin-bottom: 3px;
+  color: #9aa0aa;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.board-serial {
+  height: 120px;
+  margin: 0;
+  padding: 5px 6px;
+  overflow: auto;
+  border: 1px solid #3a3d44;
+  border-radius: 4px;
+  background: #18191c;
+  color: #cfe8cf;
+  font: 11.5px/1.35 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

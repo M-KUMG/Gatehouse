@@ -2,6 +2,7 @@ import { PARTS } from './parts';
 import { partImageUrl } from './sprites';
 
 const ICON_CELL = 12; // pixels per grid cell in menu icons
+const ICON_BOX = { w: 72, h: 48 }; // .palette-icon; big parts (boards) are scaled down to fit
 
 export interface PaletteAction {
   name: string;
@@ -43,8 +44,9 @@ export function createPalette(
 
     const icon = document.createElement('img');
     icon.src = partImageUrl(part);
-    icon.width = part.cols * ICON_CELL;
-    icon.height = part.rows * ICON_CELL;
+    const cell = Math.min(ICON_CELL, ICON_BOX.w / part.cols, ICON_BOX.h / part.rows);
+    icon.width = Math.round(part.cols * cell);
+    icon.height = Math.round(part.rows * cell);
     icon.alt = '';
     icon.draggable = false;
     const iconBox = document.createElement('div');

@@ -28,7 +28,24 @@ export type ComponentModel =
   /** Reference node (0 V). Pin: gnd. */
   | { kind: 'ground' }
   /** Conducts nothing (e.g. a burned-out part). No pins of its own. */
-  | { kind: 'open' };
+  | { kind: 'open' }
+  /**
+   * A microcontroller board. Its `gnd` pin is a reference like a ground
+   * part (a USB-powered board shares the computer's ground). Each rail pin
+   * is a stiff supply against gnd; each io pin is driven as set by the
+   * mixed-signal bridge (src/mcu/mixedsignal.ts). Pins: gnd, rails, io.
+   */
+  | { kind: 'board'; rails: Record<string, number>; io: Record<string, PinDrive> };
+
+/**
+ * How a microcontroller pin acts on the circuit: a Thevenin source of
+ * `volts` behind `ohms` to the board's gnd (outputs, pull-ups, and a very
+ * large resistance for a high-impedance input).
+ */
+export interface PinDrive {
+  volts: number;
+  ohms: number;
+}
 
 export interface SimComponent {
   id: number;
@@ -39,6 +56,12 @@ export interface SimInput {
   components: SimComponent[];
   /** Pairs of terminals joined by an ideal conductor (wires, internal links). */
   links: [Terminal, Terminal][];
+  /**
+   * Simulated time in seconds this solve belongs to (default 0). The solve
+   * is still a DC operating point; the field is here so a transient solver
+   * (capacitors) can use it later.
+   */
+  time?: number;
 }
 
 /** Which node is 0 V. */
@@ -53,9 +76,13 @@ export interface PartResult {
   power: number;
   /** Amps flowing from the circuit into the part at each pin. */
   pins: Record<string, number>;
+  /** Boards only: volts of each pin against the board's gnd. */
+  volts?: Record<string, number>;
 }
 
 export interface SimResult {
+  /** Simulated time of the solve in seconds (SimInput.time). */
+  time: number;
   /** False when Newton's method ran out of iterations or the matrix was singular. */
   converged: boolean;
   iterations: number;
