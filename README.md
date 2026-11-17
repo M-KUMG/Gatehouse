@@ -6,7 +6,7 @@ Web and Electron simulator for Arduino and RP2040 boards and circuits. A univers
 
 Early but working. You can build circuits on a grid, wire them, and run a real Arduino Uno program that drives them.
 
-- **Works:** grid editor (pan, zoom, select, move, rotate, copy, delete, undo/redo), wires, battery / ground / resistor / LED / switch / push button / potentiometer / transistor parts, a DC circuit solver, an Arduino Uno running real AVR code (load a compiled `.hex`, with a built-in Blink example), save/open projects as `.gth` files, autosave, and an IDE-style window layout with a Serial console, a File explorer and a Code editor (each board has its own source files, saved automatically into the project).
+- **Works:** grid editor (pan, zoom, select, move, rotate, copy, delete, undo/redo), wires, battery / ground / resistor / LED / diode / switch / push button / potentiometer / NPN and PNP transistor / N- and P-MOSFET parts, a DC circuit solver, an Arduino Uno running real AVR code (load a compiled `.hex`, with a built-in Blink example), save/open projects as `.gth` files, autosave, and an IDE-style window layout with a Serial console, a File explorer and a Code editor (each board has its own source files, saved automatically into the project).
 - **Not built yet:** compiling sketches inside the app (the board runs a precompiled `.hex` for now, the source files are not compiled), sending text to a board's serial port, opening a real project folder, capacitors and time-based circuits, breadboard, Raspberry Pi Pico, several boards at once, component database.
 
 The full roadmap, decisions and honest status are in [`docs/PLAN.md`](docs/PLAN.md).

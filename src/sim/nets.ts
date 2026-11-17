@@ -10,6 +10,8 @@ export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readon
   pot: ['a', 'w', 'b'],
   diode: ['anode', 'cathode'],
   npn: ['c', 'b', 'e'],
+  pnp: ['c', 'b', 'e'],
+  mosfet: ['g', 'd', 's'],
   ground: ['gnd'],
   open: [],
   node: ['n'],

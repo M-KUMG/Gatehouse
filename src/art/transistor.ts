@@ -25,7 +25,9 @@ const legs = LEGS.map(
     `<path d="${d}" fill="none" stroke="#eef0f2" stroke-width="1" stroke-linejoin="round"/>`,
 ).join('');
 
-const body = `
+/** A TO-92 transistor with its type marking and a second line (batch code). */
+function to92(marking: string, code: string): string {
+  const body = `
 ${legs}
 <path d="M16 16A24 9 0 0 1 64 16Z" fill="url(#top)"/>
 <path d="M16 16H64V51Q64 53.5 61.5 53.5H18.5Q16 53.5 16 51Z" fill="url(#face)"/>
@@ -33,9 +35,14 @@ ${legs}
 <path d="M16 16A24 9 0 0 1 64 16" fill="none" stroke="#000" stroke-opacity=".5" stroke-width=".7"/>
 <path d="M16 16H64V51Q64 53.5 61.5 53.5H18.5Q16 53.5 16 51Z" fill="none" stroke="#000" stroke-opacity=".5" stroke-width=".7"/>
 <g font-family="Arial, Helvetica, sans-serif" fill="#b4b7bd" text-anchor="middle">
-  <text x="40" y="30" font-size="7.5" font-weight="bold">BC547</text>
-  <text x="40" y="39" font-size="5.5" fill-opacity=".8">B 331</text>
+  <text x="40" y="30" font-size="7.5" font-weight="bold">${marking}</text>
+  <text x="40" y="39" font-size="5.5" fill-opacity=".8">${code}</text>
 </g>
 <circle cx="40" cy="46.5" r="2.2" fill="#000" fill-opacity=".25"/>`;
+  return svgDoc(4, 4, defs, body);
+}
 
-export const TRANSISTOR_ART: PartArt = { cols: 4, rows: 4, svg: svgDoc(4, 4, defs, body) };
+/** BC547 NPN. */
+export const TRANSISTOR_ART: PartArt = { cols: 4, rows: 4, svg: to92('BC547', 'B 331') };
+/** BC557 PNP: same package and pinout (C B E), different marking. */
+export const PNP_ART: PartArt = { cols: 4, rows: 4, svg: to92('BC557', 'B 342') };

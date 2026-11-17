@@ -24,6 +24,31 @@ export const RED_LED: ComponentModel = {
 /** BC547B-like small-signal NPN. */
 export const BC547: ComponentModel = { kind: 'npn', is: 1.8e-14, bf: 300, br: 10 };
 
+/**
+ * BC557B-like small-signal PNP: hFE 250 (datasheet B group 220..475, lower
+ * than the NPN as usual for PNPs), Veb about 0.63 V at 2 mA, poor reverse beta.
+ */
+export const BC557: ComponentModel = { kind: 'pnp', is: 6e-14, bf: 250, br: 5 };
+
+/**
+ * 1N4148 small-signal silicon diode: the widely used SPICE parameters
+ * (IS 2.52 nA, N 1.752, RS 0.568 ohm). About 0.58 V at 1 mA, 0.69 V at 10 mA.
+ */
+export const D1N4148: ComponentModel = { kind: 'diode', is: 2.52e-9, n: 1.752, rs: 0.568 };
+
+/**
+ * Logic-level N-channel power MOSFET, IRLZ44N-like: kp chosen so that
+ * Rds(on) = 1 / (kp (Vgs - Vth)) is about 25 mOhm at Vgs = 5 V (the datasheet
+ * maximum); saturation current at 5 V is kp / 2 * 3^2 = 58 A.
+ */
+export const LOGIC_NMOS: ComponentModel = { kind: 'mosfet', polarity: 1, vth: 2.0, kp: 13, lambda: 0.02 };
+
+/**
+ * P-channel power MOSFET, IRF9540N-like: Rds(on) = 1 / (kp (|Vgs| - 3)) is
+ * about 120 mOhm at Vgs = -10 V (datasheet 117 mOhm), 0.4 ohm at -5 V.
+ */
+export const POWER_PMOS: ComponentModel = { kind: 'mosfet', polarity: -1, vth: -3.0, kp: 1.2, lambda: 0.02 };
+
 const MAX_EXP_ARG = 80;
 
 /** Shockley current and conductance of a junction at `v` (nvt = n * VT). */

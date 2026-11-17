@@ -1,6 +1,6 @@
 // Headless circuit simulator. Nothing in this folder touches the DOM.
 
-export { BC547, RED_LED } from './devices';
+export { BC547, BC557, D1N4148, LOGIC_NMOS, POWER_PMOS, RED_LED } from './devices';
 export { linkCurrents } from './flow';
 export { NODE_PIN, modelPins, terminalKey } from './nets';
 export { solveCircuit } from './solve';

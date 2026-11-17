@@ -25,6 +25,13 @@ export type ComponentModel =
   | { kind: 'diode'; is: number; n: number; rs: number }
   /** Ebers-Moll NPN transistor. Pins: c, b, e. */
   | { kind: 'npn'; is: number; bf: number; br: number }
+  /** Ebers-Moll PNP transistor: an NPN with every junction voltage and current reversed. Pins: c, b, e. */
+  | { kind: 'pnp'; is: number; bf: number; br: number }
+  /**
+   * Level-1 (square-law) enhancement MOSFET. polarity 1 is N-channel, -1 is
+   * P-channel (then vth is negative). kp in A/V^2. Pins: g, d, s.
+   */
+  | { kind: 'mosfet'; polarity: 1 | -1; vth: number; kp: number; lambda: number }
   /** Reference node (0 V). Pin: gnd. */
   | { kind: 'ground' }
   /** Conducts nothing (e.g. a burned-out part). No pins of its own. */
@@ -70,15 +77,15 @@ export interface SimInput {
 export type Reference = 'ground' | 'battery' | 'floating' | 'empty';
 
 export interface PartResult {
-  /** Volts across the part (battery: pos - neg, diode: anode - cathode, npn: Vce, others: a - b). */
+  /** Volts across the part (battery: pos - neg, diode: anode - cathode, npn/pnp: Vce, mosfet: Vds, others: a - b). */
   voltage: number;
-  /** Amps through the part (battery: delivered, npn: collector current, pot: a to wiper). */
+  /** Amps through the part (battery: delivered, npn/pnp: into the collector, mosfet: into the drain, pot: a to wiper). */
   current: number;
   /** Watts dissipated (battery: delivered to the circuit). */
   power: number;
   /** Amps flowing from the circuit into the part at each pin. */
   pins: Record<string, number>;
-  /** Boards only: volts of each pin against the board's gnd. */
+  /** Volts of each pin: boards against the board's gnd, MOSFETs against the source. */
   volts?: Record<string, number>;
 }
 

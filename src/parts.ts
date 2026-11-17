@@ -5,19 +5,24 @@
 
 import { BATTERY_ART } from './art/battery';
 import { BATTERY_9V_ART } from './art/battery9v';
+import { DIODE_ART } from './art/diode';
 import { GROUND_ART } from './art/ground';
 import { LED_ART, LED_BURNED_SVG, drawLedGlow } from './art/led';
 import { POT_ART, POT_KNOB, drawPotPointer } from './art/pot';
 import { PUSH_BUTTON_ART, PUSH_BUTTON_PRESSED_SVG } from './art/pushbutton';
 import { RESISTOR_ART, resistorArt } from './art/resistor';
 import { TOGGLE_ART, TOGGLE_ON_SVG } from './art/toggle';
-import { TRANSISTOR_ART } from './art/transistor';
+import { NMOS_ART, PMOS_ART } from './art/to220';
+import { PNP_ART, TRANSISTOR_ART } from './art/transistor';
 import { UNO_ART, UNO_BOTTOM, UNO_RESET, UNO_TOP, drawUnoLeds, type HeaderPin } from './art/uno';
 import { ART_CELL } from './art/common';
+import { diodeReadout, mosfetReadout, pnpReadout } from './devicereadouts';
 import type { BoardSpec } from './mcu/board';
 import { UNO_SPEC } from './mcu/avr/uno';
 import { parseBoardId } from './project/boardidparse';
-import { BC547, RED_LED, type ComponentModel, type PartResult } from './sim';
+import {
+  BC547, BC557, D1N4148, LOGIC_NMOS, POWER_PMOS, RED_LED, type ComponentModel, type PartResult,
+} from './sim';
 
 /** What a placed part remembers besides its position. Plain serializable data. */
 export interface PartState {
@@ -64,6 +69,8 @@ export interface PartType {
   variant?(state: PartState): { key: string; svg: string } | null;
   /** Live drawing on top of the artwork; the canvas is in art units, unrotated. */
   overlay?(ctx: CanvasRenderingContext2D, state: PartState, result: PartResult | undefined): void;
+  /** Hover text lines for the simulated values (default: chosen from the pins, see src/readout.ts). */
+  readout?(result: PartResult): string[];
   /** Electrical model; its pin names are this part's pin ids. */
   sim?(state: PartState): ComponentModel;
   /** A microcontroller board: runs programs (see src/mcu). */
@@ -106,6 +113,17 @@ function unoPinName(p: HeaderPin): string {
 const UNO_PINS = [
   ...UNO_TOP.map((p) => ({ id: p.id, name: unoPinName(p), x: p.x, y: 0 })),
   ...UNO_BOTTOM.map((p) => ({ id: p.id, name: unoPinName(p), x: p.x, y: UNO_ART.rows })),
+];
+
+/** TO-92 transistors (BC547, BC557): C B E, left to right, flat face to the front. */
+const TO92_PINS: readonly PinDef[] = [
+  { id: 'c', name: 'Collector', x: 1, y: 4 }, { id: 'b', name: 'Base', x: 2, y: 4 },
+  { id: 'e', name: 'Emitter', x: 3, y: 4 },
+];
+
+/** TO-220 MOSFETs: G D S, left to right seen from the front (the tab is the drain too). */
+const TO220_PINS: readonly PinDef[] = [
+  { id: 'g', name: 'Gate', x: 1, y: 7 }, { id: 'd', name: 'Drain', x: 2, y: 7 }, { id: 's', name: 'Source', x: 3, y: 7 },
 ];
 
 export const PARTS: readonly PartType[] = [
@@ -174,12 +192,35 @@ export const PARTS: readonly PartType[] = [
     sim: (s) => ({ kind: 'pot', ohms: s.value ?? DEFAULT_POT_OHMS, position: s.position ?? 0.5 }),
   },
   {
-    id: 'bjt', name: 'BJT transistor', ...TRANSISTOR_ART,
-    pins: [
-      { id: 'c', name: 'Collector', x: 1, y: 4 }, { id: 'b', name: 'Base', x: 2, y: 4 },
-      { id: 'e', name: 'Emitter', x: 3, y: 4 },
-    ],
+    // Pin ids are the diode model's, like the LED's; the band marks the cathode.
+    id: 'diode', name: 'Diode (1N4148)', ...DIODE_ART,
+    pins: [{ id: 'anode', name: 'Anode (+)', x: 0, y: 1 }, { id: 'cathode', name: 'Cathode (−, band)', x: 4, y: 1 }],
+    readout: diodeReadout,
+    sim: () => D1N4148,
+  },
+  {
+    // The id stays 'bjt' (saved projects use it).
+    id: 'bjt', name: 'NPN transistor (BC547)', ...TRANSISTOR_ART,
+    pins: TO92_PINS,
     sim: () => BC547,
+  },
+  {
+    id: 'pnp', name: 'PNP transistor (BC557)', ...PNP_ART,
+    pins: TO92_PINS,
+    readout: pnpReadout,
+    sim: () => BC557,
+  },
+  {
+    id: 'nmos', name: 'N-MOSFET (logic level)', ...NMOS_ART,
+    pins: TO220_PINS,
+    readout: (r) => mosfetReadout(r, 1),
+    sim: () => LOGIC_NMOS,
+  },
+  {
+    id: 'pmos', name: 'P-MOSFET', ...PMOS_ART,
+    pins: TO220_PINS,
+    readout: (r) => mosfetReadout(r, -1),
+    sim: () => POWER_PMOS,
   },
   {
     id: 'uno', name: 'Arduino Uno', ...UNO_ART,

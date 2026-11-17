@@ -3,12 +3,15 @@
 // device nodes) followed by one branch current per voltage source.
 // Pure and deterministic: same input, same output; no clock, no randomness.
 
+import { bjtResult, makeBjt, stampBjt, updateBjt, type Bjt } from './bjt';
 import {
   GMIN, POT_END_OHMS, SWITCH_CLOSED_OHMS, SWITCH_OPEN_OHMS, VT,
   criticalVoltage, junction, limitJunction,
 } from './devices';
 import { solveLinear } from './linear';
+import { makeMosfet, mosfetResult, stampMosfet, updateMosfet, type Mosfet } from './mosfet';
 import { buildNets } from './nets';
+import { stampInto } from './stamp';
 import type { PartResult, SimInput, SimResult } from './types';
 
 const MAX_ITERATIONS = 200;
@@ -33,24 +36,19 @@ interface Diode {
   is: number; nvt: number; vCrit: number;
   v: number; // junction voltage the model is linearized at
 }
-interface Npn {
-  part: number; c: number; b: number; e: number;
-  is: number; bf: number; br: number; vCrit: number;
-  vbe: number; vbc: number;
-}
-
 interface Elements {
   resistors: Resistor[];
   sources: Source[];
   diodes: Diode[];
-  npns: Npn[];
+  bjts: Bjt[];
+  mosfets: Mosfet[];
   drives: Drive[];
   nodes: number; // including the reference and internal nodes
 }
 
 function buildElements(input: SimInput, netOf: (part: number, pin: string) => number, netCount: number): Elements {
   const el: Elements = {
-    resistors: [], sources: [], diodes: [], npns: [], drives: [], nodes: netCount,
+    resistors: [], sources: [], diodes: [], bjts: [], mosfets: [], drives: [], nodes: netCount,
   };
   const resistor = (part: number, pinA: string, pinB: string, ohms: number): void => {
     el.resistors.push({ part, a: netOf(part, pinA), b: netOf(part, pinB), g: 1 / ohms, pinA, pinB });
@@ -84,11 +82,16 @@ function buildElements(input: SimInput, netOf: (part: number, pin: string) => nu
         break;
       }
       case 'npn':
-        el.npns.push({
-          part: id, c: netOf(id, 'c'), b: netOf(id, 'b'), e: netOf(id, 'e'),
-          is: m.is, bf: m.bf, br: m.br, vCrit: criticalVoltage(m.is, VT), vbe: 0, vbc: 0,
-        });
+      case 'pnp': {
+        const nodes = { c: netOf(id, 'c'), b: netOf(id, 'b'), e: netOf(id, 'e') };
+        el.bjts.push(makeBjt(id, nodes, m.kind === 'npn' ? 1 : -1, m.is, m.bf, m.br));
         break;
+      }
+      case 'mosfet': {
+        const nodes = { d: netOf(id, 'd'), g: netOf(id, 'g'), s: netOf(id, 's') };
+        el.mosfets.push(makeMosfet(id, nodes, m.polarity, m.vth, m.kp, m.lambda));
+        break;
+      }
       case 'board': {
         const gnd = netOf(id, 'gnd');
         for (const [pin, volts] of Object.entries(m.rails)) {
@@ -109,49 +112,14 @@ function buildElements(input: SimInput, netOf: (part: number, pin: string) => nu
   return el;
 }
 
-/** Terminal currents of an NPN (Ebers-Moll, transport form) and their derivatives. */
-function npnCurrents(q: Npn, vbe: number, vbc: number) {
-  const f = junction(vbe, q.is, VT);
-  const r = junction(vbc, q.is, VT);
-  return {
-    ic: f.i - r.i * (1 + 1 / q.br),
-    ib: f.i / q.bf + r.i / q.br,
-    gf: f.g,
-    gr: r.g,
-  };
-}
-
 /** One linearized system at the devices' current operating points. */
 function assemble(el: Elements, size: number): { a: Float64Array[]; z: Float64Array } {
   const a: Float64Array[] = [];
   for (let i = 0; i < size; i++) a.push(new Float64Array(size));
   const z = new Float64Array(size);
 
-  /** Conductance g between two nodes. */
-  const addG = (n1: number, n2: number, g: number): void => {
-    if (n1 > 0) a[n1 - 1][n1 - 1] += g;
-    if (n2 > 0) a[n2 - 1][n2 - 1] += g;
-    if (n1 > 0 && n2 > 0) {
-      a[n1 - 1][n2 - 1] -= g;
-      a[n2 - 1][n1 - 1] -= g;
-    }
-  };
-  /** Constant current i flowing from one node to the other through the element. */
-  const addI = (from: number, to: number, i: number): void => {
-    if (from > 0) z[from - 1] -= i;
-    if (to > 0) z[to - 1] += i;
-  };
-  /** Current g * (v[cp] - v[cm]) flowing from one node to the other. */
-  const addGm = (from: number, to: number, cp: number, cm: number, g: number): void => {
-    if (from > 0) {
-      if (cp > 0) a[from - 1][cp - 1] += g;
-      if (cm > 0) a[from - 1][cm - 1] -= g;
-    }
-    if (to > 0) {
-      if (cp > 0) a[to - 1][cp - 1] -= g;
-      if (cm > 0) a[to - 1][cm - 1] += g;
-    }
-  };
+  const stamp = stampInto(a, z);
+  const { addG, addI } = stamp;
 
   for (let n = 1; n < el.nodes; n++) a[n - 1][n - 1] += GMIN;
   for (const r of el.resistors) addG(r.a, r.b, r.g);
@@ -181,19 +149,8 @@ function assemble(el: Elements, size: number): { a: Float64Array[]; z: Float64Ar
     addI(d.inner, d.cathode, i - g * d.v);
   }
 
-  for (const q of el.npns) {
-    const { ic, ib, gf, gr } = npnCurrents(q, q.vbe, q.vbc);
-    const gcr = gr * (1 + 1 / q.br);
-    // Collector current flows c -> e, base current b -> e.
-    addGm(q.c, q.e, q.b, q.e, gf);
-    addGm(q.c, q.e, q.b, q.c, -gcr);
-    addI(q.c, q.e, ic - gf * q.vbe + gcr * q.vbc);
-    addGm(q.b, q.e, q.b, q.e, gf / q.bf);
-    addGm(q.b, q.e, q.b, q.c, gr / q.br);
-    addI(q.b, q.e, ib - (gf / q.bf) * q.vbe - (gr / q.br) * q.vbc);
-    addG(q.b, q.e, GMIN);
-    addG(q.b, q.c, GMIN);
-  }
+  for (const q of el.bjts) stampBjt(q, stamp);
+  for (const q of el.mosfets) stampMosfet(q, stamp);
   return { a, z };
 }
 
@@ -215,7 +172,7 @@ export function solveCircuit(input: SimInput): SimResult {
 
   let x: Float64Array = new Float64Array(size);
   const volt = (n: number): number => (n > 0 ? x[n - 1] : 0);
-  const nonlinear = el.diodes.length + el.npns.length > 0;
+  const nonlinear = el.diodes.length + el.bjts.length + el.mosfets.length > 0;
 
   if (size > 0) {
     result.converged = false;
@@ -238,10 +195,8 @@ export function solveCircuit(input: SimInput): SimResult {
         return limited;
       };
       for (const d of el.diodes) d.v = step(volt(d.inner) - volt(d.cathode), d.v, d.nvt, d.vCrit);
-      for (const q of el.npns) {
-        q.vbe = step(volt(q.b) - volt(q.e), q.vbe, VT, q.vCrit);
-        q.vbc = step(volt(q.b) - volt(q.c), q.vbc, VT, q.vCrit);
-      }
+      for (const q of el.bjts) updateBjt(q, volt, (raw, old, vCrit) => step(raw, old, VT, vCrit));
+      for (const q of el.mosfets) if (updateMosfet(q, volt, ABS_TOL)) settled = false;
       if (settled) {
         result.converged = true;
         break;
@@ -294,15 +249,8 @@ function collectResults(
     const v = volt(d.anode) - volt(d.cathode);
     parts[d.part] = { voltage: v, current: i, power: v * i, pins: { anode: i, cathode: -i } };
   }
-  for (const q of el.npns) {
-    const vbe = volt(q.b) - volt(q.e);
-    const vbc = volt(q.b) - volt(q.c);
-    const m = npnCurrents(q, vbe, vbc);
-    const ic = m.ic - GMIN * vbc;
-    const ib = m.ib + GMIN * (vbe + vbc);
-    const vce = volt(q.c) - volt(q.e);
-    parts[q.part] = { voltage: vce, current: ic, power: vce * ic + vbe * ib, pins: { c: ic, b: ib, e: -(ic + ib) } };
-  }
+  for (const q of el.bjts) parts[q.part] = bjtResult(q, volt);
+  for (const q of el.mosfets) parts[q.part] = mosfetResult(q, volt);
 }
 
 /** Per board: volts and current at every pin, and what it delivers to the circuit. */
