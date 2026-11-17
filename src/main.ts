@@ -1,10 +1,12 @@
 import './style.css';
 import { BoardClock } from './boardclock';
-import { BoardPanel } from './boardpanel';
+import { ActiveBoard } from './boardcontrols';
 import { EXAMPLES } from './examples';
 import { GridView } from './grid';
 import { Editor } from './interaction';
+import { CODE_EDITOR_ID, CodeEditor } from './layout/codeeditor';
 import { DockLayout, isForOtherWindow } from './layout/dock';
+import { onOpenFile } from './layout/fileevents';
 import { FILE_EXPLORER_ID, FileExplorer } from './layout/fileexplorer';
 import { SERIAL_CONSOLE_ID, SerialConsole } from './layout/serialconsole';
 import { createWindowsMenu } from './layout/windowsmenu';
@@ -19,7 +21,7 @@ const dock = document.getElementById('dock');
 if (!app || !dock) throw new Error('Missing #app or #dock');
 
 // The grid's area: the canvas plus the overlays anchored to it (file bar,
-// board panel, zoom, status). It lives in the dock's centre panel.
+// zoom, status; the toolbar and board chip float over it). It lives in the dock's centre panel.
 const editorArea = document.createElement('div');
 editorArea.className = 'editor-area';
 const canvas = document.createElement('canvas');
@@ -32,14 +34,17 @@ const scene = project.scene;
 // The view asks the simulation to catch up before every frame, so any edit
 // (a new wire, a flipped switch, a turned knob) is re-solved automatically.
 const sim = new Simulation(scene);
-// Serial output of the boards; "Auto" shows the board panel's board. Made
-// before the layout, which may restore the console window straight away.
-const serialConsole = new SerialConsole(scene, sim, () => boardPanel.boardId);
+// The board the other windows follow: the one selected on the grid, else the
+// last one. Updated after every frame (the view comes later in this file).
+const activeBoard = new ActiveBoard(() => scene.parts, () => view.selected);
+// Serial output of the boards; "Auto" shows the active board. Made before the
+// layout, which may restore the console window straight away.
+const serialConsole = new SerialConsole(scene, sim, () => activeBoard.partId);
 // File explorer: the source files of the boards. A change is recorded in the
 // undo history at once (settle) and the grid redraws (requestRender).
 const fileExplorer = new FileExplorer({
   project,
-  autoBoard: () => boardPanel.boardId,
+  autoBoard: () => activeBoard.partId,
   changed: () => {
     controller.history.settle();
     view.requestRender();
@@ -47,8 +52,20 @@ const fileExplorer = new FileExplorer({
   undo: () => controller.history.undo(),
   redo: () => controller.history.redo(),
 });
+// Code editor: opens the files the explorer announces and writes edits into
+// the project's files (debounced); same hand-off as the explorer for the history.
+const codeEditor = new CodeEditor({
+  project,
+  show: () => layout.open(CODE_EDITOR_ID),
+  changed: () => {
+    controller.history.settle();
+    view.requestRender();
+  },
+});
+onOpenFile((boardId, path, options) => codeEditor.open(boardId, path, options));
 const layout = new DockLayout(dock, editorArea, {
   [SERIAL_CONSOLE_ID]: serialConsole.element,
+  [CODE_EDITOR_ID]: codeEditor.element,
   [FILE_EXPLORER_ID]: fileExplorer.element,
 });
 const view = new GridView(canvas, scene, project.camera);
@@ -57,8 +74,14 @@ layout.api.onDidLayoutChange(view.requestRender);
 view.sim = sim;
 const editor = new Editor(view, scene, sim, editorArea);
 editor.ignoreKey = (e) => isForOtherWindow(e.target, editorArea);
-// Boards run on animation frames while one is running; the panel shows the selected board.
+// Boards run on animation frames while one is running.
 const clock = new BoardClock(sim, view.requestRender);
+// Run / Pause / Reset (toolbar, the board's reset button) and finished builds
+// (async) start the clock and redraw (which also refreshes the board chip).
+sim.boards.onChange(() => {
+  clock.wake();
+  view.requestRender();
+});
 const controller = new ProjectController(
   project,
   {
@@ -73,8 +96,8 @@ const controller = new ProjectController(
     },
     // Undo / redo. Board runtimes follow the parts through sim.update(): a
     // board that comes back starts stopped with empty serial buffers, a
-    // changed program reloads (stopped), a board that is gone loses its
-    // emulator; an untouched board keeps running.
+    // board that is gone loses its emulator; the others keep running (file
+    // changes take effect at the next Run from fresh or Reset).
     busy: () => editor.busy,
     beforeRestore: () => {
       editor.cancelGesture();
@@ -90,13 +113,14 @@ const controller = new ProjectController(
 );
 const bar = controller.fileBar.element;
 bar.insertBefore(createWindowsMenu(layout), bar.querySelector('.project-name'));
-const boardPanel = new BoardPanel(scene, view, sim, clock, editorArea, (partId) => {
+// The toolbar's console button: open (or bring forward) the Serial console on that board.
+editor.onOpenConsole = (partId) => {
   layout.open(SERIAL_CONSOLE_ID);
   serialConsole.showBoard(partId);
-});
-view.renderListeners.push(() => boardPanel.update());
-view.renderListeners.push(() => serialConsole.update()); // after the panel: Auto follows its board
-view.renderListeners.push(() => fileExplorer.update()); // Auto follows the board panel's board
+};
+view.renderListeners.push(() => activeBoard.update());
+view.renderListeners.push(() => serialConsole.update()); // after the active board: Auto follows it
+view.renderListeners.push(() => fileExplorer.update()); // the highlighted board follows it too
 layout.onChange(() => serialConsole.update());
 layout.onChange(() => fileExplorer.update());
 // Every edit is followed by a frame, so this notices all of them; the

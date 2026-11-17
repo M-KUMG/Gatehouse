@@ -35,6 +35,7 @@ export class BoardClock {
     this.frame = 0;
     if (!this.sim.boards.anyRunning) {
       this.speed = 0;
+      this.sim.boards.speed = 0;
       this.onTick();
       return;
     }
@@ -50,6 +51,7 @@ export class BoardClock {
     if (wall > 0) {
       const ratio = done / wall;
       this.speed = this.speed > 0 ? this.speed + (ratio - this.speed) * 0.1 : ratio;
+      this.sim.boards.speed = this.speed; // for boardRunState
     }
     this.onTick();
     this.frame = requestAnimationFrame(this.tick);

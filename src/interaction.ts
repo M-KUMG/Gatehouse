@@ -1,8 +1,13 @@
 // Editing on the grid: decides what a press, drag, click or key means and
 // hands the work to focused helpers: selection.ts (selection + commands),
 // wiring.ts (drawing wires), controls.ts (buttons, switches, knobs),
-// placing.ts (new parts from the menu), toolbar.ts / readout.ts (overlays).
+// placing.ts (new parts from the menu), toolbar.ts / boardstatus.ts /
+// readout.ts (overlays). A selected board gets Run / Reset / Serial console
+// buttons and a status chip; its drawn reset button resets it on a click
+// (boardcontrols.ts).
 
+import { isOnReset, selectedBoard, toolbarButtons } from './boardcontrols';
+import { BoardStatusChip } from './boardstatus';
 import { clickPart, isOnKnob, knobPosition, knobPositionAt, setKnob, setPressed } from './controls';
 import type { GridView } from './grid';
 import { isTap, type WireTap } from './junctions';
@@ -40,6 +45,8 @@ interface Moving {
   narrowTo: number | null;
   /** A release without movement counts as a click on the part (flips a switch). */
   click: boolean;
+  /** The press was on the board's reset button: a click resets the board instead. */
+  reset: boolean;
   moved: boolean;
   downX: number;
   downY: number;
@@ -77,15 +84,18 @@ interface Hover {
   tap: GridPoint | null;
   pin: PinRef | null;
   onKnob: boolean;
+  /** Over a board's reset button. */
+  onReset: boolean;
 }
 
-const NO_HOVER: Hover = { partId: null, wireId: null, tap: null, pin: null, onKnob: false };
+const NO_HOVER: Hover = { partId: null, wireId: null, tap: null, pin: null, onKnob: false, onReset: false };
 
 export class Editor {
   private readonly selection: Selection;
   private readonly placer: Placer;
   private readonly wiring: WireTool;
   private readonly toolbar: Toolbar;
+  private readonly statusChip: BoardStatusChip;
   private readonly readout: Readout;
   private readonly valueEditor = new ValueEditor();
   private readonly updateZoomReadout: () => void;
@@ -93,12 +103,15 @@ export class Editor {
   private drag: Moving | Marquee | Turning | Tapping | null = null;
   private pressed: PlacedPart | null = null; // push button held down by the mouse
   private onKnob = false;
+  private onReset = false;
   private pointer: { x: number; y: number } | null = null; // last position over the canvas
   /** Return true for key presses the grid must leave alone (e.g. aimed at another window). */
   ignoreKey: ((e: KeyboardEvent) => boolean) | null = null;
   /** Ctrl+Z, and Ctrl+Y or Ctrl+Shift+Z, while the grid has the keyboard. */
   onUndo: (() => void) | null = null;
   onRedo: (() => void) | null = null;
+  /** Open (or bring forward) the Serial console showing this board (part id). */
+  onOpenConsole: ((partId: number) => void) | null = null;
 
   constructor(
     private readonly view: GridView,
@@ -134,7 +147,14 @@ export class Editor {
       duplicate: () => this.duplicateSelected(),
       edit: () => this.editValue(this.selection.parts()[0]),
       delete: () => this.deleteSelected(),
+      run: () => this.toggleRun(),
+      reset: () => this.resetSelectedBoard(),
+      console: () => {
+        const board = selectedBoard(this.selection.parts());
+        if (board) this.onOpenConsole?.(board.id);
+      },
     });
+    this.statusChip = new BoardStatusChip(canvas);
     this.updateZoomReadout = createZoomReadout(
       overlayParent,
       () => view.camera.zoom,
@@ -267,7 +287,7 @@ export class Editor {
       } else if (sel.partIds.size > 1) {
         narrowTo = part.id;
       }
-      this.startMove(part, cell, e.clientX, e.clientY, narrowTo, !e.shiftKey);
+      this.startMove(part, cell, e.clientX, e.clientY, narrowTo, !e.shiftKey, !e.shiftKey && isOnReset(part, cell.col, cell.row));
       if (!e.shiftKey && setPressed(part, true)) this.pressed = part;
     }
     canvas.setPointerCapture(e.pointerId);
@@ -275,7 +295,7 @@ export class Editor {
     this.view.requestRender();
   };
 
-  private startMove(anchor: PlacedPart, cell: Cell, x: number, y: number, narrowTo: number | null, click: boolean): void {
+  private startMove(anchor: PlacedPart, cell: Cell, x: number, y: number, narrowTo: number | null, click: boolean, reset = false): void {
     const parts = this.selection.parts();
     for (const p of parts) this.scene.bringToFront(p.id);
     // Corners of the wires between the moving parts, and junctions only those wires use, move along.
@@ -287,7 +307,7 @@ export class Editor {
       offsetRow: cell.row - anchor.row,
       starts: new Map(parts.map((p) => [p, { col: p.col, row: p.row }])),
       corners: new Map(corners.map((c) => [c, { col: c.col, row: c.row }])),
-      narrowTo, click, moved: false, downX: x, downY: y,
+      narrowTo, click, reset, moved: false, downX: x, downY: y,
     };
   }
 
@@ -373,7 +393,10 @@ export class Editor {
     if (e.type === 'pointerup') this.updateDrag(e.clientX, e.clientY);
     if (d.kind === 'move' && !d.moved) {
       if (d.narrowTo !== null) this.selection.set([d.narrowTo]);
-      if (d.click && e.type === 'pointerup' && !this.pressed) clickPart(d.anchor);
+      if (d.click && e.type === 'pointerup' && !this.pressed) {
+        if (d.reset) void this.sim.boards.resetBoard(d.anchor.id);
+        else clickPart(d.anchor);
+      }
     }
     this.endDrag();
     if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
@@ -453,6 +476,7 @@ export class Editor {
       tap: hit?.point ?? null,
       partId: part?.id ?? null,
       onKnob: part !== undefined && isOnKnob(part, cell.col, cell.row),
+      onReset: part !== undefined && isOnReset(part, cell.col, cell.row),
     });
   }
 
@@ -460,12 +484,13 @@ export class Editor {
     const v = this.view;
     const samePin = v.hoverPin?.partId === h.pin?.partId && v.hoverPin?.pinId === h.pin?.pinId;
     const sameTap = v.hoverTap?.col === h.tap?.col && v.hoverTap?.row === h.tap?.row;
-    if (v.hoverId === h.partId && v.hoverWireId === h.wireId && sameTap && samePin && this.onKnob === h.onKnob) return;
+    if (v.hoverId === h.partId && v.hoverWireId === h.wireId && sameTap && samePin && this.onKnob === h.onKnob && this.onReset === h.onReset) return;
     v.hoverId = h.partId;
     v.hoverWireId = h.wireId;
     v.hoverTap = h.tap;
     v.hoverPin = h.pin;
     this.onKnob = h.onKnob;
+    this.onReset = h.onReset;
     this.updateCursor();
     v.requestRender();
   }
@@ -476,7 +501,7 @@ export class Editor {
     let cursor = '';
     if (this.wiring.active || v.hoverPin) cursor = 'crosshair';
     else if (this.drag?.kind === 'move') cursor = 'grabbing';
-    else if (this.drag?.kind === 'knob' || this.onKnob || v.hoverWireId !== null) cursor = 'pointer';
+    else if (this.drag?.kind === 'knob' || this.onKnob || this.onReset || v.hoverWireId !== null) cursor = 'pointer';
     else if (v.hoverId !== null) cursor = 'grab';
     v.canvas.style.cursor = cursor;
   }
@@ -495,6 +520,20 @@ export class Editor {
       this.startMove(d.anchor, { col, row }, d.downX, d.downY, null, false);
       if (this.drag?.kind === 'move') this.drag.moved = d.moved;
     }
+  }
+
+  /** Run, or pause while it runs, the selected board (a fresh board builds from its files first). */
+  private toggleRun(): void {
+    const board = selectedBoard(this.selection.parts());
+    if (!board) return;
+    const boards = this.sim.boards;
+    if (boards.boardRunState(board.id).state === 'running') boards.pauseBoard(board.id);
+    else void boards.runBoard(board.id);
+  }
+
+  private resetSelectedBoard(): void {
+    const board = selectedBoard(this.selection.parts());
+    if (board) void this.sim.boards.resetBoard(board.id);
   }
 
   private deleteSelected(): void {
@@ -563,11 +602,15 @@ export class Editor {
     const d = this.drag;
     const dragging = d !== null && (d.kind === 'move' ? d.moved : d.kind === 'marquee' ? d.active : false);
     const busy = this.placer.active || this.wiring.active || dragging;
-    this.toolbar.show(box && !busy ? this.view.toScreen(box) : null, {
-      rotate: parts.length > 0,
-      duplicate: parts.length > 0,
-      edit: parts.length === 1 && getPart(parts[0].typeId)?.value !== undefined,
-    });
+    this.toolbar.show(
+      box && !busy ? this.view.toScreen(box) : null,
+      toolbarButtons(parts, (id) => this.sim.boards.boardRunState(id)),
+    );
+    const board = selectedBoard(parts);
+    this.statusChip.show(
+      board && !busy ? this.view.toScreen(footprint(board)) : null,
+      board ? this.sim.boards.boardRunState(board.id) : null,
+    );
 
     const p = this.pointer;
     const text = p && !this.placer.active && !dragging && !this.valueEditor.isOpen ? this.hoverText() : null;
@@ -588,6 +631,7 @@ export class Editor {
     const wire = this.scene.findWire(target && isTap(target) ? target.wireId : v.draft ? null : v.hoverWireId);
     if (wire) return describeWire(wire, this.sim);
     const part = d?.kind === 'move' ? d.anchor : this.scene.find(v.hoverId);
+    if (part && !d && this.onReset) return { title: 'Reset', lines: ['Rebuild from the board files, stopped'] };
     return part ? describePart(part, this.sim) : null;
   }
 }

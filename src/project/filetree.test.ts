@@ -27,7 +27,7 @@ function sample(): BoardTree {
 
 describe('path rules', () => {
   it('accepts normal relative paths', () => {
-    for (const p of ['main.ino', 'src/led driver.h', 'a/b/c-d_e+f.cpp', 'README', '.hidden']) expect(pathError(p)).toBeNull();
+    for (const p of ['main.ino', 'src/led driver.h', 'a/b/c-d_e+f.cpp', 'README', '.hidden', 'main (2).ino']) expect(pathError(p)).toBeNull();
   });
 
   it('rejects bad paths with clear messages', () => {

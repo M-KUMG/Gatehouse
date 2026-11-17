@@ -64,8 +64,8 @@ export interface Wire {
 
 /** Everything a project stores about the circuit. */
 export interface ProjectState {
-  /** 2: no source files (built-in examples); 3: with `files`. */
-  version: 2 | 3;
+  /** 2: no source files; 3: with `files`; 4: firmware in `files`, not in part state. */
+  version: 2 | 3 | 4;
   parts: PlacedPart[];
   wires: Wire[];
   junctions: Junction[];
@@ -357,7 +357,7 @@ export class Scene {
     const inner = partIds ? this.within(partIds) : { wires: this.wires, junctions: this.junctions };
     const parts = partIds ? this.parts.filter((p) => partIds.has(p.id)) : this.parts;
     const files = Object.fromEntries(parts.flatMap((p) => (p.boardId && this.files[p.boardId] ? [[p.boardId, this.files[p.boardId]]] : [])));
-    const state: ProjectState = { version: 3, parts, wires: inner.wires, junctions: inner.junctions, files };
+    const state: ProjectState = { version: 4, parts, wires: inner.wires, junctions: inner.junctions, files };
     return JSON.parse(JSON.stringify(state)) as ProjectState;
   }
 

@@ -40,7 +40,8 @@ export const DEFAULT_SKETCH_PATH = 'main.ino';
 export const DEFAULT_SKETCH = `// Blink: turns the built-in LED (pin 13) on and off once a second.
 //
 // This file is source only. Gatehouse cannot compile sketches yet: the
-// board runs the program loaded as a .hex file.
+// board runs firmware.hex from this folder (compiled Intel HEX, e.g. from
+// the Arduino IDE "Export compiled binary").
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);

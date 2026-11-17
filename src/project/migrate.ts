@@ -6,6 +6,7 @@ import { APP_NAME } from '../app';
 import { isBoardType, nextBoardId, type BoardCounters } from './boardid';
 import { defaultTree, type SourceFiles } from './filetree';
 import { PROJECT_VERSION, ProjectError } from './format';
+import { programToFirmware } from './migratefirmware';
 
 export type RawDocument = Record<string, unknown>;
 
@@ -50,7 +51,7 @@ const addBoardFiles: Migration = {
 };
 
 /** All known steps, oldest first. */
-export const MIGRATIONS: readonly Migration[] = [addJunctions, addBoardFiles];
+export const MIGRATIONS: readonly Migration[] = [addJunctions, addBoardFiles, programToFirmware];
 
 /** The oldest version any chain of steps can start from. */
 function oldestSupported(current: number, migrations: readonly Migration[]): number {

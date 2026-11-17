@@ -14,7 +14,8 @@ export const MAX_FILES = 200;
 /** Most explicitly created folders in one board. */
 export const MAX_FOLDERS = 200;
 
-const SEGMENT = /^[A-Za-z0-9 ._+-]+$/;
+// Parentheses are allowed so "name (2).ext" (what a browser or an import makes for a duplicate) is a valid name.
+const SEGMENT = /^[A-Za-z0-9 ._+()-]+$/;
 const CONTROL = /[\u0000-\u001f\u007f]/;
 /** Device names Windows will not use as file names, with or without an extension. */
 const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
@@ -40,7 +41,7 @@ export function pathError(path: unknown): string | null {
   for (const s of segments) {
     if (s === '') return `${q} has an empty folder name ("//").`;
     if (s === '.' || s === '..') return `${q} uses "${s}", which is not allowed in a path.`;
-    if (!SEGMENT.test(s)) return `"${s}" in ${q} may only use letters, digits, spaces and . _ - +.`;
+    if (!SEGMENT.test(s)) return `"${s}" in ${q} may only use letters, digits, spaces and . _ - + ( ).`;
     if (s.startsWith(' ') || s.endsWith(' ')) return `"${s}" in ${q} starts or ends with a space.`;
     if (s.endsWith('.')) return `"${s}" in ${q} ends with ".", which Windows does not allow.`;
     if (RESERVED.test(s)) return `"${s}" in ${q} is a reserved device name on Windows.`;

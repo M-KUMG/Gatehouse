@@ -4,6 +4,7 @@
 // mixed-signal bridge, which also owns the simulated clock; without boards
 // a circuit is solved once, exactly as a plain DC circuit.
 
+import type { BuildInput } from './build/compiler';
 import { endTerminal, findContacts } from './contacts';
 import type { Scene, WireEnd } from './model';
 import { MixedSignal } from './mcu/mixedsignal';
@@ -58,13 +59,20 @@ export function boardParts(scene: Scene): BoardPartInfo[] {
   const out: BoardPartInfo[] = [];
   for (const part of scene.parts) {
     const spec = getPart(part.typeId)?.board;
-    if (spec) out.push({ id: part.id, spec, program: part.state?.program });
+    if (spec) out.push({ id: part.id, spec });
   }
   return out;
 }
 
+/** What a board is built from: its type and a copy of its files as they are now (null when it is not a board). */
+export function buildInput(scene: Scene, partId: number): BuildInput | null {
+  const part = scene.find(partId);
+  if (!part?.boardId || !Object.hasOwn(scene.files, part.boardId)) return null;
+  return { boardTypeId: part.typeId, files: { ...scene.files[part.boardId].files } };
+}
+
 export class Simulation implements SimView {
-  readonly boards = new BoardRuntimes();
+  readonly boards = new BoardRuntimes((partId) => buildInput(this.scene, partId));
   readonly bridge = new MixedSignal();
   /** How long the last solve took, for the status line only. */
   solveMs = 0;

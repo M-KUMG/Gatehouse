@@ -101,7 +101,7 @@ describe('board identity', () => {
 describe('board files API', () => {
   it('lists boards with labels and their files', () => {
     const { p, boardId } = withBoard();
-    expect(listBoards(p)).toEqual([{ boardId, partId: 2, typeId: 'uno', label: 'Arduino Uno #2' }]);
+    expect(listBoards(p)).toEqual([{ boardId, partId: 2, typeId: 'uno', label: 'Arduino Uno #1' }]);
     expect(listBoardFiles(p, boardId)?.map((e) => e.path)).toEqual(['empty dir', 'lib', 'lib/led.h', 'main.ino']);
     expect(boardTree(p, 'uno-9')).toBeNull();
     expect(createBoardFile(p, 'uno-9', 'x.ino')).toEqual({ ok: false, error: 'There is no board "uno-9" in this project.' });
@@ -127,7 +127,7 @@ describe('project format v3', () => {
   it('migrates a v2 file: boards get ids in order and the default tree, other parts untouched', () => {
     const v2 = JSON.parse(V2_FIXTURE);
     const out = migrate(v2);
-    expect(out.version).toBe(3);
+    expect(out.version).toBe(4); // through v3 (board files) to v4
     expect(out.parts).toEqual([v2.parts[0], { ...v2.parts[1], boardId: 'uno-1' }, v2.parts[2], { ...v2.parts[3], boardId: 'uno-2' }]);
     expect(out.files).toEqual({ 'uno-1': defaultTree(), 'uno-2': defaultTree() });
     expect(out.boardCounters).toEqual({ uno: 2 });

@@ -1,6 +1,8 @@
 // Floating round buttons next to the selection: rotate, duplicate, edit
-// value, delete. Also the small readouts along the bottom edge.
+// value, delete, and for one selected board Run / Pause, Reset and the Serial
+// console. Also the small readouts along the bottom edge.
 
+import type { BoardToolbar, ToolbarButtons } from './boardcontrols';
 import type { ScreenRect } from './grid';
 
 const GAP = 8; // between the selection and the toolbar
@@ -14,6 +16,10 @@ const ICONS = {
   rotate: svg('<path d="M20 11a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>'),
   duplicate: svg('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>'),
   edit: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
+  run: svg('<path d="M8 5.5v13l11-6.5z" fill="currentColor"/>'),
+  pause: svg('<path d="M8.5 5.5v13M15.5 5.5v13" stroke-width="3"/>'),
+  reset: svg('<path d="M12 3.5v8"/><path d="M6.6 6.8a8 8 0 1 0 10.8 0"/>'),
+  console: svg('<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7.5 9.5l3 2.5-3 2.5"/><path d="M13 15h4"/>'),
   delete: svg(
     '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/>' +
       '<path d="M9 7V4h6v3"/>',
@@ -25,18 +31,23 @@ export interface ToolbarActions {
   duplicate: () => void;
   edit: () => void;
   delete: () => void;
+  /** Board buttons: Run or Pause (whichever the button shows), Reset, Serial console. */
+  run: () => void;
+  reset: () => void;
+  console: () => void;
 }
 
-/** Which buttons make sense for the current selection (delete always does). */
-export interface ToolbarButtons {
-  rotate: boolean;
-  duplicate: boolean;
-  edit: boolean;
-}
+const NO_BUTTONS: ToolbarButtons = { rotate: true, duplicate: true, edit: false, board: null };
 
 export class Toolbar {
   private readonly el: HTMLDivElement;
-  private readonly buttons: Record<keyof ToolbarButtons, HTMLButtonElement>;
+  private readonly buttons: Record<'rotate' | 'duplicate' | 'edit', HTMLButtonElement>;
+  private readonly runButton: HTMLButtonElement;
+  private readonly resetButton: HTMLButtonElement;
+  private readonly consoleButton: HTMLButtonElement;
+  private readonly boardGroup = document.createElement('div');
+  /** What the board buttons show now (so they are only touched when it changes). */
+  private boardShown = '';
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -49,7 +60,13 @@ export class Toolbar {
       duplicate: button('Duplicate (Ctrl+D)', ICONS.duplicate, actions.duplicate),
       edit: button('Edit value (double-click)', ICONS.edit, actions.edit),
     };
+    this.runButton = button('Run', ICONS.run, actions.run, 'run');
+    this.resetButton = button('Reset (rebuild from files)', ICONS.reset, actions.reset);
+    this.consoleButton = button('Open serial console', ICONS.console, actions.console);
+    this.boardGroup.className = 'tool-group';
+    this.boardGroup.append(this.runButton, this.resetButton, this.consoleButton);
     this.el.append(
+      this.boardGroup,
       this.buttons.rotate, this.buttons.duplicate, this.buttons.edit,
       button('Delete (Del)', ICONS.delete, actions.delete, 'danger'),
     );
@@ -58,15 +75,14 @@ export class Toolbar {
   }
 
   /** Show the toolbar beside a viewport rectangle, or hide it with null. */
-  show(target: ScreenRect | null, buttons: ToolbarButtons = { rotate: true, duplicate: true, edit: false }): void {
+  show(target: ScreenRect | null, buttons: ToolbarButtons = NO_BUTTONS): void {
     const el = this.el;
     for (const name of ['rotate', 'duplicate', 'edit'] as const) {
       this.buttons[name].style.display = buttons[name] ? '' : 'none';
     }
-    const area = this.visibleArea();
-    const onScreen =
-      target && target.right > area.left && target.left < area.right && target.bottom > area.top && target.top < area.bottom;
-    if (!target || !onScreen) {
+    this.showBoardButtons(buttons.board);
+    const area = visibleArea(this.canvas);
+    if (!target || !isOnScreen(target, area)) {
       el.style.display = 'none';
       return;
     }
@@ -83,11 +99,35 @@ export class Toolbar {
     el.style.top = `${top}px`;
   }
 
-  /** The canvas' own rectangle (it only covers the centre area), less a margin. */
-  private visibleArea(): ScreenRect {
-    const c = this.canvas.getBoundingClientRect();
-    return { left: c.left + MARGIN, top: c.top + MARGIN, right: c.right - MARGIN, bottom: c.bottom - MARGIN };
+  /** Run / Reset / Serial console: shown for one selected board; touched only when what they show changes. */
+  private showBoardButtons(board: BoardToolbar | null): void {
+    this.boardGroup.style.display = board ? '' : 'none';
+    const key = board ? JSON.stringify(board) : '';
+    if (!board || key === this.boardShown) return;
+    this.boardShown = key;
+    const run = board.run;
+    this.runButton.innerHTML = run.icon === 'pause' ? ICONS.pause : ICONS.run;
+    this.runButton.title = run.title;
+    this.runButton.setAttribute('aria-label', run.title.split('\n')[0]);
+    this.runButton.disabled = run.disabled;
+    this.runButton.classList.toggle('has-error', run.error);
+    for (const [b, view] of [[this.resetButton, board.reset], [this.consoleButton, board.console]] as const) {
+      b.title = view.title;
+      b.setAttribute('aria-label', view.title);
+      b.disabled = view.disabled;
+    }
   }
+}
+
+/** The canvas' own rectangle (it only covers the centre area), less a margin. */
+export function visibleArea(canvas: HTMLCanvasElement): ScreenRect {
+  const c = canvas.getBoundingClientRect();
+  return { left: c.left + MARGIN, top: c.top + MARGIN, right: c.right - MARGIN, bottom: c.bottom - MARGIN };
+}
+
+/** True when `target` shows at least partly inside `area`. */
+export function isOnScreen(target: ScreenRect, area: ScreenRect): boolean {
+  return target.right > area.left && target.left < area.right && target.bottom > area.top && target.top < area.bottom;
 }
 
 function button(title: string, icon: string, onClick: () => void, extraClass?: string): HTMLButtonElement {

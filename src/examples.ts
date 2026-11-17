@@ -1,8 +1,10 @@
 // Ready-made circuits, stored exactly like a project would store them.
 
-import { BLINK_HEX, BLINK_NAME } from './mcu/programs/blink';
+import { FIRMWARE_FILE } from './build/firmware';
+import { BLINK_HEX } from './mcu/programs/blink';
 import type { PlacedPart, ProjectState, Rotation, Wire } from './model';
 import type { PartState } from './parts';
+import { defaultTree } from './project/filetree';
 
 export interface Example {
   name: string;
@@ -75,9 +77,9 @@ export const EXAMPLES: readonly Example[] = [
     name: 'Uno blink',
     hint: 'Arduino Uno with the Blink program: pin 13 → 220 Ω → LED → GND. Select the board and press Run.',
     state: {
-      version: 2,
+      version: 4,
       parts: [
-        part(1, 'uno', 0, 0, 0, { program: { name: BLINK_NAME, hex: BLINK_HEX } }),
+        { ...part(1, 'uno', 0, 0), boardId: 'uno-1' },
         part(2, 'resistor', 4, -5, 90, { value: 220 }),
         part(3, 'led', 3, -10),
       ],
@@ -87,6 +89,8 @@ export const EXAMPLES: readonly Example[] = [
         wire(13, '3.cathode', '1.gnd3'),
       ],
       junctions: [],
+      // The sketch next to the firmware it stands for (sketches are not compiled yet).
+      files: { 'uno-1': { files: { ...defaultTree().files, [FIRMWARE_FILE]: BLINK_HEX }, folders: [] } },
     },
   },
 ];

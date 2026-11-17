@@ -17,8 +17,10 @@ export const PROJECT_FORMAT = 'gatehouse-project';
  * v1: parts and pin-to-pin wires. v2: adds `junctions`; wire ends may be a
  * junction ({ junctionId }) instead of a pin. v3: board parts carry a
  * `boardId`; adds `files` (each board's source tree) and `boardCounters`.
+ * v4: boards no longer hold `state.program`; the firmware is a .hex file in
+ * the board's tree (v3 programs become "firmware.hex", see migratefirmware.ts).
  */
-export const PROJECT_VERSION = 3;
+export const PROJECT_VERSION = 4;
 
 export const DEFAULT_PROJECT_NAME = 'Untitled';
 

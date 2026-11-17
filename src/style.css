@@ -317,7 +317,7 @@ html, body {
   position: absolute;
   left: 10px;
   top: 10px;
-  z-index: 7; /* above the board panel (6) so the Windows menu is not hidden by it */
+  z-index: 7; /* above the toolbar and board chip (5) so the Windows menu is not hidden by them */
   display: flex;
   align-items: center;
   gap: 4px;
@@ -452,87 +452,97 @@ html, body {
   color: #fff;
 }
 
-/* Microcontroller board: program, Run / Pause / Reset, link to the serial console (top-left of the grid). */
-.board-panel {
+/* One selected board: its buttons in the selection toolbar and the status chip below it. */
+.tool-group {
+  display: flex;
+  gap: 6px;
+  padding-right: 6px;
+  border-right: 1px solid #3a3d44;
+}
+
+.tool-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tool-button:disabled:hover {
+  background: #25272c;
+  color: #d8dbe0;
+}
+
+/* Run button after a failed build: red marker in its corner. */
+.tool-button.run {
+  position: relative;
+}
+
+.tool-button.has-error::after {
+  content: '';
   position: absolute;
-  left: 10px;
-  top: 52px;
-  z-index: 6;
-  width: 290px;
-  max-width: calc(100% - 20px);
-  max-height: calc(100% - 100px);
-  overflow: auto;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid #25272c;
+  border-radius: 50%;
+  background: #e5534b;
+}
+
+.board-chip {
+  position: fixed;
+  z-index: 5;
   box-sizing: border-box;
-  padding: 8px 10px 10px;
+  max-width: 340px;
+  padding: 4px 8px;
   border: 1px solid #3a3d44;
   border-radius: 6px;
   background: rgba(37, 39, 44, 0.92);
   color: #c3c7ce;
-  font: 12px/1.4 system-ui, sans-serif;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+  font: 12px/1.35 system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  user-select: none;
 }
 
-.board-title {
-  color: #e6e8ec;
-  font-size: 13px;
-  font-weight: 600;
+.board-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.board-program {
-  margin-bottom: 6px;
-  color: #9aa0aa;
+.board-chip-line,
+.board-chip-note {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.board-buttons {
-  display: flex;
-  gap: 6px;
-}
-
-.board-button {
-  padding: 4px 10px;
-  border: 1px solid #3a3d44;
-  border-radius: 5px;
-  background: #2b2e34;
-  color: #d8dbe0;
-  font: inherit;
-  cursor: pointer;
-}
-
-.board-button:hover:not(:disabled) {
-  border-color: #4ea1ff;
-}
-
-.board-button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.board-status {
-  margin: 6px 0;
+.board-chip-note {
   color: #9aa0aa;
-  font-variant-numeric: tabular-nums;
 }
 
-.board-status.error {
+.board-chip-note.error {
   color: #ff8a80;
 }
 
-.board-link {
-  padding: 0;
-  border: none;
-  background: none;
-  color: #4ea1ff;
-  font: inherit;
-  cursor: pointer;
+.board-chip-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7d828b;
 }
 
-.board-link:hover,
-.board-link:focus-visible {
-  text-decoration: underline;
-  outline: none;
+.board-chip-dot.running {
+  background: #3fbf55;
+}
+
+.board-chip-dot.paused {
+  background: #e3b341;
+}
+
+.board-chip-dot.error {
+  background: #e5534b;
 }
 
 /* Windows menu in the file bar. */

@@ -35,6 +35,9 @@ export const UNO_BOTTOM: readonly HeaderPin[] = [
   ...[0, 1, 2, 3, 4, 5].map((n) => ({ id: `a${n}`, label: `A${n}`, x: 12 + n })),
 ];
 
+/** The red reset button's housing, in art units (its hit area; see PartType.resetButton). */
+export const UNO_RESET = { x: 20, y: 10, w: 24, h: 24 };
+
 /** The on-board LEDs, in art units. */
 export const UNO_L_LED = { x: 112, y: 52 };
 export const UNO_ON_LED = { x: 336, y: 62 };

@@ -125,20 +125,21 @@ describe('Blink output through the simulation', () => {
     return { sim, scene, id };
   }
 
-  it('reaches the store per board and port', () => {
+  it('reaches the store per board and port', async () => {
     const { sim, id } = blinkSim();
-    sim.boards.run(id);
+    await sim.boards.runBoard(id);
     for (let i = 0; i < 50; i++) sim.advance(0.05); // 2.5 s
     expect(sim.boards.serial.get(id, 'usart0')?.text).toBe('Blink: LED on pin 13\nLED on\nLED off\nLED on\n');
   });
 
-  it('reset clears the board\'s buffers; deleting the board removes them', () => {
+  it('reset clears the board\'s buffers; deleting the board removes them', async () => {
     const { sim, scene, id } = blinkSim();
-    sim.boards.run(id);
+    await sim.boards.runBoard(id);
     sim.advance(0.1);
     expect(sim.boards.serial.get(id, 'usart0')?.text).toContain('LED on');
-    sim.boards.reset(id);
+    await sim.boards.resetBoard(id);
     expect(sim.boards.serial.get(id, 'usart0')).toBeUndefined();
+    await sim.boards.runBoard(id); // Reset leaves the board stopped
     sim.advance(0.1);
     expect(sim.boards.serial.get(id, 'usart0')?.text).toContain('LED on');
     scene.remove(id);

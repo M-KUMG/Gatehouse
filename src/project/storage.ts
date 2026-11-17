@@ -1,5 +1,5 @@
-// The seam for saving a project as a folder (or zip) later. Not wired into
-// the app yet: it still saves one JSON file. No DOM here.
+// A project as a folder of files. Save writes this folder as a `.gth` zip
+// (gth.ts, diskfile.ts); a real-folder storage can come later. No DOM here.
 //
 // Folder layout (toFileMap / fromFileMap):
 //   gatehouse.json            the project file without file contents, plus

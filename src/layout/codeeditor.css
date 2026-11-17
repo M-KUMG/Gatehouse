@@ -1,0 +1,156 @@
+/* Code editor window (codeeditor.ts); the CodeMirror theme is in editorcm.ts. */
+
+.code-editor {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #18191c;
+  color: #c3c7ce;
+  font: 12px system-ui, sans-serif;
+}
+
+.ce-tabs {
+  display: flex;
+  flex: none;
+  min-height: 28px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid #3a3d44;
+  background: #25272c;
+  scrollbar-width: thin;
+  scrollbar-color: #4a4d55 transparent;
+}
+
+.ce-tab {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  max-width: 220px;
+  padding: 0 4px 0 10px;
+  border-right: 1px solid #3a3d44;
+  background: #25272c;
+  color: #9aa0aa;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.ce-tab:hover {
+  background: #2b2e34;
+  color: #c3c7ce;
+}
+
+.ce-tab.active {
+  background: #18191c;
+  color: #e6e8ec;
+  box-shadow: inset 0 -2px 0 #4ea1ff;
+}
+
+.ce-tab:focus {
+  outline: none;
+}
+
+.ce-tab:focus-visible {
+  box-shadow: inset 0 0 0 1px #4ea1ff;
+}
+
+.ce-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ce-tab-board {
+  overflow: hidden;
+  color: #7d828c;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+.ce-tab-close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.ce-tab:hover .ce-tab-close,
+.ce-tab.active .ce-tab-close {
+  opacity: 1;
+}
+
+.ce-tab-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.ce-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.ce-surface {
+  position: absolute;
+  inset: 0;
+}
+
+.ce-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  color: #7d828c;
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.ce-surface[hidden],
+.ce-empty[hidden] {
+  display: none;
+}
+
+/* A generated, read-only file (gatehouse.json): lock on the tab and a note above the text. */
+.ce-tab-lock {
+  display: inline-flex;
+  flex: none;
+  color: #7d828c;
+}
+
+.ce-tab.active .ce-tab-lock {
+  color: #e6b36a;
+}
+
+.ce-note {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-bottom: 1px solid #3a3d44;
+  background: #22242a;
+  color: #9aa0aa;
+  font-size: 11px;
+}
+
+.ce-note[hidden] {
+  display: none;
+}
+
+.ce-note-icon {
+  display: inline-flex;
+  color: #e6b36a;
+}

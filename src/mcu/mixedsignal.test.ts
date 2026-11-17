@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { EXAMPLES } from '../examples';
 import { Scene } from '../model';
 import { RED_LED, type SimInput } from '../sim';
-import { boardParts, buildNetlist } from '../simulation';
+import { boardParts, buildInput, buildNetlist } from '../simulation';
 import { UNO_ELECTRICAL, UNO_IO, UNO_SPEC, UnoEmulator } from './avr/uno';
 import type { BoardEmulator, BoardInputs, SliceResult } from './board';
 import { MixedSignal, SLICE_SECONDS, type BoardSlot } from './mixedsignal';
@@ -198,19 +198,20 @@ describe('mixed-signal bridge', () => {
     expect(board.inputs!.analog[a0]).toBeCloseTo(2.5, 2);
   });
 
-  it('runs the "Uno blink" example end to end: the LED follows Blink', () => {
+  it('runs the "Uno blink" example end to end: the LED follows Blink', async () => {
     const scene = new Scene();
     scene.insert(EXAMPLES.find((e) => e.name === 'Uno blink')!.state);
-    const runtimes = new BoardRuntimes();
+    const runtimes = new BoardRuntimes((id) => buildInput(scene, id));
     const slots = runtimes.sync(boardParts(scene));
-    expect(slots[0].emulator).not.toBeNull();
-    expect(slots[0].running).toBe(false); // stopped until Run
+    expect(slots[0].emulator).toBeNull(); // nothing built until Run
+    expect(slots[0].running).toBe(false);
     const ms = new MixedSignal();
     ms.setCircuit(buildNetlist(scene).input, slots);
     const led = scene.parts.find((p) => p.typeId === 'led')!.id;
     expect(ms.result!.parts[led].current).toBeLessThan(1e-9);
 
-    runtimes.run(slots[0].partId);
+    await runtimes.runBoard(slots[0].partId);
+    ms.setCircuit(buildNetlist(scene).input, slots); // the new emulator (Simulation.update does this)
     const serial = ms.advance(0.5);
     expect(ms.result!.parts[led].current).toBeGreaterThan(0.012); // on
     expect(String.fromCharCode(...serial.get(slots[0].partId)!.usart0)).toBe('Blink: LED on pin 13\r\nLED on\r\n');

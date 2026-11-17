@@ -1,6 +1,7 @@
 // The Serial console window: the serial output of one board on one port.
-// Board dropdown: "Auto" (follows the board selected on the grid, i.e. the
-// board panel's board) or a fixed board; Port dropdown: the board type's
+// Board dropdown (boards in a fixed order, e.g. uno-1, uno-2, uno-10): "Auto"
+// (follows the active board: the one selected on the grid, else the last one)
+// or a fixed board; Port dropdown: the board type's
 // serial ports (BoardSpec.serialPorts). The text comes from the serial store
 // (sim.boards.serial), which keeps collecting while this window is closed.
 // The choice of board and port is session UI state, never saved in the
@@ -13,6 +14,7 @@
 // (the store and BoardEmulator have no receive path yet).
 
 import './serialconsole.css';
+import { boardsInOrder } from '../boardcontrols';
 import type { BoardEmulator } from '../mcu/board';
 import { nominalBaud, type SerialBuffer } from '../mcu/serialstore';
 import type { PlacedPart, Scene } from '../model';
@@ -62,7 +64,7 @@ export class SerialConsole {
   constructor(
     private readonly scene: Scene,
     private readonly sim: Simulation,
-    /** The board "Auto" stands for (the board panel's board), or null. */
+    /** The board "Auto" stands for (the active board), or null. */
     private readonly autoBoard: () => number | null,
   ) {
     const el = this.element;
@@ -125,7 +127,7 @@ export class SerialConsole {
     }).observe(this.output);
   }
 
-  /** Show a board (from the board panel's link). Stays on "Auto" when Auto already shows it. */
+  /** Show a board (from the toolbar's console button). Stays on "Auto" when Auto already shows it. */
   showBoard(partId: number): void {
     if (!(this.boardChoice === AUTO && this.autoBoard() === partId)) this.boardChoice = String(partId);
     this.setFollow(true);
@@ -135,7 +137,7 @@ export class SerialConsole {
 
   /** Call after every frame and when the window opens. Cheap when nothing changed. */
   update(): void {
-    const boards = this.scene.parts.filter((p) => getPart(p.typeId)?.board !== undefined);
+    const boards = boardsInOrder(this.scene.parts);
     if (this.boardChoice !== AUTO && !boards.some((p) => String(p.id) === this.boardChoice)) this.boardChoice = AUTO;
     const part = this.resolveBoard(boards);
     this.updateBoardSelect(boards, part);
@@ -160,7 +162,8 @@ export class SerialConsole {
     if (!part) hint = 'No board in the project';
     else if (!port) hint = 'This board has no serial port.';
     else if (empty) {
-      if (!emulator) hint = rt?.error ? 'The program could not be loaded.' : 'No program loaded. Open a .hex in the board panel.';
+      // Before the first Run there is no emulator yet (the firmware is built on Run), so do not claim "no firmware".
+      if (!emulator) hint = rt?.error ? 'The program could not be loaded. Check the status below the board.' : 'Board stopped. Press Run.';
       else if (!rt?.running) hint = 'Board stopped. Press Run.';
       else hint = 'Waiting for serial output…';
     }

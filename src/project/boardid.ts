@@ -4,11 +4,12 @@
 // only goes up, even when boards are deleted or an undo removes one.
 
 import { getPart } from '../parts';
+import { parseBoardId } from './boardidparse';
+
+export { compareBoardIds, parseBoardId } from './boardidparse';
 
 /** Last number used per type slug, e.g. { uno: 3 }. */
 export type BoardCounters = Record<string, number>;
-
-const BOARD_ID = /^([a-z0-9]+)-([1-9][0-9]{0,5})$/;
 
 /** True for part types that are microcontroller boards (they get a boardId and files). */
 export function isBoardType(typeId: string): boolean {
@@ -18,12 +19,6 @@ export function isBoardType(typeId: string): boolean {
 /** The folder-name prefix of a board type: lower-case letters and digits only. */
 export function boardSlug(typeId: string): string {
   return typeId.toLowerCase().replace(/[^a-z0-9]+/g, '') || 'board';
-}
-
-/** The slug and number of a boardId, or null when it is not one. */
-export function parseBoardId(boardId: string): { slug: string; n: number } | null {
-  const m = BOARD_ID.exec(boardId);
-  return m ? { slug: m[1], n: Number(m[2]) } : null;
 }
 
 /** A fresh boardId for a new board of `typeId`; advances `counters` (changed in place). */

@@ -5,10 +5,11 @@
 import { APP_NAME } from '../app';
 import { ask, toast } from './dialog';
 import { createFileBar, type FileBar } from './filebar';
-import { chooseFileToOpen, chooseSaveTarget, fileNameFor, projectNameFromFile, type SaveTarget } from './files';
-import { ProjectError, stringifyProject, type ProjectFile } from './format';
+import { projectFromBytes, projectToGth, type ReadFile } from './diskfile';
+import { fileNameFor, projectNameFromFile } from './filename';
+import { chooseFileToOpen, chooseSaveTarget, type SaveTarget } from './files';
+import { ProjectError, type ProjectFile } from './format';
 import type { Project } from './project';
-import { readProject } from './read';
 import { readAutosave, startAutosave } from './autosave';
 import { UndoManager, type UndoHooks } from './undo';
 
@@ -81,17 +82,17 @@ export class ProjectController {
       if (!(await this.confirmDiscard())) return;
       const opened = await chooseFileToOpen();
       if (!opened) return;
-      let file: ProjectFile;
+      let read: ReadFile;
       try {
-        file = readProject(opened.text); // all checks happen before anything changes
+        read = projectFromBytes(opened.name, opened.bytes); // all checks happen before anything changes
       } catch (e) {
         if (!(e instanceof ProjectError)) throw e;
         toast(`Could not open "${opened.name}": ${e.message}`, 'error');
         return;
       }
-      file = { ...file, name: projectNameFromFile(opened.name) };
-      this.load(file, false);
-      this.target = opened.target;
+      this.load(read.file, false);
+      // An older JSON file is not overwritten with a zip: the next Save asks where.
+      this.target = read.legacy ? null : opened.target;
       toast(`Opened "${opened.name}"`);
     });
   }
@@ -103,7 +104,7 @@ export class ProjectController {
       if (!target) return;
       const name = projectNameFromFile(target.name);
       const file: ProjectFile = { ...this.project.serialize(), name, savedAt: new Date().toISOString() };
-      await target.write(stringifyProject(file));
+      await target.write(projectToGth(file));
       this.target = target;
       this.project.markSaved(name);
       toast(target.reusable ? `Saved "${target.name}"` : `Downloaded "${target.name}"`);

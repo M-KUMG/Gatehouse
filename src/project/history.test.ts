@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { clickPart, setKnob } from '../controls';
 import { connect } from '../junctions';
+import { createBoardFile, readBoardFile, writeBoardFile } from './boardfiles';
 import type { Circuit } from './format';
 import { COALESCE_MS, History, copyCircuit, editKey } from './history';
 import { Project } from './project';
@@ -256,16 +257,16 @@ describe('UndoManager with a project', () => {
     expect(undo.canRedo).toBe(false);
   });
 
-  it('a board program load is a step; undo brings back the old program', () => {
+  it('importing board firmware is a step; undo brings back the old firmware', () => {
     const { p, undo, tick } = setup();
     const uno = p.scene.add({ typeId: 'uno', col: 0, row: 0, rotation: 0 });
     tick();
-    uno.state = { ...uno.state, program: { name: 'One', hex: ':00000001FF\n' } };
+    expect(createBoardFile(p, uno.boardId!, 'firmware.hex', 'One').ok).toBe(true);
     tick();
-    uno.state = { ...uno.state, program: { name: 'Two', hex: ':00000001FF\n' } };
+    expect(writeBoardFile(p, uno.boardId!, 'firmware.hex', 'Two').ok).toBe(true);
     tick();
     undo.undo();
-    expect(p.scene.find(uno.id)?.state?.program?.name).toBe('One');
+    expect(readBoardFile(p, uno.boardId!, 'firmware.hex')).toEqual({ ok: true, content: 'One' });
     // New ids never reuse an id that undo took away.
     undo.undo();
     undo.undo();

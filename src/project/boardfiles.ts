@@ -2,7 +2,7 @@
 //
 // API (all take the Project; boardId is a board part's `boardId`, paths
 // follow the rules in paths.ts):
-//   listBoards(project): BoardInfo[]                     boards in draw order, with labels
+//   listBoards(project): BoardInfo[]                     boards in natural boardId order (uno-2 before uno-10), with labels
 //   boardTree(project, boardId): BoardTree | null        a copy of the board's tree
 //   listBoardFiles(project, boardId): TreeEntry[] | null files and folders, explorer order
 //   readBoardFile(project, boardId, path): ReadResult
@@ -19,6 +19,7 @@
 // Fast repeated writes to the same board fold into one undo step.
 
 import { boardLabel } from '../parts';
+import { compareBoardIds } from './boardidparse';
 import {
   createFile, createFolder, deletePath, listTree, readFile, renamePath, writeFile, copyTree,
   type BoardTree, type ReadResult, type TreeEntry, type TreeResult,
@@ -35,10 +36,11 @@ export interface BoardInfo {
 
 export type FileOpResult = { ok: true } | { ok: false; error: string };
 
+/** The boards, in a fixed order that does not depend on selection or draw order (bring-to-front). */
 export function listBoards(project: Project): BoardInfo[] {
-  return project.scene.parts.flatMap((p) =>
-    p.boardId ? [{ boardId: p.boardId, partId: p.id, typeId: p.typeId, label: boardLabel(p) }] : [],
-  );
+  return project.scene.parts
+    .flatMap((p) => (p.boardId ? [{ boardId: p.boardId, partId: p.id, typeId: p.typeId, label: boardLabel(p) }] : []))
+    .sort((a, b) => compareBoardIds(a.boardId, b.boardId));
 }
 
 function tree(project: Project, boardId: string): BoardTree | undefined {

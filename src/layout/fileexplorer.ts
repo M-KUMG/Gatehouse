@@ -1,43 +1,63 @@
-// The File explorer window: the source files and folders of one board, as a
-// tree. Board dropdown on top ("Auto" follows the board selected on the
-// grid, like the serial console), a small toolbar (new file, new folder,
-// rename, delete) and the tree of the chosen board.
+// The File explorer window: the whole project as a tree. The root row is the
+// project (named after its file), then gatehouse.json (generated from the
+// circuit, shown read only in the Code editor), then the `boards` folder with
+// one folder per board on the grid, each with that board's files and
+// subfolders. The board the rest of the app follows (selected on the grid,
+// else the last one) is highlighted; it is never the only board shown.
+//
+// What can change: inside a board folder files and folders can be created,
+// renamed, deleted and imported (importfiles.ts, fileimport.ts). The project
+// row, gatehouse.json, `boards` and the board folders themselves cannot (a
+// board folder lives and dies with its board part; see projectrows.ts for
+// what each kind of row allows). New file / new folder with one of those
+// selected goes into the active board's folder.
 //
 // All changes go through project/boardfiles.ts, which tells the project at
 // once. This window then calls host.changed() so the undo history records
 // the step (the app settles the history and redraws). It also listens to the
 // project's change notification, so undo / redo, open, new and board edits
-// elsewhere refresh the tree; expanded folders and the selection are kept
-// while their paths still exist.
+// elsewhere refresh the tree; folded rows and the selection are kept while
+// their paths still exist.
 //
 // Keys (while the tree has focus): arrows move and fold, Enter opens a file
 // (or folds a folder), F2 renames, Delete deletes, Ctrl+Z / Ctrl+Y undo and
 // redo the project. The tree is focusable, so key presses aimed at it never
-// reach the grid shortcuts (see isForOtherWindow in dock.ts).
+// reach the grid shortcuts (see isForOtherWindow in dock.ts). When the Code
+// editor has focus instead, its own undo / redo applies, not these.
 //
-// Opening a file is announced through fileevents.ts; nothing shows it yet.
+// Opening a file is announced through fileevents.ts and shown by the Code
+// editor: a single click on a file opens it (the focus stays in the tree, so
+// the arrow keys keep browsing); Enter and double-click also move the focus
+// into the editor. A folder click only selects (the arrow toggles it).
+//
+// Files dragged in from the desktop are imported into the board folder or
+// folder under the pointer; the Import button does the same into the
+// selected folder (or the file's folder, or the active board's folder).
 
 import './fileexplorer.css';
 import {
-  createBoardFile, createBoardFolder, deleteBoardPath, listBoardFiles, listBoards, renameBoardPath,
-  type BoardInfo, type FileOpResult,
+  createBoardFile, createBoardFolder, deleteBoardPath, listBoardFiles, listBoards, renameBoardPath, type BoardInfo,
 } from '../project/boardfiles';
 import { ask, toast } from '../project/dialog';
-import type { TreeEntry } from '../project/filetree';
 import { ancestors, isInside } from '../project/paths';
 import type { Project } from '../project/project';
+import { ICONS, type IconName } from './explorericons';
 import { emitOpenFile } from './fileevents';
+import { baseLength, checkNewName, checkRename, isCodeFile, remapPaths } from './filerows';
+import { createFilePicker, filesFromDrop, importFiles, type ImportRequest } from './fileimport';
+import { dropTarget, importTarget, type ImportTarget } from './importfiles';
+import { MANIFEST_TAB, READ_ONLY_NOTE } from './editortabs';
 import {
-  ROOT, baseLength, checkNewName, checkRename, horizontalMove, isCodeFile, moveSelection, newItemParent, reconcile,
-  remapPaths, selectionAfterDelete, visibleRows, type TreeRow,
-} from './filerows';
+  PROJECT_ROOT, horizontalMove, isFoldable, lockReason, moveSelection, newItemTarget, projectNodes, reconcile,
+  resolveActiveBoard, rowId, rowOps, selectionAfterDelete, visibleRows, type NewTarget, type ProjectNode, type ProjectRow,
+} from './projectrows';
 
 export const FILE_EXPLORER_ID = 'file-explorer';
 
 /** What the explorer needs from the app. */
 export interface ExplorerHost {
   project: Project;
-  /** Part id of the board "Auto" stands for (the board panel's board), or null. */
+  /** Part id of the board the rest of the app follows (the active board: selected on the grid, else the last one), or null. */
   autoBoard(): number | null;
   /** A change was made to the files: record it in the undo history and redraw. */
   changed(): void;
@@ -45,71 +65,53 @@ export interface ExplorerHost {
   redo(): void;
 }
 
-const AUTO = 'auto';
 const INDENT = 12;
-
-/** Per board, what survives refreshes and switching boards. */
-interface ViewState {
-  collapsed: Set<string>;
-  selected: string | null;
-}
+const NO_BOARD = 'add an Arduino board to the grid first';
 
 interface EditBase {
-  board: string;
   value: string;
   error: string | null;
 }
 interface NewEdit extends EditBase {
   mode: 'new';
-  parent: string;
+  target: NewTarget;
   folder: boolean;
 }
 interface RenameEdit extends EditBase {
   mode: 'rename';
+  /** Row id, board and path inside the board. */
+  id: string;
+  boardId: string;
   path: string;
 }
 type Edit = NewEdit | RenameEdit;
 
-const svg = (body: string): string =>
-  `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
-
-const FILE = '<path d="M4 1.5h5l3 3v10H4z"/><path d="M9 1.5v3h3"/>';
-const FOLDER = '<path d="M1.5 4h4l1.5 1.5h7.5v8h-13z"/>';
-const ICONS = {
-  file: svg(FILE),
-  code: svg(`${FILE}<path d="M7 8.5 5.7 10 7 11.5M9 8.5l1.3 1.5L9 11.5"/>`),
-  folder: svg(FOLDER),
-  board: svg('<rect x="3.5" y="3.5" width="9" height="9" rx="1"/><path d="M6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2"/>'),
-  chevron: svg('<path d="M6 4l4 4-4 4"/>'),
-  newFile: svg(`${FILE}<path d="M8 8v4M6 10h4"/>`),
-  newFolder: svg(`${FOLDER}<path d="M8 7.5v4M6 9.5h4"/>`),
-  rename: svg('<path d="M3 13l.5-3L11 2.5 13.5 5 6 12.5z"/><path d="M9.5 4l2.5 2.5"/>'),
-  trash: svg('<path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.5 6.5v5M9.5 6.5v5"/>'),
-};
-
 export class FileExplorer {
   /** The window's content; DockLayout adopts it whenever the window opens. */
   readonly element = document.createElement('div');
-  private readonly boardSelect = document.createElement('select');
   private readonly newFileButton = toolButton('newFile', 'New file');
   private readonly newFolderButton = toolButton('newFolder', 'New folder');
+  private readonly importButton = toolButton('import', 'Import files');
   private readonly renameButton = toolButton('rename', 'Rename (F2)');
   private readonly deleteButton = toolButton('trash', 'Delete (Delete key)');
   private readonly tree = document.createElement('div');
-  private readonly hint = document.createElement('div');
+  private readonly picker = createFilePicker((files) => void this.runImport({ files, target: this.pendingTarget ?? this.fallbackTarget() }));
 
-  /** AUTO or a boardId. */
-  private choice = AUTO;
-  private boardOptions = '';
-  private boardId: string | null = null;
-  private entries: TreeEntry[] = [];
-  private rows: TreeRow[] = [];
+  private boards: BoardInfo[] = [];
+  private activeBoardId: string | null = null;
+  private nodes: ProjectNode[] = [];
+  private rows: ProjectRow[] = [];
   private signature = '';
-  private readonly views = new Map<string, ViewState>();
+  private collapsed = new Set<string>();
+  private selected: string | null = null;
   private edit: Edit | null = null;
   private input: HTMLInputElement | null = null;
   private errorEl: HTMLElement | null = null;
   private readonly rowEls = new Map<string, HTMLElement>();
+  /** Row ids showing the drop highlight while files are dragged over. */
+  private dropIds: string[] = [];
+  /** Where the files of the open file picker go. */
+  private pendingTarget: ImportTarget | null = null;
   /** Focus the name input after the next render and select (part of) its text. */
   private focusEdit = false;
   /** True while the tree is rebuilt: blur events of removed inputs are not "the person left". */
@@ -117,7 +119,7 @@ export class FileExplorer {
   /** True while a change made here is applied: the project notification is ignored, we refresh once afterwards. */
   private applying = false;
   private asking = false;
-  /** False until the first update(): the board panel (Auto) may not exist yet before that. */
+  /** False until the first update(): the active board may not exist yet before that. */
   private started = false;
   private lastAuto: number | null | undefined;
 
@@ -125,53 +127,40 @@ export class FileExplorer {
     const el = this.element;
     el.className = 'file-explorer';
 
-    const bar = document.createElement('div');
-    bar.className = 'fx-bar';
-    this.boardSelect.className = 'fx-select';
-    this.boardSelect.title = 'Board whose files are shown';
-    this.boardSelect.setAttribute('aria-label', 'Board');
-    const field = document.createElement('label');
-    field.className = 'fx-field';
-    const caption = document.createElement('span');
-    caption.textContent = 'Board';
-    field.append(caption, this.boardSelect);
-    bar.append(field);
-
     const toolbar = document.createElement('div');
     toolbar.className = 'fx-toolbar';
     toolbar.setAttribute('role', 'toolbar');
-    toolbar.append(this.newFileButton, this.newFolderButton, this.renameButton, this.deleteButton);
+    toolbar.append(this.newFileButton, this.newFolderButton, this.importButton, this.renameButton, this.deleteButton, this.picker.element);
 
     const body = document.createElement('div');
     body.className = 'fx-body';
     this.tree.className = 'fx-tree';
     this.tree.tabIndex = 0; // focusable, so key presses aim here and not at the grid
     this.tree.setAttribute('role', 'tree');
-    this.tree.setAttribute('aria-label', 'Board files');
-    this.hint.className = 'fx-hint';
-    body.append(this.tree, this.hint);
-    el.append(bar, toolbar, body);
+    this.tree.setAttribute('aria-label', 'Project files');
+    body.append(this.tree);
+    el.append(toolbar, body);
 
-    this.boardSelect.addEventListener('change', () => {
-      this.choice = this.boardSelect.value;
-      this.edit = null;
-      this.refresh();
-    });
     this.newFileButton.addEventListener('click', () => this.startNew(false));
     this.newFolderButton.addEventListener('click', () => this.startNew(true));
+    this.importButton.addEventListener('click', () => this.chooseFiles());
     this.renameButton.addEventListener('click', () => this.startRename());
     this.deleteButton.addEventListener('click', () => void this.deleteSelected());
     this.tree.addEventListener('mousedown', this.onMouseDown);
     this.tree.addEventListener('click', this.onClick);
     this.tree.addEventListener('dblclick', this.onDoubleClick);
     this.tree.addEventListener('keydown', this.onKey);
+    this.tree.addEventListener('dragenter', this.onDragOver);
+    this.tree.addEventListener('dragover', this.onDragOver);
+    this.tree.addEventListener('dragleave', this.onDragLeave);
+    this.tree.addEventListener('drop', this.onDrop);
 
     host.project.onChange(() => {
       if (this.started && !this.applying) this.refresh();
     });
   }
 
-  /** Call after every frame and when windows open or close. Cheap; refreshes when "Auto" points to another board. */
+  /** Call after every frame and when windows open or close. Cheap; refreshes when the active board changes. */
   update(): void {
     const auto = this.host.autoBoard();
     if (this.started && auto === this.lastAuto) return;
@@ -184,142 +173,145 @@ export class FileExplorer {
 
   /** Bring everything in line with the project; rebuilds the tree only when it changed. */
   private refresh(): void {
-    const boards = listBoards(this.host.project);
-    if (this.choice !== AUTO && !boards.some((b) => b.boardId === this.choice)) this.choice = AUTO;
-    const info = this.resolveBoard(boards);
-    this.updateBoardSelect(boards, info);
-
-    const boardId = info?.boardId ?? null;
-    const entries = boardId ? listBoardFiles(this.host.project, boardId) ?? [] : [];
-    const signature = `${boardId}\n${entries.map((e) => `${e.kind}:${e.path}`).join('\n')}`;
-    for (const id of [...this.views.keys()]) if (!boards.some((b) => b.boardId === id)) this.views.delete(id);
+    const project = this.host.project;
+    const boards = listBoards(project);
+    const active = resolveActiveBoard(boards, this.host.autoBoard());
+    const nodes = projectNodes(
+      project.name,
+      boards.map((b) => ({ boardId: b.boardId, label: b.label, entries: listBoardFiles(project, b.boardId) ?? [] })),
+    );
+    const signature = `${active}\n${nodes.map((n) => `${n.kind}:${n.id}:${n.name}`).join('\n')}`;
+    this.boards = boards;
+    this.activeBoardId = active;
     if (signature === this.signature) return;
 
     this.signature = signature;
-    this.boardId = boardId;
-    this.entries = entries;
-    const view = this.view();
-    if (view) {
-      const kept = reconcile(entries, view.collapsed, view.selected);
-      view.collapsed = kept.collapsed;
-      view.selected = kept.selected;
-    }
+    this.nodes = nodes;
+    const kept = reconcile(nodes, this.collapsed, this.selected);
+    this.collapsed = kept.collapsed;
+    this.selected = kept.selected;
     if (this.edit && !this.editStillValid(this.edit)) this.edit = null;
     this.render();
   }
 
   private editStillValid(edit: Edit): boolean {
-    if (edit.board !== this.boardId) return false;
-    const has = (path: string, kind: string): boolean => this.entries.some((e) => e.path === path && e.kind === kind);
-    return edit.mode === 'rename' ? this.entries.some((e) => e.path === edit.path) : edit.parent === ROOT || has(edit.parent, 'folder');
+    const has = (id: string, folder: boolean): boolean => this.nodes.some((n) => n.id === id && (!folder || n.kind === 'folder' || n.kind === 'board'));
+    return edit.mode === 'rename' ? has(edit.id, false) : has(edit.target.parentId, true);
   }
 
-  /** The board to show: the fixed choice, else Auto's board, else the first board. */
-  private resolveBoard(boards: readonly BoardInfo[]): BoardInfo | null {
-    if (boards.length === 0) return null;
-    if (this.choice !== AUTO) return boards.find((b) => b.boardId === this.choice) ?? null;
-    const auto = this.host.autoBoard();
-    return boards.find((b) => b.partId === auto) ?? boards[0];
+  private labelOf(boardId: string): string {
+    return this.boards.find((b) => b.boardId === boardId)?.label ?? boardId;
   }
 
-  private updateBoardSelect(boards: readonly BoardInfo[], info: BoardInfo | null): void {
-    const sel = this.boardSelect;
-    const signature = boards.map((b) => `${b.boardId}=${b.label}`).join('|');
-    // Rebuild only when the list changes, so an open dropdown is not disturbed.
-    if (signature !== this.boardOptions || sel.options.length === 0) {
-      this.boardOptions = signature;
-      sel.replaceChildren(option(AUTO, ''), ...boards.map((b) => option(b.boardId, b.label)));
-    }
-    const autoText = boards.length === 0 ? 'No board in the project' : this.choice === AUTO && info
-      ? `Auto: selected board (${info.label})` : 'Auto: selected board';
-    const auto = sel.options[0];
-    if (auto.textContent !== autoText) auto.textContent = autoText;
-    if (sel.value !== this.choice) sel.value = this.choice;
-    sel.disabled = boards.length === 0;
-  }
-
-  private view(): ViewState | null {
-    if (!this.boardId) return null;
-    let v = this.views.get(this.boardId);
-    if (!v) {
-      v = { collapsed: new Set(), selected: null };
-      this.views.set(this.boardId, v);
-    }
-    return v;
+  private selectedRow(): ProjectRow | null {
+    return this.rows.find((r) => r.id === this.selected) ?? null;
   }
 
   private render(): void {
-    const view = this.view();
     const hadFocus = this.input !== null && document.activeElement === this.input;
     this.rebuilding = true;
     this.rowEls.clear();
+    this.dropIds = [];
     this.input = null;
     this.errorEl = null;
-    this.rows = view && this.boardId ? visibleRows(this.entries, view.collapsed, `boards/${this.boardId}`) : [];
+    this.rows = visibleRows(this.nodes, this.collapsed, this.activeBoardId);
     const edit = this.edit;
     const nodes: HTMLElement[] = [];
     for (const row of this.rows) {
-      const renaming = edit?.mode === 'rename' && edit.path === row.path ? edit : null;
-      const el = this.buildRow(row, view?.selected === row.path, renaming);
-      this.rowEls.set(row.path, el);
+      const renaming = edit?.mode === 'rename' && edit.id === row.id ? edit : null;
+      const el = this.buildRow(row, this.selected === row.id, renaming);
+      this.rowEls.set(row.id, el);
       nodes.push(el);
       if (renaming) nodes.push(this.buildErrorRow(row.depth, renaming));
-      else if (edit?.mode === 'new' && edit.parent === row.path) {
+      else if (edit?.mode === 'new' && edit.target.parentId === row.id) {
         nodes.push(this.buildNewRow(row.depth + 1, edit), this.buildErrorRow(row.depth + 1, edit));
       }
+      if (row.kind === 'boards' && row.expanded && this.boards.length === 0) nodes.push(this.buildNote(row.depth + 1));
     }
     this.tree.replaceChildren(...nodes);
     this.rebuilding = false;
-    this.hint.textContent = 'No board in the project';
-    this.hint.hidden = this.boardId !== null;
     this.updateToolbar();
-    const input = this.currentInput(); // set by makeInput while the rows were built
+    const input = this.input as HTMLInputElement | null; // set by makeInput while the rows were built
     if (input && (hadFocus || this.focusEdit)) {
       input.focus();
       if (this.focusEdit && edit) {
-        const folder = edit.mode === 'new' ? edit.folder : this.entries.some((e) => e.path === edit.path && e.kind === 'folder');
-        input.setSelectionRange(0, edit.mode === 'rename' && !folder ? baseLength(input.value) : input.value.length);
+        const file = edit.mode === 'new' ? !edit.folder : this.rows.some((r) => r.id === edit.id && r.kind === 'file');
+        input.setSelectionRange(0, edit.mode === 'rename' && file ? baseLength(input.value) : input.value.length);
       }
       this.focusEdit = false;
       input.scrollIntoView?.({ block: 'nearest' });
     }
   }
 
-  private currentInput(): HTMLInputElement | null {
-    return this.input;
+  private iconFor(row: ProjectRow): IconName {
+    switch (row.kind) {
+      case 'project': return 'project';
+      case 'manifest': return 'json';
+      case 'boards': return 'boards';
+      case 'board': return 'board';
+      case 'folder': return 'folder';
+      default: return /\.json$/i.test(row.name) ? 'json' : isCodeFile(row.name) ? 'code' : 'file';
+    }
   }
 
-  private buildRow(row: TreeRow, selected: boolean, renaming: RenameEdit | null): HTMLElement {
+  private titleFor(row: ProjectRow): string {
+    switch (row.kind) {
+      case 'project': return `Project: ${row.name}`;
+      case 'manifest': return `${row.name}: ${READ_ONLY_NOTE}`;
+      case 'boards': return 'boards: one folder for each board on the grid';
+      default: return row.id; // the full path
+    }
+  }
+
+  private buildRow(row: ProjectRow, selected: boolean, renaming: RenameEdit | null): HTMLElement {
     const d = document.createElement('div');
-    d.className = 'fx-row';
+    d.className = `fx-row k-${row.kind}`;
     if (selected) d.classList.add('selected');
+    if (row.active) {
+      d.classList.add('active');
+      d.setAttribute('aria-current', 'true');
+    }
     d.setAttribute('role', 'treeitem');
     d.setAttribute('aria-level', String(row.depth + 1));
     d.setAttribute('aria-selected', String(selected));
-    if (row.kind !== 'file') d.setAttribute('aria-expanded', String(row.expanded));
-    d.dataset.path = row.path;
+    const foldable = isFoldable(row.kind);
+    if (foldable) d.setAttribute('aria-expanded', String(row.expanded));
+    d.dataset.id = row.id;
     d.style.paddingLeft = `${4 + row.depth * INDENT}px`;
 
     const twisty = document.createElement('span');
     twisty.className = 'fx-twisty';
-    if (row.kind === 'folder') {
+    if (foldable) {
       twisty.innerHTML = ICONS.chevron;
       twisty.classList.add('toggle');
       if (row.expanded) twisty.classList.add('open');
     }
     const icon = document.createElement('span');
-    icon.className = `fx-icon ${row.kind === 'file' ? (isCodeFile(row.name) ? 'code' : 'file') : row.kind}`;
-    icon.innerHTML = row.kind === 'root' ? ICONS.board : row.kind === 'folder' ? ICONS.folder : isCodeFile(row.name) ? ICONS.code : ICONS.file;
+    const iconName = this.iconFor(row);
+    icon.className = `fx-icon ${row.kind === 'file' && iconName === 'code' ? 'code' : row.kind}`;
+    icon.innerHTML = ICONS[iconName];
     d.append(twisty, icon);
 
     if (renaming) {
       d.append(this.makeInput(renaming));
-    } else {
-      const name = document.createElement('span');
-      name.className = 'fx-name';
-      name.textContent = row.name;
-      d.title = row.kind === 'root' ? `Source files of this board (${row.name})` : row.path;
-      d.append(name);
+      return d;
+    }
+    const name = document.createElement('span');
+    name.className = 'fx-name';
+    name.textContent = row.name;
+    d.title = this.titleFor(row);
+    d.append(name);
+    if (row.secondary) {
+      const sub = document.createElement('span');
+      sub.className = 'fx-sub';
+      sub.textContent = row.secondary;
+      d.append(sub);
+    }
+    if (row.kind === 'manifest') {
+      const lock = document.createElement('span');
+      lock.className = 'fx-lock';
+      lock.innerHTML = ICONS.lock;
+      d.append(lock);
     }
     return d;
   }
@@ -346,6 +338,15 @@ export class FileExplorer {
     d.textContent = edit.error ?? '';
     d.hidden = edit.error === null;
     this.errorEl = d;
+    return d;
+  }
+
+  /** The hint under an empty `boards` folder. */
+  private buildNote(depth: number): HTMLElement {
+    const d = document.createElement('div');
+    d.className = 'fx-note';
+    d.style.paddingLeft = `${4 + depth * INDENT + 20}px`;
+    d.textContent = 'Add an Arduino board to the grid to get a folder here';
     return d;
   }
 
@@ -393,56 +394,69 @@ export class FileExplorer {
   }
 
   private updateToolbar(): void {
-    const has = this.boardId !== null;
-    const selected = this.view()?.selected ?? null;
-    this.newFileButton.disabled = !has;
-    this.newFolderButton.disabled = !has;
-    this.renameButton.disabled = !has || selected === null || selected === ROOT;
-    this.deleteButton.disabled = this.renameButton.disabled;
+    const row = this.selectedRow();
+    const kind = row?.kind ?? null;
+    const target = newItemTarget(row, this.activeBoardId);
+    const where = target?.redirected ? ` in ${this.labelOf(target.boardId)} (the active board)` : '';
+    this.setButton(this.newFileButton, target === null, target ? `New file${where}` : `New file (${NO_BOARD})`);
+    this.setButton(this.newFolderButton, target === null, target ? `New folder${where}` : `New folder (${NO_BOARD})`);
+
+    const drop = importTarget(row, this.activeBoardId);
+    const into = drop ? ` into ${this.labelOf(drop.boardId)}${drop.folder ? `/${drop.folder}` : ''}` : '';
+    this.setButton(this.importButton, drop === null, drop ? `Import files${into}` : `Import files (${NO_BOARD})`);
+
+    const ops = rowOps(kind);
+    const locked = lockReason(kind);
+    this.setButton(this.renameButton, !ops.rename, locked ?? 'Rename (F2)');
+    this.setButton(this.deleteButton, !ops.remove, locked ?? 'Delete (Delete key)');
+  }
+
+  private setButton(button: HTMLButtonElement, disabled: boolean, title: string): void {
+    button.disabled = disabled;
+    button.title = title;
+    button.setAttribute('aria-label', title);
   }
 
   // ---- selection and folding -----------------------------------------------
 
-  private select(path: string | null): void {
-    const view = this.view();
-    if (!view) return;
-    view.selected = path;
-    for (const [p, el] of this.rowEls) {
-      const on = p === path;
+  private select(id: string | null): void {
+    this.selected = id;
+    for (const [rid, el] of this.rowEls) {
+      const on = rid === id;
       el.classList.toggle('selected', on);
       el.setAttribute('aria-selected', String(on));
     }
     this.updateToolbar();
-    if (path !== null) this.rowEls.get(path)?.scrollIntoView?.({ block: 'nearest' });
+    if (id !== null) this.rowEls.get(id)?.scrollIntoView?.({ block: 'nearest' });
   }
 
-  private setExpanded(path: string, expanded: boolean): void {
-    const view = this.view();
-    if (!view) return;
-    if (expanded) view.collapsed.delete(path);
+  private setExpanded(id: string, expanded: boolean): void {
+    if (expanded) this.collapsed.delete(id);
     else {
-      view.collapsed.add(path);
-      if (view.selected !== null && isInside(view.selected, path)) view.selected = path; // do not hide the selection
+      this.collapsed.add(id);
+      if (this.selected !== null && (id === PROJECT_ROOT ? this.selected !== PROJECT_ROOT : isInside(this.selected, id))) this.selected = id; // do not hide the selection
     }
     this.render();
   }
 
-  private rowAt(target: EventTarget | null): TreeRow | null {
+  private rowAt(target: EventTarget | null): ProjectRow | null {
     if (!(target instanceof Element)) return null;
     const el = target.closest<HTMLElement>('.fx-row');
     if (!el || el.classList.contains('editing') || target.closest('.fx-input')) return null;
-    return this.rows.find((r) => r.path === el.dataset.path) ?? null;
+    return this.rows.find((r) => r.id === el.dataset.id) ?? null;
   }
 
   private onMouseDown = (e: MouseEvent): void => {
     if (e.button !== 0 || (e.target instanceof Element && e.target.closest('.fx-input'))) return;
     const row = this.rowAt(e.target);
-    this.select(row ? row.path : null); // empty space clears the selection
+    this.select(row ? row.id : null); // empty space clears the selection
   };
 
   private onClick = (e: MouseEvent): void => {
     const row = this.rowAt(e.target);
-    if (row?.kind === 'folder' && e.target instanceof Element && e.target.closest('.fx-twisty')) this.setExpanded(row.path, !row.expanded);
+    if (!row || e.button !== 0) return;
+    if (isFoldable(row.kind) && e.target instanceof Element && e.target.closest('.fx-twisty')) this.setExpanded(row.id, !row.expanded);
+    else if (rowOps(row.kind).open) this.open(row, false);
   };
 
   private onDoubleClick = (e: MouseEvent): void => {
@@ -450,10 +464,16 @@ export class FileExplorer {
     if (row) this.activate(row);
   };
 
-  /** Enter or double-click: open a file, fold or unfold a folder. */
-  private activate(row: TreeRow): void {
-    if (row.kind === 'file' && this.boardId) emitOpenFile(this.boardId, row.path);
-    else if (row.kind === 'folder') this.setExpanded(row.path, !row.expanded);
+  /** Show a file in the Code editor (gatehouse.json too, read only). */
+  private open(row: ProjectRow, focus: boolean): void {
+    if (row.kind === 'manifest') emitOpenFile(MANIFEST_TAB.boardId, MANIFEST_TAB.path, { focus });
+    else if (row.kind === 'file' && row.boardId !== undefined && row.path !== undefined) emitOpenFile(row.boardId, row.path, { focus });
+  }
+
+  /** Enter or double-click: open a file in the editor and focus it, fold or unfold a folder. */
+  private activate(row: ProjectRow): void {
+    if (rowOps(row.kind).open) this.open(row, true);
+    else if (isFoldable(row.kind)) this.setExpanded(row.id, !row.expanded);
   }
 
   // ---- keyboard --------------------------------------------------------------
@@ -472,14 +492,12 @@ export class FileExplorer {
       return;
     }
     if (e.altKey) return;
-    const view = this.view();
-    const selected = view?.selected ?? null;
-    const row = this.rows.find((r) => r.path === selected) ?? null;
+    const row = this.selectedRow();
     switch (e.key) {
       case 'ArrowUp':
       case 'ArrowDown':
         e.preventDefault();
-        this.select(moveSelection(this.rows, selected, e.key === 'ArrowDown' ? 1 : -1));
+        this.select(moveSelection(this.rows, this.selected, e.key === 'ArrowDown' ? 1 : -1));
         break;
       case 'Home':
       case 'End':
@@ -489,9 +507,9 @@ export class FileExplorer {
       case 'ArrowLeft':
       case 'ArrowRight': {
         e.preventDefault();
-        const move = horizontalMove(this.rows, selected, e.key === 'ArrowLeft' ? 'left' : 'right');
-        if (move?.kind === 'select') this.select(move.path);
-        else if (move) this.setExpanded(move.path, move.kind === 'expand');
+        const move = horizontalMove(this.rows, this.selected, e.key === 'ArrowLeft' ? 'left' : 'right');
+        if (move?.kind === 'select') this.select(move.id);
+        else if (move) this.setExpanded(move.id, move.kind === 'expand');
         break;
       }
       case 'Enter':
@@ -512,21 +530,29 @@ export class FileExplorer {
   // ---- changes -----------------------------------------------------------------
 
   private startNew(folder: boolean): void {
-    const view = this.view();
-    if (!view || !this.boardId) return;
-    const parent = newItemParent(this.rows, view.selected);
-    // Make the new row visible: the folder and every folder above it unfold.
-    for (const p of [...ancestors(parent), parent]) view.collapsed.delete(p);
-    this.edit = { mode: 'new', board: this.boardId, parent, folder, value: '', error: null };
+    const target = newItemTarget(this.selectedRow(), this.activeBoardId);
+    if (!target) return;
+    if (target.redirected) toast(`New ${folder ? 'folder' : 'file'} goes in ${this.labelOf(target.boardId)}, the active board.`);
+    this.unfold(target.parentId);
+    this.edit = { mode: 'new', target, folder, value: '', error: null };
     this.focusEdit = true;
     this.render();
   }
 
+  /** Make a row visible: it and every row above it unfold. */
+  private unfold(id: string): void {
+    for (const p of [PROJECT_ROOT, ...ancestors(id), id]) this.collapsed.delete(p);
+  }
+
   private startRename(): void {
-    const view = this.view();
-    const row = this.rows.find((r) => r.path === view?.selected);
-    if (!view || !this.boardId || !row || row.kind === 'root') return;
-    this.edit = { mode: 'rename', board: this.boardId, path: row.path, value: row.name, error: null };
+    const row = this.selectedRow();
+    if (!row) return;
+    if (!rowOps(row.kind).rename || row.boardId === undefined || row.path === undefined) {
+      const why = lockReason(row.kind);
+      if (why) toast(why);
+      return;
+    }
+    this.edit = { mode: 'rename', id: row.id, boardId: row.boardId, path: row.path, value: row.name, error: null };
     this.focusEdit = true;
     this.render();
   }
@@ -540,41 +566,45 @@ export class FileExplorer {
 
   private commit(): void {
     const edit = this.edit;
-    const boardId = this.boardId;
-    const view = this.view();
-    if (!edit || !boardId || !view) return;
+    if (!edit) return;
     const project = this.host.project;
 
     if (edit.mode === 'new') {
-      const named = checkNewName(edit.parent, edit.value);
+      const { boardId, parent, parentId } = edit.target;
+      const named = checkNewName(parent, edit.value);
       if (!named.ok) return this.setError(named.error);
       const result = this.apply(() => (edit.folder ? createBoardFolder(project, boardId, named.path) : createBoardFile(project, boardId, named.path)));
       if (!result.ok) return this.setError(result.error);
-      for (const p of [...ancestors(named.path), edit.parent]) view.collapsed.delete(p);
-      this.finish(view, named.path);
+      const id = rowId(boardId, named.path);
+      this.unfold(parentId);
+      for (const p of ancestors(id)) this.collapsed.delete(p);
+      this.finish(id);
       return;
     }
 
     const named = checkRename(edit.path, edit.value);
     if (!named.ok) return this.setError(named.error);
     if (named.unchanged) return this.cancelEdit();
-    const result = this.apply(() => renameBoardPath(project, boardId, edit.path, named.path));
+    const result = this.apply(() => renameBoardPath(project, edit.boardId, edit.path, named.path));
     if (!result.ok) return this.setError(result.error);
-    view.collapsed = remapPaths(view.collapsed, edit.path, named.path);
-    this.finish(view, named.path);
+    this.collapsed = remapPaths(this.collapsed, edit.id, rowId(edit.boardId, named.path));
+    this.finish(rowId(edit.boardId, named.path));
   }
 
   private async deleteSelected(): Promise<void> {
-    const boardId = this.boardId;
-    const view = this.view();
-    const path = view?.selected;
-    const entry = this.entries.find((e) => e.path === path);
-    if (this.asking || !boardId || !view || !path || !entry) return;
-    const what = entry.kind === 'folder'
+    const row = this.selectedRow();
+    if (this.asking || !row) return;
+    if (!rowOps(row.kind).remove || row.boardId === undefined || row.path === undefined) {
+      const why = lockReason(row.kind);
+      if (why) toast(why);
+      return;
+    }
+    const { boardId, path } = row;
+    const what = row.kind === 'folder'
       ? `Delete the folder "${path}" and everything in it?`
       : `Delete the file "${path}"?`;
     this.asking = true;
-    const yes = await ask(entry.kind === 'folder' ? 'Delete folder' : 'Delete file', `${what} You can undo this with Ctrl+Z.`, [
+    const yes = await ask(row.kind === 'folder' ? 'Delete folder' : 'Delete file', `${what} You can undo this with Ctrl+Z.`, [
       { label: 'Cancel', value: false },
       { label: 'Delete', value: true, primary: true },
     ], false);
@@ -583,19 +613,19 @@ export class FileExplorer {
       this.tree.focus();
       return;
     }
-    if (this.boardId !== boardId) return; // the board went away while asking
-    const next = selectionAfterDelete(this.rows, path);
+    if (!this.rows.some((r) => r.id === row.id)) return; // it went away while asking
+    const next = selectionAfterDelete(this.rows, row.id);
     const result = this.apply(() => deleteBoardPath(this.host.project, boardId, path));
     if (!result.ok) {
       toast(result.error, 'error');
       this.tree.focus();
       return;
     }
-    this.finish(view, next);
+    this.finish(next);
   }
 
   /** Run a change of the files; the project notification is held back until finish(). */
-  private apply(op: () => FileOpResult): FileOpResult {
+  private apply<T>(op: () => T): T {
     this.applying = true;
     try {
       return op();
@@ -604,25 +634,83 @@ export class FileExplorer {
     }
   }
 
-  /** After a successful change: select `path`, let the app record the step, show the new tree. */
-  private finish(view: ViewState, path: string): void {
+  /** After a successful change: select `id`, let the app record the step, show the new tree. */
+  private finish(id: string): void {
     this.edit = null;
-    view.selected = path;
+    this.selected = id;
     this.host.changed();
     this.signature = ''; // force the rebuild
     this.refresh();
     this.tree.focus();
   }
+
+  // ---- importing files -------------------------------------------------------------
+
+  /** The Import button: remember where the files go, then ask for them. */
+  private chooseFiles(): void {
+    const target = importTarget(this.selectedRow(), this.activeBoardId);
+    if (!target) return;
+    this.pendingTarget = target;
+    this.picker.open();
+  }
+
+  private fallbackTarget(): ImportTarget {
+    return { boardId: this.activeBoardId ?? '', folder: '' };
+  }
+
+  private async runImport(request: ImportRequest): Promise<void> {
+    this.pendingTarget = null;
+    const done = await importFiles(this.host.project, request, (op) => this.apply(op));
+    if (!done) {
+      this.signature = ''; // names may have changed even when the import failed halfway
+      this.refresh();
+      return;
+    }
+    this.host.changed(); // one undo step for the whole import
+    this.unfold(rowId(done.boardId, done.folder));
+    this.selected = rowId(done.boardId, done.imported[0]);
+    this.signature = '';
+    this.refresh();
+    this.rowEls.get(this.selected)?.scrollIntoView?.({ block: 'nearest' });
+  }
+
+  private static hasFiles(e: DragEvent): boolean {
+    return e.dataTransfer !== null && [...e.dataTransfer.types].includes('Files');
+  }
+
+  private onDragOver = (e: DragEvent): void => {
+    if (!FileExplorer.hasFiles(e)) return;
+    e.preventDefault(); // also for refused targets: a drop must never reach the browser's own handling
+    const target = dropTarget(this.rowAt(e.target));
+    if (e.dataTransfer) e.dataTransfer.dropEffect = target ? 'copy' : 'none';
+    this.setDrop(target);
+  };
+
+  private onDragLeave = (e: DragEvent): void => {
+    if (!(e.relatedTarget instanceof Node && this.tree.contains(e.relatedTarget))) this.setDrop(null);
+  };
+
+  private onDrop = (e: DragEvent): void => {
+    if (!FileExplorer.hasFiles(e) || !e.dataTransfer) return;
+    e.preventDefault();
+    this.setDrop(null);
+    const target = dropTarget(this.rowAt(e.target));
+    if (!target) return;
+    const { files, skipped } = filesFromDrop(e.dataTransfer);
+    void this.runImport({ files, skipped, target });
+  };
+
+  /** Highlight the board folder (and the folder inside it) that would take the files. */
+  private setDrop(target: ImportTarget | null): void {
+    const ids = target ? [rowId(target.boardId, ''), ...(target.folder ? [rowId(target.boardId, target.folder)] : [])] : [];
+    if (ids.join('\n') === this.dropIds.join('\n')) return;
+    for (const id of this.dropIds) this.rowEls.get(id)?.classList.remove('drop');
+    for (const id of ids) this.rowEls.get(id)?.classList.add('drop');
+    this.dropIds = ids;
+  }
 }
 
-function option(value: string, text: string): HTMLOptionElement {
-  const o = document.createElement('option');
-  o.value = value;
-  o.textContent = text;
-  return o;
-}
-
-function toolButton(icon: keyof typeof ICONS, title: string): HTMLButtonElement {
+function toolButton(icon: IconName, title: string): HTMLButtonElement {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'fx-button';

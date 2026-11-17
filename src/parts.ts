@@ -12,10 +12,11 @@ import { PUSH_BUTTON_ART, PUSH_BUTTON_PRESSED_SVG } from './art/pushbutton';
 import { RESISTOR_ART, resistorArt } from './art/resistor';
 import { TOGGLE_ART, TOGGLE_ON_SVG } from './art/toggle';
 import { TRANSISTOR_ART } from './art/transistor';
-import { UNO_ART, UNO_BOTTOM, UNO_TOP, drawUnoLeds, type HeaderPin } from './art/uno';
+import { UNO_ART, UNO_BOTTOM, UNO_RESET, UNO_TOP, drawUnoLeds, type HeaderPin } from './art/uno';
 import { ART_CELL } from './art/common';
-import type { BoardProgram, BoardSpec } from './mcu/board';
+import type { BoardSpec } from './mcu/board';
 import { UNO_SPEC } from './mcu/avr/uno';
+import { parseBoardId } from './project/boardidparse';
 import { BC547, RED_LED, type ComponentModel, type PartResult } from './sim';
 
 /** What a placed part remembers besides its position. Plain serializable data. */
@@ -28,8 +29,6 @@ export interface PartState {
   value?: number;
   /** Destroyed by too much current. */
   burned?: boolean;
-  /** Boards: the loaded program. Whether it runs is not saved. */
-  program?: BoardProgram;
 }
 
 export interface PinDef {
@@ -69,6 +68,19 @@ export interface PartType {
   sim?(state: PartState): ComponentModel;
   /** A microcontroller board: runs programs (see src/mcu). */
   board?: BoardSpec;
+  /**
+   * Boards: the reset button drawn on the art, as a box in cells inside the
+   * unrotated cell box. A click on it (not a drag) resets the board; it
+   * rotates with the part (see src/boardcontrols.ts).
+   */
+  resetButton?: { x: number; y: number; w: number; h: number };
+  /**
+   * Boards: file extensions (lower case, no dot) of the source files that can
+   * be imported into this board's folder. A board type without any accepts no
+   * imports. A future Raspberry Pi Pico type lists 'py' and friends here; the
+   * explorer needs no change.
+   */
+  sourceExtensions?: readonly string[];
 }
 
 const DEFAULT_OHMS = 220;
@@ -174,6 +186,9 @@ export const PARTS: readonly PartType[] = [
     pins: UNO_PINS,
     links: [['gnd', 'gnd2'], ['gnd', 'gnd3']],
     board: UNO_SPEC,
+    resetButton: { x: UNO_RESET.x / ART_CELL, y: UNO_RESET.y / ART_CELL, w: UNO_RESET.w / ART_CELL, h: UNO_RESET.h / ART_CELL },
+    // 'hex': compiled firmware (Intel HEX text), run by the board (see src/build/firmware.ts).
+    sourceExtensions: ['ino', 'cpp', 'c', 'h', 'hpp', 'txt', 'md', 'hex'],
     // io pins are filled in by the mixed-signal bridge (src/mcu/mixedsignal.ts).
     sim: () => ({ kind: 'board', rails: { ...UNO_SPEC.electrical.rails }, io: {} }),
     overlay: (ctx, _s, r) => drawUnoLeds(ctx, (r?.volts?.d13 ?? 0) / UNO_SPEC.electrical.vcc, r !== undefined),
@@ -185,9 +200,12 @@ export function getPart(id: string): PartType | undefined {
 }
 
 /**
- * Short name of a placed board, e.g. "Arduino Uno #4": the type name and the
- * part id, which stays the same while the part exists (also across saving).
+ * Short name of a placed board, e.g. "Arduino Uno #2" for the board folder
+ * "uno-2": the type name and the counter of its boardId, which never changes
+ * (also across saving) and is what the board's folder is called.
  */
-export function boardLabel(part: { id: number; typeId: string }): string {
-  return `${getPart(part.typeId)?.name ?? 'Board'} #${part.id}`;
+export function boardLabel(part: { typeId: string; boardId?: string }): string {
+  const name = getPart(part.typeId)?.name ?? 'Board';
+  const parsed = part.boardId === undefined ? null : parseBoardId(part.boardId);
+  return parsed ? `${name} #${parsed.n}` : name;
 }

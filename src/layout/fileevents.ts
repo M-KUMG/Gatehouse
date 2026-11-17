@@ -1,7 +1,12 @@
 // Tiny event channel between the File explorer and the Code editor: the
 // explorer says "open this file", whoever shows files listens. No DOM.
 
-export type OpenFileListener = (boardId: string, path: string) => void;
+export interface OpenFileOptions {
+  /** Move the keyboard focus into the editor (Enter, double-click). A single click leaves the focus in the explorer. */
+  focus?: boolean;
+}
+
+export type OpenFileListener = (boardId: string, path: string, options: OpenFileOptions) => void;
 
 const listeners = new Set<OpenFileListener>();
 
@@ -13,7 +18,7 @@ export function onOpenFile(listener: OpenFileListener): () => void {
   };
 }
 
-/** A file of a board was chosen in the explorer (double-click or Enter). */
-export function emitOpenFile(boardId: string, path: string): void {
-  for (const listener of [...listeners]) listener(boardId, path);
+/** A file of a board was chosen in the explorer (click, double-click or Enter). */
+export function emitOpenFile(boardId: string, path: string, options: OpenFileOptions = {}): void {
+  for (const listener of [...listeners]) listener(boardId, path, options);
 }

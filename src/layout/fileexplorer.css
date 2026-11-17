@@ -10,42 +10,6 @@
   font: 12px system-ui, sans-serif;
 }
 
-.fx-bar {
-  display: flex;
-  padding: 5px 8px;
-  border-bottom: 1px solid #3a3d44;
-  background: #25272c;
-}
-
-.fx-field {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  color: #9aa0aa;
-}
-
-.fx-select {
-  flex: 1;
-  min-width: 0;
-  padding: 2px 4px;
-  border: 1px solid #3a3d44;
-  border-radius: 4px;
-  background: #1e1f22;
-  color: #d8dbe0;
-  font: inherit;
-}
-
-.fx-select:focus-visible {
-  border-color: #4ea1ff;
-  outline: none;
-}
-
-.fx-select:disabled {
-  opacity: 0.55;
-}
-
 .fx-toolbar {
   display: flex;
   gap: 2px;
@@ -176,8 +140,17 @@
   height: 16px;
 }
 
-.fx-icon.root {
+.fx-icon.project {
   color: #4ea1ff;
+}
+
+.fx-icon.boards,
+.fx-icon.board {
+  color: #7fb98f;
+}
+
+.fx-icon.manifest {
+  color: #e6b36a;
 }
 
 .fx-icon.folder {
@@ -192,6 +165,57 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.k-project > .fx-name,
+.k-boards > .fx-name {
+  color: #d8dbe0;
+}
+
+/* The board folder id after the label ("uno-1"): quieter. */
+.fx-sub {
+  flex: none;
+  margin-left: 2px;
+  color: #7d828c;
+  font-size: 11px;
+}
+
+.fx-row.selected .fx-sub {
+  color: #aab3c0;
+}
+
+/* The lock after gatehouse.json: generated, read only. */
+.fx-lock {
+  display: inline-flex;
+  flex: none;
+  margin-left: 2px;
+  color: #7d828c;
+}
+
+.fx-lock svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* The active board: the one the console follows (selected on the grid). */
+.fx-row.active {
+  box-shadow: inset 2px 0 0 #4ea1ff;
+}
+
+.fx-row.active > .fx-name {
+  color: #7cbcff;
+  font-weight: 600;
+}
+
+.fx-row.active > .fx-icon {
+  color: #4ea1ff;
+}
+
+/* Files dragged in from the desktop: the board folder (and folder) that would take them. */
+.fx-row.drop {
+  background: rgba(78, 161, 255, 0.18);
+  outline: 1px dashed #4ea1ff;
+  outline-offset: -1px;
 }
 
 .fx-input {
@@ -227,19 +251,16 @@
   user-select: text;
 }
 
-.fx-error[hidden],
-.fx-hint[hidden] {
+.fx-error[hidden] {
   display: none;
 }
 
-.fx-hint {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
+/* A quiet line under an empty folder (no boards yet). */
+.fx-note {
+  box-sizing: border-box;
+  padding: 3px 8px;
   color: #7d828c;
-  text-align: center;
-  pointer-events: none;
+  font-style: italic;
+  white-space: normal;
+  cursor: default;
 }

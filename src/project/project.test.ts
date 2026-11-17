@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EXAMPLES } from '../examples';
+import { BLINK_HEX } from '../mcu/programs/blink';
 import { connect } from '../junctions';
 import { PROJECT_VERSION, ProjectError, stringifyProject } from './format';
 import { migrate, type Migration } from './migrate';
@@ -79,7 +80,7 @@ describe('project files', () => {
   });
 
   it('rejects files from a newer version with a clear message', () => {
-    expect(errorOf(variant((d) => (d.version = PROJECT_VERSION + 1)))).toMatch(/newer version.*v4.*up to v3/);
+    expect(errorOf(variant((d) => (d.version = PROJECT_VERSION + 1)))).toMatch(/newer version.*v5.*up to v4/);
   });
 
   it('rejects things that are not project files', () => {
@@ -122,7 +123,7 @@ describe('project files', () => {
     expect(p.serialize()).toEqual(before);
   });
 
-  it('round-trips a project with an Arduino Uno and its program', () => {
+  it('round-trips a project with an Arduino Uno and its firmware file', () => {
     const a = new Project();
     a.scene.insert(EXAMPLES.find((e) => e.name === 'Uno blink')!.state, 2, 3);
     const text = stringifyProject(a.serialize());
@@ -130,26 +131,22 @@ describe('project files', () => {
     b.load(readProject(text));
     expect(b.serialize()).toEqual(a.serialize());
     const uno = b.scene.parts.find((p) => p.typeId === 'uno')!;
-    expect(uno.state?.program?.name).toBe('Blink');
-    expect(Object.keys(uno.state ?? {})).toEqual(['program']); // nothing about running
+    expect(uno.state).toBeUndefined(); // nothing about the program or running
+    expect(b.scene.files[uno.boardId!].files['firmware.hex']).toBe(BLINK_HEX);
+    expect(Object.keys(b.scene.files[uno.boardId!].files)).toEqual(['firmware.hex', 'main.ino']);
     expect(b.scene.wires.some((w) => [w.from, w.to].some((e) => 'pinId' in e && e.pinId === 'd13'))).toBe(true);
   });
 
-  it('rejects a board program that is not valid Intel HEX, and programs on other parts', () => {
-    const withUno = (edit: (program: { name: string; hex: string }) => void): string =>
-      variant((d) => {
-        const program = { name: 'Blink', hex: ':0400100001020304E2\n:00000001FF\n' };
-        edit(program);
-        d.parts.push({ id: 40, typeId: 'uno', col: 0, row: 20, rotation: 0, state: { program } });
-      });
-    expect(() => readProject(withUno(() => undefined))).not.toThrow();
-    expect(errorOf(withUno((p) => (p.hex = ':0400100001020304E3\n:00000001FF\n')))).toMatch(
-      /parts\[5\]\.state\.program\.hex is not a valid program\. Line 1 has a wrong checksum/,
-    );
-    expect(errorOf(withUno((p) => ((p as { name: unknown }).name = 3)))).toMatch(/program\.name must be text/);
-    expect(errorOf(variant((d) => (d.parts[2].state.program = { name: 'x', hex: '' })))).toMatch(
-      /a resistor part cannot hold a program/,
-    );
+  it('an old board program becomes firmware.hex; v4 parts may not hold one', () => {
+    const hex = ':0400100001020304E3\n:00000001FF\n'; // not even valid: in v4 it is just a text file
+    const old = variant((d) => d.parts.push({ id: 40, typeId: 'uno', col: 0, row: 20, rotation: 0, state: { program: { name: 'B', hex } } }));
+    const p = new Project();
+    p.load(readProject(old));
+    expect(p.scene.find(40)?.state).toBeUndefined();
+    expect(p.scene.files['uno-1'].files['firmware.hex']).toBe(hex);
+    const v4 = JSON.parse(stringifyProject(p.serialize()));
+    v4.parts.find((x: any) => x.id === 40).state = { program: { name: 'B', hex } };
+    expect(errorOf(JSON.stringify(v4))).toMatch(/parts\[5\]\.state has an unknown field "program"/);
   });
 
   it('tracks unsaved changes', () => {
@@ -207,13 +204,13 @@ describe('migrations', () => {
   it('upgrades a v1 file (no boards) by adding an empty junction list and no board files', () => {
     const v1 = JSON.parse(V1_FIXTURE);
     const out = migrate(v1);
-    expect(out).toEqual({ ...v1, version: 3, junctions: [], files: {}, boardCounters: {} });
+    expect(out).toEqual({ ...v1, version: PROJECT_VERSION, junctions: [], files: {}, boardCounters: {} });
     expect(v1.version).toBe(1);
-    // The loaded v1 file saves as v3 with the same parts and wires.
+    // The loaded v1 file saves as the current version with the same parts and wires.
     const p = new Project();
     p.load(readProject(V1_FIXTURE));
     const file = p.serialize();
-    expect(file.version).toBe(3);
+    expect(file.version).toBe(PROJECT_VERSION);
     expect(file.junctions).toEqual([]);
     expect(file.wires).toEqual(v1.wires);
     expect(file.parts).toEqual(v1.parts);
