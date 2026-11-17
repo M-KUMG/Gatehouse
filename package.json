@@ -6,10 +6,11 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node scripts/third-party-licenses.mjs THIRD_PARTY_LICENSES.txt dist/THIRD_PARTY_LICENSES.txt",
     "typecheck": "tsc",
     "test": "vitest run",
-    "start": "npm run build && electron ."
+    "start": "npm run build && electron .",
+    "licenses": "node scripts/third-party-licenses.mjs"
   },
   "devDependencies": {
     "electron": "^33.0.0",
@@ -21,6 +22,7 @@
     "electron@33.4.11": true
   },
   "dependencies": {
-    "avr8js": "0.21.1"
+    "avr8js": "0.21.1",
+    "dockview": "8.9.0"
   }
 }

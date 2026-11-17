@@ -10,10 +10,13 @@ export interface PaletteAction {
   run: () => void;
 }
 
+const NARROW_SCREEN = 600; // CSS px: start with the menu folded away, so the grid keeps some room
+
 /**
- * Retractable parts menu on the right. Pressing on an item calls `onGrab`,
- * which starts dragging that part onto the grid. `examples` become buttons
- * under the list.
+ * Retractable parts menu, a fixed column on the right of `parent` (the dock
+ * area beside it takes the rest of the width and reflows when it folds).
+ * Pressing on an item calls `onGrab`, which starts dragging that part onto
+ * the grid. `examples` become buttons under the list.
  */
 export function createPalette(
   parent: HTMLElement,
@@ -84,7 +87,7 @@ export function createPalette(
     toggle.textContent = open ? '›' : '‹';
   };
   toggle.addEventListener('click', () => setOpen(panel.classList.contains('closed')));
-  setOpen(true);
+  setOpen(window.innerWidth > NARROW_SCREEN);
 
   parent.appendChild(panel);
 }

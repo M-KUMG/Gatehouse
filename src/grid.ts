@@ -74,7 +74,9 @@ export class GridView {
     canvas.addEventListener('auxclick', (e) => e.preventDefault());
     // Not passive: Ctrl+wheel must not zoom the page.
     canvas.addEventListener('wheel', this.handleWheel, { passive: false });
-    window.addEventListener('resize', this.requestRender);
+    // The canvas fills the centre area, which changes size with the window,
+    // docked windows and the parts menu: redraw whenever its own box changes.
+    new ResizeObserver(this.requestRender).observe(canvas);
 
     this.render();
   }

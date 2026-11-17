@@ -5,6 +5,26 @@ html, body {
   background: #1e1f22;
 }
 
+/* Whole window: the dock area (grid in the centre, windows around it) and
+   the parts menu as a fixed column on the right. */
+#app {
+  display: flex;
+  height: 100%;
+}
+
+#dock {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+}
+
+/* The grid's area inside the centre panel; overlays below anchor to it. */
+.editor-area {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
 #grid {
   display: block;
   width: 100%;
@@ -12,25 +32,30 @@ html, body {
 }
 
 #palette {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
+  flex: none;
   width: 220px;
+  height: 100%;
   box-sizing: border-box;
   padding: 12px;
+  overflow: hidden;
   background: #25272c;
   border-left: 1px solid #3a3d44;
   color: #d8dbe0;
   font: 14px system-ui, sans-serif;
-  transition: transform 0.2s ease;
   display: flex;
   flex-direction: column;
   user-select: none;
 }
 
+/* Folded: a thin strip with only the show/hide tab. */
 #palette.closed {
-  transform: translateX(100%);
+  width: 30px;
+  padding: 0;
+}
+
+#palette.closed > :not(#palette-toggle) {
+  display: none;
 }
 
 #palette h2 {
@@ -44,18 +69,28 @@ html, body {
 
 #palette-toggle {
   position: absolute;
-  top: 12px;
-  left: -28px;
-  width: 28px;
-  height: 40px;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: 1px solid #3a3d44;
-  border-right: none;
-  border-radius: 6px 0 0 6px;
-  background: #25272c;
+  border-radius: 5px;
+  background: #2b2e34;
   color: #d8dbe0;
-  font-size: 20px;
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
+}
+
+#palette-toggle:hover {
+  border-color: #4ea1ff;
+}
+
+#palette.closed #palette-toggle {
+  top: 8px;
+  right: 1px;
+  height: 40px;
 }
 
 .palette-list {
@@ -97,10 +132,14 @@ html, body {
   filter: drop-shadow(1px 1.5px 1.5px rgba(0, 0, 0, 0.45));
 }
 
+/* Overlays on <body> share the page with dockview, whose floating windows
+   sit at z-index ~1000: tooltips, popups and messages go above them, the
+   selection toolbar stays below (a floating window covers it). */
+
 /* Part following the cursor while dragged over the menu. */
 .drag-float {
   position: fixed;
-  z-index: 10;
+  z-index: 1200;
   pointer-events: none;
   opacity: 0.9;
   filter: drop-shadow(2px 3px 3px rgba(0, 0, 0, 0.5));
@@ -145,9 +184,9 @@ html, body {
   color: #fff;
 }
 
-/* Zoom level in the bottom-left corner; click resets to 100%. */
+/* Zoom level in the bottom-left corner of the grid; click resets to 100%. */
 .zoom-readout {
-  position: fixed;
+  position: absolute;
   left: 10px;
   bottom: 10px;
   z-index: 5;
@@ -189,13 +228,13 @@ html, body {
   border-color: #4ea1ff;
 }
 
-/* Simulation status along the bottom edge, right of the zoom readout. */
+/* Simulation status along the bottom edge of the grid, right of the zoom readout. */
 .status-line {
-  position: fixed;
+  position: absolute;
   left: 72px;
   bottom: 10px;
   z-index: 5;
-  max-width: calc(100% - 320px);
+  max-width: calc(100% - 92px);
   padding: 3px 8px;
   border: 1px solid #3a3d44;
   border-radius: 4px;
@@ -213,7 +252,7 @@ html, body {
 /* Live values next to the cursor. */
 .readout {
   position: fixed;
-  z-index: 8;
+  z-index: 1100;
   max-width: 260px;
   padding: 5px 8px;
   border: 1px solid #3a3d44;
@@ -238,7 +277,7 @@ html, body {
 /* Popup for typing a part's value. */
 .value-editor {
   position: fixed;
-  z-index: 9;
+  z-index: 1100;
   padding: 6px 8px;
   border: 1px solid #4ea1ff;
   border-radius: 6px;
@@ -273,9 +312,9 @@ html, body {
   border-color: #e5534b;
 }
 
-/* New / Open / Save and the project name, top-left. */
+/* New / Open / Save, Windows and the project name, top-left of the grid. */
 .file-bar {
-  position: fixed;
+  position: absolute;
   left: 10px;
   top: 10px;
   z-index: 6;
@@ -330,7 +369,7 @@ html, body {
   position: fixed;
   top: 12px;
   left: 50%;
-  z-index: 20;
+  z-index: 2000;
   max-width: min(560px, calc(100% - 40px));
   transform: translateX(-50%);
   padding: 7px 12px;
@@ -352,7 +391,7 @@ html, body {
 .dialog-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: 3000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -408,13 +447,16 @@ html, body {
   color: #fff;
 }
 
-/* Microcontroller board: program, Run / Pause / Reset, serial output (top-left). */
+/* Microcontroller board: program, Run / Pause / Reset, serial output (top-left of the grid). */
 .board-panel {
-  position: fixed;
+  position: absolute;
   left: 10px;
   top: 52px;
   z-index: 6;
   width: 290px;
+  max-width: calc(100% - 20px);
+  max-height: calc(100% - 100px);
+  overflow: auto;
   box-sizing: border-box;
   padding: 8px 10px 10px;
   border: 1px solid #3a3d44;
@@ -493,4 +535,66 @@ html, body {
   font: 11.5px/1.35 ui-monospace, Consolas, monospace;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+/* Windows menu in the file bar. */
+.windows-menu {
+  position: relative;
+  display: flex;
+}
+
+.file-button.active {
+  border-color: #4ea1ff;
+  color: #d8dbe0;
+}
+
+.windows-menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  min-width: 170px;
+  padding: 4px;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  background: #25272c;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+
+.windows-menu-list[hidden] {
+  display: none;
+}
+
+.windows-menu-item {
+  display: block;
+  width: 100%;
+  padding: 5px 8px 5px 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #d8dbe0;
+  font: 12px system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+}
+
+.windows-menu-item:hover,
+.windows-menu-item:focus-visible {
+  background: #2f5f99;
+  outline: none;
+}
+
+.windows-menu-item[aria-checked='true']::before {
+  content: '✓';
+  position: absolute;
+  left: 8px;
+  color: #4ea1ff;
+}
+
+.windows-menu-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: #3a3d44;
 }

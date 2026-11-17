@@ -1,4 +1,4 @@
-// Panel for a microcontroller board (top-left, under the file bar): its
+// Panel for a microcontroller board (top-left of the grid, under the file bar): its
 // program (Open .hex), Run / Pause / Reset, simulated time and speed, and
 // the serial output. It follows the board last selected.
 
@@ -29,6 +29,8 @@ export class BoardPanel {
     private readonly view: GridView,
     private readonly sim: Simulation,
     private readonly clock: BoardClock,
+    /** Where the panel goes (the grid's area). */
+    parent: HTMLElement,
   ) {
     const el = this.el;
     el.className = 'board-panel';
@@ -49,7 +51,7 @@ export class BoardPanel {
     this.fileInput.style.display = 'none';
     el.append(this.fileInput);
     el.style.display = 'none';
-    document.body.appendChild(el);
+    parent.appendChild(el);
 
     this.runButton.addEventListener('click', this.toggleRun);
     this.resetButton.addEventListener('click', () => {

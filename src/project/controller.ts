@@ -3,7 +3,7 @@
 
 import { APP_NAME } from '../app';
 import { ask, toast } from './dialog';
-import { createFileBar } from './filebar';
+import { createFileBar, type FileBar } from './filebar';
 import { chooseFileToOpen, chooseSaveTarget, fileNameFor, projectNameFromFile, type SaveTarget } from './files';
 import { ProjectError, stringifyProject, type ProjectFile } from './format';
 import type { Project } from './project';
@@ -26,13 +26,16 @@ export class ProjectController {
   /** The file Save writes to, once known. */
   private target: SaveTarget | null = null;
   private busy = false;
-  private readonly showState: (name: string, dirty: boolean) => void;
+  /** New / Open / Save and the project name. */
+  readonly fileBar: FileBar;
 
   constructor(
     private readonly project: Project,
     private readonly hooks: LoadHooks,
+    /** Where the file bar goes (the grid's area). */
+    fileBarParent: HTMLElement,
   ) {
-    this.showState = createFileBar({
+    this.fileBar = createFileBar(fileBarParent, {
       newProject: () => void this.newProject(),
       open: () => void this.open(),
       save: () => void this.save(false),
@@ -153,7 +156,7 @@ export class ProjectController {
 
   private refresh = (): void => {
     const { name, dirty } = this.project;
-    this.showState(name, dirty);
+    this.fileBar.show(name, dirty);
     document.title = `${dirty ? '● ' : ''}${name} · ${APP_NAME}`;
   };
 

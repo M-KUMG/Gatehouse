@@ -65,7 +65,8 @@ export class Readout {
   private readonly el = document.createElement('div');
   private shown = '';
 
-  constructor() {
+  /** `bounds`: the viewport rectangle to keep the tooltip inside (the grid's canvas). */
+  constructor(private readonly bounds: () => DOMRect) {
     this.el.className = 'readout';
     this.el.style.display = 'none';
     document.body.appendChild(this.el);
@@ -89,10 +90,11 @@ export class Readout {
       );
       el.style.display = '';
     }
-    const left = Math.min(clientX + 16, window.innerWidth - el.offsetWidth - 8);
-    const top = Math.min(clientY + 18, window.innerHeight - el.offsetHeight - 8);
-    el.style.left = `${Math.max(8, left)}px`;
-    el.style.top = `${Math.max(8, top)}px`;
+    const area = this.bounds();
+    const left = Math.min(clientX + 16, area.right - el.offsetWidth - 8);
+    const top = Math.min(clientY + 18, area.bottom - el.offsetHeight - 8);
+    el.style.left = `${Math.max(area.left + 8, left)}px`;
+    el.style.top = `${Math.max(area.top + 8, top)}px`;
   }
 }
 

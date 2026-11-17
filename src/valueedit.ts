@@ -12,8 +12,11 @@ export class ValueEditor {
     return this.el !== null;
   }
 
-  /** Open under a viewport rectangle. `onChange` runs after a new value is set. */
-  open(part: PlacedPart, anchor: ScreenRect, onChange: () => void): void {
+  /**
+   * Open under a viewport rectangle, kept inside `bounds` (the grid's canvas).
+   * `onChange` runs after a new value is set.
+   */
+  open(part: PlacedPart, anchor: ScreenRect, bounds: DOMRect, onChange: () => void): void {
     this.close();
     const spec = getPart(part.typeId)?.value;
     if (!spec) return;
@@ -33,8 +36,8 @@ export class ValueEditor {
     document.body.appendChild(el);
     this.el = el;
 
-    el.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - el.offsetWidth - 8))}px`;
-    el.style.top = `${Math.max(8, Math.min(anchor.bottom + 8, window.innerHeight - el.offsetHeight - 8))}px`;
+    el.style.left = `${Math.max(bounds.left + 8, Math.min(anchor.left, bounds.right - el.offsetWidth - 8))}px`;
+    el.style.top = `${Math.max(bounds.top + 8, Math.min(anchor.bottom + 8, bounds.bottom - el.offsetHeight - 8))}px`;
 
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {

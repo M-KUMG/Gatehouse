@@ -75,21 +75,27 @@ export class Editor {
   private readonly placer: Placer;
   private readonly wiring: WireTool;
   private readonly toolbar: Toolbar;
-  private readonly readout = new Readout();
+  private readonly readout: Readout;
   private readonly valueEditor = new ValueEditor();
   private readonly updateZoomReadout: () => void;
-  private readonly setStatus = createStatusLine();
+  private readonly setStatus: (text: string) => void;
   private drag: Moving | Marquee | Turning | null = null;
   private pressed: PlacedPart | null = null; // push button held down by the mouse
   private onKnob = false;
   private pointer: { x: number; y: number } | null = null; // last position over the canvas
+  /** Return true for key presses the grid must leave alone (e.g. aimed at another window). */
+  ignoreKey: ((e: KeyboardEvent) => boolean) | null = null;
 
   constructor(
     private readonly view: GridView,
     private readonly scene: Scene,
     private readonly sim: Simulation,
+    /** The grid's area, for the zoom readout and status line in its bottom-left corner. */
+    overlayParent: HTMLElement,
   ) {
     const canvas = view.canvas;
+    this.readout = new Readout(() => canvas.getBoundingClientRect());
+    this.setStatus = createStatusLine(overlayParent);
     canvas.addEventListener('pointerdown', this.onCanvasDown);
     canvas.addEventListener('pointermove', this.onCanvasMove);
     canvas.addEventListener('pointerup', this.onCanvasUp);
@@ -101,8 +107,6 @@ export class Editor {
       this.pointer = null;
     });
     window.addEventListener('keydown', this.onKeyDown);
-    // The menu slides open/closed: keep the toolbar out from under it.
-    document.addEventListener('transitionend', view.requestRender);
 
     this.selection = new Selection(view, scene);
     this.wiring = new WireTool(view, scene);
@@ -118,6 +122,7 @@ export class Editor {
       delete: () => this.deleteSelected(),
     });
     this.updateZoomReadout = createZoomReadout(
+      overlayParent,
       () => view.camera.zoom,
       () => view.setZoom(1),
     );
@@ -450,12 +455,13 @@ export class Editor {
   private editValue(part: PlacedPart | undefined): void {
     if (!part || !getPart(part.typeId)?.value || this.drag) return;
     this.selection.set([part.id]);
-    this.valueEditor.open(part, this.view.toScreen(footprint(part)), this.view.requestRender);
+    this.valueEditor.open(part, this.view.toScreen(footprint(part)), this.view.canvas.getBoundingClientRect(), this.view.requestRender);
   }
 
   private onKeyDown = (e: KeyboardEvent): void => {
     const target = e.target as HTMLElement | null;
     if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+    if (this.ignoreKey?.(e)) return;
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
     const busy = this.placer.active || this.wiring.active;

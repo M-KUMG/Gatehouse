@@ -1,0 +1,72 @@
+/* Dock chrome (tabs, sashes, floating windows) in Gatehouse's dark colours.
+   Overrides dockview's dark theme variables; the theme class list is
+   "dockview-theme-dark gh-dock" (see dock.ts). */
+
+.dockview-theme-dark.gh-dock {
+  --dv-group-view-background-color: #1e1f22;
+  --dv-tabs-and-actions-container-background-color: #25272c;
+  --dv-tabs-and-actions-container-height: 30px;
+  --dv-tabs-and-actions-container-font-size: 12px;
+  --dv-activegroup-visiblepanel-tab-background-color: #2b2e34;
+  --dv-activegroup-hiddenpanel-tab-background-color: #25272c;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #2b2e34;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: #25272c;
+  --dv-activegroup-visiblepanel-tab-color: #e6e8ec;
+  --dv-activegroup-hiddenpanel-tab-color: #9aa0aa;
+  --dv-inactivegroup-visiblepanel-tab-color: #c3c7ce;
+  --dv-inactivegroup-hiddenpanel-tab-color: #7d828c;
+  --dv-tab-divider-color: #3a3d44;
+  --dv-separator-border: #3a3d44;
+  --dv-paneview-header-border-color: #3a3d44;
+  --dv-paneview-active-outline-color: #4ea1ff;
+  --dv-sash-color: transparent;
+  --dv-active-sash-color: #4ea1ff;
+  --dv-drag-over-background-color: rgba(78, 161, 255, 0.16);
+  --dv-drag-over-border-color: #4ea1ff;
+  --dv-edge-dock-indicator-color: rgba(78, 161, 255, 0.9);
+  --dv-icon-hover-background-color: rgba(255, 255, 255, 0.08);
+  --dv-tabs-container-scrollbar-color: #4a4d55;
+  --dv-scrollbar-background-color: #4a4d55;
+  --dv-floating-border: 1px solid #3a3d44;
+  --dv-floating-box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+  color: #d8dbe0;
+  font: 12px system-ui, sans-serif;
+}
+
+/* The tab of the window in front gets the accent line used across the app. */
+.gh-dock .dv-tab.dv-active-tab {
+  box-shadow: inset 0 -2px 0 #4ea1ff;
+}
+
+.gh-dock .dv-groupview:not(.dv-active-group) .dv-tab.dv-active-tab {
+  box-shadow: inset 0 -2px 0 #3a5f8a;
+}
+
+/* Panel contents fill their group's content box exactly (it is a flex item
+   without a definite height, so percentages are not reliable inside it). */
+.gh-dock .dv-groupview > .dv-content-container {
+  position: relative;
+}
+
+/* Centre panel: the grid editor and the overlays anchored to it. */
+.gh-editor-host {
+  position: absolute;
+  inset: 0;
+}
+
+/* Placeholder windows. */
+.gh-window {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  overflow: auto;
+  background: #25272c;
+  color: #7d828c;
+  font: 13px system-ui, sans-serif;
+  text-align: center;
+  user-select: none;
+}

@@ -1,5 +1,5 @@
-// Small bar in the top-left corner: New, Open, Save, and the project name
-// with a dot while there are unsaved changes.
+// Small bar in the top-left corner of the grid: New, Open, Save, and the
+// project name with a dot while there are unsaved changes.
 
 const svg = (body: string): string =>
   '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" ' +
@@ -20,8 +20,15 @@ export interface FileBarActions {
   save: () => void;
 }
 
-/** Builds the bar; returns a function that shows the name and unsaved state. */
-export function createFileBar(actions: FileBarActions): (name: string, dirty: boolean) => void {
+export interface FileBar {
+  /** The bar itself, so other controls (e.g. the Windows menu) can join it. */
+  element: HTMLElement;
+  /** Shows the project name and unsaved state. */
+  show: (name: string, dirty: boolean) => void;
+}
+
+/** Builds the bar inside `parent`. */
+export function createFileBar(parent: HTMLElement, actions: FileBarActions): FileBar {
   const bar = document.createElement('div');
   bar.className = 'file-bar';
   const name = document.createElement('span');
@@ -37,12 +44,15 @@ export function createFileBar(actions: FileBarActions): (name: string, dirty: bo
     name,
     dot,
   );
-  document.body.append(bar);
+  parent.append(bar);
 
-  return (projectName, dirty) => {
-    name.textContent = projectName;
-    name.title = dirty ? `${projectName} (unsaved changes)` : projectName;
-    dot.style.visibility = dirty ? 'visible' : 'hidden';
+  return {
+    element: bar,
+    show: (projectName, dirty) => {
+      name.textContent = projectName;
+      name.title = dirty ? `${projectName} (unsaved changes)` : projectName;
+      dot.style.visibility = dirty ? 'visible' : 'hidden';
+    },
   };
 }
 

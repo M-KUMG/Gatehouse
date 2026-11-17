@@ -5,7 +5,6 @@ import type { ScreenRect } from './grid';
 
 const GAP = 8; // between the selection and the toolbar
 const MARGIN = 6; // to the edges of the visible grid
-const TAB_WIDTH = 28; // the menu's show/hide tab sticks out to its left
 
 const svg = (body: string): string =>
   '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" ' +
@@ -84,13 +83,10 @@ export class Toolbar {
     el.style.top = `${top}px`;
   }
 
-  /** The canvas area that is not covered by the parts menu. */
+  /** The canvas' own rectangle (it only covers the centre area), less a margin. */
   private visibleArea(): ScreenRect {
     const c = this.canvas.getBoundingClientRect();
-    let right = c.right;
-    const menu = document.getElementById('palette');
-    if (menu) right = Math.min(right, menu.getBoundingClientRect().left - TAB_WIDTH);
-    return { left: c.left + MARGIN, top: c.top + MARGIN, right: right - MARGIN, bottom: c.bottom - MARGIN };
+    return { left: c.left + MARGIN, top: c.top + MARGIN, right: c.right - MARGIN, bottom: c.bottom - MARGIN };
   }
 }
 
@@ -105,14 +101,14 @@ function button(title: string, icon: string, onClick: () => void, extraClass?: s
   return b;
 }
 
-/** "100%" label in the bottom-left corner; clicking it resets the zoom. */
-export function createZoomReadout(getZoom: () => number, reset: () => void): () => void {
+/** "100%" label in the bottom-left corner of `parent`; clicking it resets the zoom. */
+export function createZoomReadout(parent: HTMLElement, getZoom: () => number, reset: () => void): () => void {
   const el = document.createElement('button');
   el.type = 'button';
   el.className = 'zoom-readout';
   el.title = 'Zoom (mouse wheel). Click to reset to 100%';
   el.addEventListener('click', reset);
-  document.body.appendChild(el);
+  parent.appendChild(el);
   let shown = '';
   return () => {
     const text = `${Math.round(getZoom() * 100)}%`;
@@ -120,11 +116,11 @@ export function createZoomReadout(getZoom: () => number, reset: () => void): () 
   };
 }
 
-/** One line of text along the bottom edge; returns a function that sets it. */
-export function createStatusLine(): (text: string) => void {
+/** One line of text along the bottom edge of `parent`; returns a function that sets it. */
+export function createStatusLine(parent: HTMLElement): (text: string) => void {
   const el = document.createElement('div');
   el.className = 'status-line';
-  document.body.appendChild(el);
+  parent.appendChild(el);
   let shown = '';
   return (text) => {
     if (text !== shown) el.textContent = shown = text;

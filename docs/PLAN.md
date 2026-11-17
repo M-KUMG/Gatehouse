@@ -2,6 +2,23 @@
 
 Living notes so later sessions keep the same context. Add a line to "Done" after each task. Do one task at a time.
 
+## Current status (kept honest, update with every task)
+**Works** (typecheck, build and 59 unit tests pass; UI checked by hand as noted):
+- Grid editor: pan (middle mouse), zoom, parts menu, drag-in placement, select/box-select/move/rotate/duplicate/delete, floating toolbar, wires between pins, hover readouts.
+- Parts: AA and 9V battery, ground, resistor (editable value), LED, toggle switch, push button, potentiometer, BJT (BC547-style), Arduino Uno.
+- DC circuit solver (src/sim) with LED glow and overcurrent warning; Arduino Uno runs real AVR code (avr8js) on the main thread and drives/reads pins through the mixed-signal bridge. Blink example works.
+- Save/Open/New, autosave restore, versioned project file (v1).
+- Dock layout shell (dockview) with a Windows menu and saved layout. Licensing: MIT LICENSE and generated third-party notices.
+
+**Placeholders / not built yet**
+- Serial console, Code editor and File explorer windows are empty placeholders. Serial output still lives in the Uno's board panel.
+- No project folder / multi-file source tree yet (project is one JSON file with the loaded hex inside the board).
+- No compiler: programs load as precompiled `.hex` only.
+- No capacitors or time-stepping solver (DC only), no breadboard, no RP2040, no multi-board wiring, no component database, no undo.
+- Emulation is not in a Web Worker. Phone layout (bottom-sheet fallback) not done. No Electron-specific work beyond loading `dist/` (Electron does not warn about unsaved changes on close).
+
+**Verification so far:** the owner tried save/load by hand and reported it works. In a browser I checked: placing parts, the Uno Blink example (LED blinks at 1.00x, serial text appears), autosave restore, opening the dock windows and dropping a part onto the resized grid. Not checked by anyone yet: Pause/Reset, Open .hex with real or broken files, PWM brightness, floating/tabbing/re-docking windows, layout restore after reload, narrow screens, Electron.
+
 ## Done
 - Template replaced with a TypeScript (Vite) full-window grid. Middle mouse button drag pans it. Nothing else yet.
 - Retractable parts menu on the right (battery, BJT TO-92, resistor, LED). Drag a part onto the grid to place it, snapped to cells. Visual only: no pins, no behavior, no selecting or moving placed parts yet.
@@ -10,6 +27,8 @@ Living notes so later sessions keep the same context. Add a line to "Done" after
 - Pins, wires between pins, more parts (9V battery, push button, toggle switch, potentiometer, ground), DC circuit simulation (MNA solver in src/sim with 20 unit tests), LED glow, hover readouts, example circuit. Open decisions: DC only (no timing yet); solver runs on the main thread, move to a Web Worker later. The agent that built this hit a usage limit during its own testing, so verification was done by the owner by hand.
 - Save/Open/New projects (src/project): versioned JSON file `gatehouse-project` v1 with a `migrate()` step list and strict all-or-nothing validation, File System Access API with download/file-input fallback, Ctrl+S / Ctrl+Shift+S / Ctrl+O, unsaved dot + guards, localStorage autosave with restore offer. `Project` owns scene + camera (serialize/load/onChange). Not browser-tested by the agent.
 - First microcontroller: "Arduino Uno" part (20x15 cells, pins d0-d13, a0-a5, 5v, 3v3, gnd/gnd2/gnd3, vin, aref) running real AVR code with avr8js (src/mcu: Intel HEX parser, ATmega328P wrapper, board runtimes) and a one-file mixed-signal bridge (src/mcu/mixedsignal.ts); board panel with Open .hex, Run/Pause/Reset, serial output, board time and speed; built-in Blink program and "Uno blink" example. Not browser-tested by the agent.
+- Licensing: Gatehouse is MIT (`LICENSE`). `npm run licenses` (scripts/third-party-licenses.mjs, no dependencies) walks the production dependency tree, writes `THIRD_PARTY_LICENSES.txt` (name, version, licence, full licence text) and fails on any licence outside its allowlist (MIT, ISC, BSD-2/3-Clause, Apache-2.0, 0BSD, BlueOak-1.0.0); `npm run build` also copies it into `dist/`. Found: avr8js MIT, dockview MIT, dockview-core MIT.
+- Dock layout shell (src/layout): `dockview` 8.9 (MIT, plain TypeScript, floating groups and toJSON/fromJSON built in). The grid is the locked, tab-less centre panel (its canvas redraws on ResizeObserver; all coordinate math already uses the canvas' own rect); the parts menu is a fixed flex column on the right that folds to a thin strip. Placeholder windows Serial console / Code editor / File explorer dock left/top/bottom (right drops beside the grid are refused), stack, tab, float (tab right-click > Float); opened from the new Windows menu in the file bar, which also has Reset layout. Layout saved per user in localStorage (`gatehouse.layout`, not in the project file). File bar, board panel, zoom and status anchor to the grid's area. Not browser-tested by the agent.
 
 ## Vision
 Simulator for Arduino (AVR) and Raspberry Pi Pico (RP2040) boards plus circuits, running real firmware on emulated CPUs. Web app and Electron app from one codebase. University project, non-commercial, built entirely with Claude (teacher requirement).
@@ -28,7 +47,7 @@ Wanted features:
 - **Hosting:** static site on the user's Oracle Ampere (ARM64) VPS behind HTTPS.
 - **Electron:** same built web app, bundled inside the installer (loads `dist/index.html`), works offline. Desktop-only extras (real files, local `arduino-cli`) come later.
 - **Compiling is the one open problem.** Put it behind a swappable "compiler" interface (source files in, `.hex`/`.uf2` out) with implementations: precompiled files only, local `arduino-cli` (Electron), optional VPS compile service (sandboxed: container, no network, CPU/memory/time limits, rate limiting), possibly in-browser WebAssembly. Do not hardcode local paths into the UI.
-- **IDE-style layout (planned).** The parts menu stays fixed on the right (retractable, not movable). The grid editor fills the centre. Three windows can be docked left/bottom/top (stacked or tabbed, e.g. two on the left one under the other) or floated and resized: **Serial console**, **Code editor**, **File explorer**. Do not hand-build docking: use a library (candidate: `dockview`, MIT, believed to work without React: verify first) that also saves/restores the layout. Layout is per-user (localStorage), NOT part of the project file. The grid canvas must resize with the centre area. Phones: floating windows do not work, plan a one-panel-at-a-time bottom sheet fallback.
+- **IDE-style layout (shell done, windows still placeholders).** The parts menu stays fixed on the right (retractable, not movable). The grid editor fills the centre. Three windows can be docked left/bottom/top (stacked or tabbed, e.g. two on the left one under the other) or floated and resized: **Serial console**, **Code editor**, **File explorer**. Do not hand-build docking: uses `dockview` (MIT, no framework, saves/restores the layout). In v8 the project split into `dockview` (public entry + stylesheet) and `dockview-core` (engine; its README says it is internal and it ships no CSS), so we depend on `dockview`. Layout is per-user (localStorage), NOT part of the project file. The grid canvas must resize with the centre area. Phones: floating windows do not work, plan a one-panel-at-a-time bottom sheet fallback (still open: today the parts menu only starts folded on narrow screens).
   - Serial console: shows output of a selected board; dropdowns for board and serial port (Uno: 1 port; Mega: Serial, Serial1-3; Pico: UART0, UART1, USB serial). Later an input line to send text. Replaces the small output box in the board panel.
   - Code editor: tabs per open file; candidate CodeMirror 6 (lighter than Monaco), C++ and Python highlighting.
   - File explorer: board folders and files, create/rename/delete.
@@ -48,9 +67,10 @@ Wanted features:
 ## Suggested order (one small task each)
 Done: grid, zoom, parts, wires, DC solver, save/load, first AVR board running Blink (see Done above).
 
+1. ~~**Licensing basics**~~ (done: MIT LICENSE, generated THIRD_PARTY_LICENSES.txt).
+2. ~~**Dock layout shell**~~ (done: dockview, placeholder windows, saved layout).
+
 Next, in this order:
-1. **Licensing basics:** add a LICENSE for Gatehouse itself (owner decides which) and a third-party notices file generated from dependencies (see Licensing). Small, do it early.
-2. **Dock layout shell:** `dockview` (or similar), grid in the centre, fixed retractable parts menu, empty placeholder windows, saved layout.
 3. **Serial console window** (board + port dropdowns), replacing the board panel's output box.
 4. **In-memory project file tree** (`boards/<id>/...`), project format v2 with migration, explorer window, then folder/zip storage behind `ProjectStorage`.
 5. **Code editor window** (CodeMirror 6), tabs, opens files from the tree.
@@ -62,9 +82,9 @@ Next, in this order:
 11. Electron shell, VPS deploy, polish, docs.
 
 ## Licensing
-- Using MIT libraries does not force a LICENSE file for our own code, but MIT requires keeping each library's copyright notice and licence text when we distribute it (the built site and the Electron installer both count). Plan: a generated `THIRD_PARTY_LICENSES` file (from the dependency tree) shipped with the app, e.g. with a licence-checker tool at build time.
-- Gatehouse itself: with no LICENSE file the default is "all rights reserved" (others may not reuse it). Owner decides (e.g. MIT, or none while it is a uni project) and adds a `LICENSE` file at the repo root.
-- Check before bundling anything new. Known so far: avr8js MIT, rp2040js MIT, vite/typescript/vitest MIT, dockview MIT (verify), CodeMirror 6 MIT, avr-libc (startup code in our Blink hex) permissive. Watch out: `arduino-cli` is GPLv3 and Arduino core libraries are LGPL: running arduino-cli as a separate program is different from bundling it, and shipping it in an installer has obligations: check before bundling. Manufacturer SPICE models may have restrictive licences.
+- Using MIT libraries does not force a LICENSE file for our own code, but MIT requires keeping each library's copyright notice and licence text when we distribute it (the built site and the Electron installer both count). Done: `THIRD_PARTY_LICENSES.txt` is generated by `scripts/third-party-licenses.mjs` (`npm run licenses`, also run by `npm run build` into `dist/`, which the Electron app loads and must ship). Still to add: the avr-libc BSD notice for the startup code in our built-in Blink hex (not an npm package, so the script does not see it).
+- Gatehouse itself: MIT (`LICENSE` at the repo root).
+- Check before bundling anything new. Known so far: avr8js MIT, rp2040js MIT, vite/typescript/vitest MIT, dockview + dockview-core MIT (verified), CodeMirror 6 MIT, avr-libc (startup code in our Blink hex) permissive. Watch out: `arduino-cli` is GPLv3 and Arduino core libraries are LGPL: running arduino-cli as a separate program is different from bundling it, and shipping it in an installer has obligations: check before bundling. Manufacturer SPICE models may have restrictive licences.
 - Naming rule stays: no Arduino, Raspberry Pi or Pico in the product name.
 
 ## Rules to keep
