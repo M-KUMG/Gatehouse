@@ -28,6 +28,13 @@ Wanted features:
 - **Hosting:** static site on the user's Oracle Ampere (ARM64) VPS behind HTTPS.
 - **Electron:** same built web app, bundled inside the installer (loads `dist/index.html`), works offline. Desktop-only extras (real files, local `arduino-cli`) come later.
 - **Compiling is the one open problem.** Put it behind a swappable "compiler" interface (source files in, `.hex`/`.uf2` out) with implementations: precompiled files only, local `arduino-cli` (Electron), optional VPS compile service (sandboxed: container, no network, CPU/memory/time limits, rate limiting), possibly in-browser WebAssembly. Do not hardcode local paths into the UI.
+- **IDE-style layout (planned).** The parts menu stays fixed on the right (retractable, not movable). The grid editor fills the centre. Three windows can be docked left/bottom/top (stacked or tabbed, e.g. two on the left one under the other) or floated and resized: **Serial console**, **Code editor**, **File explorer**. Do not hand-build docking: use a library (candidate: `dockview`, MIT, believed to work without React: verify first) that also saves/restores the layout. Layout is per-user (localStorage), NOT part of the project file. The grid canvas must resize with the centre area. Phones: floating windows do not work, plan a one-panel-at-a-time bottom sheet fallback.
+  - Serial console: shows output of a selected board; dropdowns for board and serial port (Uno: 1 port; Mega: Serial, Serial1-3; Pico: UART0, UART1, USB serial). Later an input line to send text. Replaces the small output box in the board panel.
+  - Code editor: tabs per open file; candidate CodeMirror 6 (lighter than Monaco), C++ and Python highlighting.
+  - File explorer: board folders and files, create/rename/delete.
+  - Selecting a board on the grid switches explorer and console to it, with an option to pin a window to one board.
+- **Folder-based project (planned, project format v2).** A project is a folder: `gatehouse.json` (circuit: parts, wires, boards list, camera, version, same content as today's file) plus `boards/<board-id>/...` source files. Folder name = the stable board id (never reused), the display name lives in `gatehouse.json`. Storage goes behind a small `ProjectStorage` interface (read all files / write file / list) with implementations: single JSON file (today), real folder (Chrome/Edge File System Access API, Electron), zip (Firefox/Safari fallback). Start with an in-memory file tree. Existing v1 files migrate through the `migrate()` list.
+- **Time-stepping solver (planned).** The DC solver gives a steady answer per simulated timestamp (enough for LEDs, buttons, transistor switches). Capacitors, RC delays, motors and PWM smoothing need a transient solver (companion models, backward Euler). `SimInput.time` already exists for this. Do it after the first board works end to end.
 - **Git workflow:** only one person works at a time (friend asks first, uses the shared Claude account). Commit straight to `main`, `git pull` before starting, push when done, tell the other on Messenger. Each person pushes under their own GitHub login. Never put tokens in remote URLs.
 
 ## Open decisions
@@ -39,15 +46,26 @@ Wanted features:
 - Updates for the bundled Electron app (installer vs auto-update).
 
 ## Suggested order (one small task each)
-1. Grid: snap to cells, zoom, place a first object.
-2. Core: pin/net model, simulation clock (cycle counts, deterministic), project file format with version.
-3. One AVR board running a precompiled blink `.hex` with an LED.
-4. Component library and serial monitor.
-5. Breadboard connectivity model.
-6. RP2040 support.
-7. Multi-board wiring and buses.
-8. Analog solver and mixed-signal sync.
-9. Compiler implementations, Electron shell, polish, docs.
+Done: grid, zoom, parts, wires, DC solver, save/load, first AVR board running Blink (see Done above).
+
+Next, in this order:
+1. **Licensing basics:** add a LICENSE for Gatehouse itself (owner decides which) and a third-party notices file generated from dependencies (see Licensing). Small, do it early.
+2. **Dock layout shell:** `dockview` (or similar), grid in the centre, fixed retractable parts menu, empty placeholder windows, saved layout.
+3. **Serial console window** (board + port dropdowns), replacing the board panel's output box.
+4. **In-memory project file tree** (`boards/<id>/...`), project format v2 with migration, explorer window, then folder/zip storage behind `ProjectStorage`.
+5. **Code editor window** (CodeMirror 6), tabs, opens files from the tree.
+6. **Compiler decision and interface** (browser WebAssembly research, Electron `arduino-cli`, optional VPS service).
+7. **Capacitor + time-stepping solver.**
+8. **Breadboard** connectivity part.
+9. **RP2040** support (rp2040js), then **several boards wired together** (UART, I2C, SPI).
+10. **Component library** with editable specs, SPICE model import, analog solver decision (own vs ngspice WASM).
+11. Electron shell, VPS deploy, polish, docs.
+
+## Licensing
+- Using MIT libraries does not force a LICENSE file for our own code, but MIT requires keeping each library's copyright notice and licence text when we distribute it (the built site and the Electron installer both count). Plan: a generated `THIRD_PARTY_LICENSES` file (from the dependency tree) shipped with the app, e.g. with a licence-checker tool at build time.
+- Gatehouse itself: with no LICENSE file the default is "all rights reserved" (others may not reuse it). Owner decides (e.g. MIT, or none while it is a uni project) and adds a `LICENSE` file at the repo root.
+- Check before bundling anything new. Known so far: avr8js MIT, rp2040js MIT, vite/typescript/vitest MIT, dockview MIT (verify), CodeMirror 6 MIT, avr-libc (startup code in our Blink hex) permissive. Watch out: `arduino-cli` is GPLv3 and Arduino core libraries are LGPL: running arduino-cli as a separate program is different from bundling it, and shipping it in an installer has obligations: check before bundling. Manufacturer SPICE models may have restrictive licences.
+- Naming rule stays: no Arduino, Raspberry Pi or Pico in the product name.
 
 ## Rules to keep
 - Timing from cycle counts on a global timeline, never wall-clock timers.
