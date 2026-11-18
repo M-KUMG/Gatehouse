@@ -1,0 +1,366 @@
+/* Build output window (buildoutput.ts). Same look as the Serial console. */
+
+.build-output {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #18191c;
+  color: #c3c7ce;
+  font: 12px system-ui, sans-serif;
+}
+
+.bo-bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 5px 8px;
+  border-bottom: 1px solid #3a3d44;
+  background: #25272c;
+}
+
+.bo-field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: #9aa0aa;
+}
+
+.bo-select {
+  max-width: 260px;
+  min-width: 0;
+  padding: 2px 4px;
+  border: 1px solid #3a3d44;
+  border-radius: 4px;
+  background: #1e1f22;
+  color: #d8dbe0;
+  font: inherit;
+}
+
+.bo-select:focus-visible {
+  border-color: #4ea1ff;
+  outline: none;
+}
+
+.bo-select:disabled {
+  opacity: 0.55;
+}
+
+.bo-spacer {
+  flex: 1;
+}
+
+.bo-button {
+  padding: 2px 10px;
+  border: 1px solid #3a3d44;
+  border-radius: 4px;
+  background: #2b2e34;
+  color: #d8dbe0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.bo-button:hover:not(:disabled) {
+  border-color: #4ea1ff;
+}
+
+.bo-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Status line, usage bars and the compiler row stay put above the scrolling messages. */
+.bo-top {
+  flex: none;
+  padding: 0 8px;
+}
+
+.bo-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 0 5px;
+  color: #e6e8ec;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bo-header[hidden] {
+  display: none;
+}
+
+.bo-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7d828b;
+}
+
+.bo-header.ok .bo-dot {
+  background: #3fbf55;
+}
+
+.bo-header.error .bo-dot {
+  background: #e5534b;
+}
+
+.bo-header.error .bo-header-text {
+  color: #ff8a80;
+}
+
+.bo-header.busy .bo-dot {
+  background: #4ea1ff;
+  animation: bo-pulse 1s ease-in-out infinite;
+}
+
+@keyframes bo-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.bo-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 4px;
+}
+
+.bo-usage:empty {
+  display: none;
+}
+
+.bo-usage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bo-usage-label {
+  flex: none;
+  width: 34px;
+  color: #9aa0aa;
+}
+
+.bo-usage-bar {
+  flex: none;
+  width: 120px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #3a3d44;
+}
+
+.bo-usage-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: #4ea1ff;
+}
+
+.bo-usage-bar.warn .bo-usage-fill {
+  background: #e3b341;
+}
+
+.bo-usage-bar.full .bo-usage-fill {
+  background: #e5534b;
+}
+
+.bo-usage-text {
+  min-width: 0;
+  color: #c3c7ce;
+}
+
+.bo-compiler {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 4px 0 6px;
+  padding: 6px 8px;
+  border: 1px solid #3a3d44;
+  border-radius: 5px;
+  background: #1e1f22;
+}
+
+.bo-compiler[hidden] {
+  display: none;
+}
+
+.bo-compiler.unavailable {
+  border-color: #6b5a2a;
+}
+
+.bo-compiler-text {
+  color: #d8dbe0;
+}
+
+.bo-compiler-hint,
+.bo-compiler-error {
+  flex-basis: 100%;
+  color: #9aa0aa;
+  font-size: 11px;
+}
+
+.bo-compiler-error {
+  color: #ff8a80;
+}
+
+.bo-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.bo-list {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: 2px 0 6px;
+  overflow: auto;
+}
+
+.bo-list[hidden],
+.bo-hint[hidden] {
+  display: none;
+}
+
+.bo-list:focus {
+  outline: none;
+}
+
+.bo-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 18px 12px;
+  color: #7d828c;
+  text-align: center;
+  pointer-events: none;
+}
+
+.bo-msg {
+  border-left: 3px solid transparent;
+}
+
+.bo-msg.error {
+  border-left-color: #e5534b;
+}
+
+.bo-msg.warning {
+  border-left-color: #e3b341;
+}
+
+.bo-msg.note {
+  border-left-color: #5b6069;
+}
+
+.bo-msg.indent .bo-msg-head {
+  padding-left: 26px;
+}
+
+.bo-msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 8px;
+}
+
+.bo-msg.clickable .bo-msg-head {
+  cursor: pointer;
+}
+
+.bo-msg.clickable .bo-msg-head:hover {
+  background: rgba(78, 161, 255, 0.1);
+}
+
+.bo-msg-head:focus-visible {
+  outline: 1px solid #4ea1ff;
+  outline-offset: -1px;
+}
+
+.bo-icon {
+  display: inline-flex;
+  flex: none;
+  align-self: center;
+}
+
+.bo-msg.error .bo-icon {
+  color: #e5534b;
+}
+
+.bo-msg.warning .bo-icon {
+  color: #e3b341;
+}
+
+.bo-msg.note .bo-icon {
+  color: #9aa0aa;
+}
+
+.bo-loc {
+  flex: none;
+  color: #7fb4f0;
+  font: 12px ui-monospace, Consolas, monospace;
+}
+
+.bo-msg:not(.clickable) .bo-loc {
+  color: #9aa0aa;
+}
+
+.bo-text {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.bo-msg.error .bo-text {
+  color: #ffb4ad;
+}
+
+.bo-msg.warning .bo-text {
+  color: #f0d58a;
+}
+
+.bo-msg.note .bo-text {
+  color: #9aa0aa;
+}
+
+.bo-toggle {
+  flex: none;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: #7d828c;
+  font: 11px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.bo-toggle:hover {
+  color: #d8dbe0;
+  text-decoration: underline;
+}
+
+.bo-detail {
+  margin: 0 8px 4px 34px;
+  padding: 4px 8px;
+  overflow-x: auto;
+  border-radius: 4px;
+  background: #1e1f22;
+  color: #b4bac4;
+  font: 12px/1.4 ui-monospace, Consolas, monospace;
+  white-space: pre;
+}
+
+.bo-detail[hidden] {
+  display: none;
+}
+
+.bo-msg.indent .bo-detail {
+  margin-left: 52px;
+}

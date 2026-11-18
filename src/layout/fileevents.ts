@@ -4,6 +4,10 @@
 export interface OpenFileOptions {
   /** Move the keyboard focus into the editor (Enter, double-click). A single click leaves the focus in the explorer. */
   focus?: boolean;
+  /** Scroll this line (1-based) into view, put the cursor there and flash it (a build message). */
+  line?: number;
+  /** 1-based column on that line; the cursor goes to the start of the line without it. */
+  column?: number;
 }
 
 export type OpenFileListener = (boardId: string, path: string, options: OpenFileOptions) => void;

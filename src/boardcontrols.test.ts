@@ -26,6 +26,7 @@ describe('which toolbar buttons show', () => {
     const b = toolbarButtons([uno(2, 'uno-1')], stateOf());
     expect(b).toMatchObject({ rotate: true, duplicate: true, edit: false });
     expect(b.board?.run).toMatchObject({ icon: 'run', title: 'Run', disabled: false, error: false });
+    expect(b.board?.build).toEqual({ title: 'Build (compile only)', disabled: false, error: false });
     expect(b.board?.reset).toEqual({ title: 'Reset (rebuild from files)', disabled: false });
     expect(b.board?.console).toEqual({ title: 'Open serial console', disabled: false });
     expect(b.board?.rename).toEqual({ title: 'Rename board (display name only)', disabled: false });
@@ -61,6 +62,20 @@ describe('the Run button follows the board state', () => {
   it('is disabled while building, and so is Reset', () => {
     expect(view({ building: true })).toMatchObject({ disabled: true, title: 'Building…' });
     expect(toolbarButtons([uno(2, 'uno-1')], stateOf({ building: true })).board?.reset.disabled).toBe(true);
+  });
+
+  it('the Build button is disabled while building and carries the red marker after a failed build', () => {
+    const build = (s: Partial<BoardRunState>, failed = false) => toolbarButtons([uno(2, 'uno-1')], stateOf(s), () => failed).board?.build;
+    expect(build({ building: true })).toEqual({ title: 'Building…', disabled: true, error: false });
+    expect(build({}, true)).toEqual({ title: 'Build (compile only)', disabled: false, error: true });
+    expect(build({ building: true }, true)?.error).toBe(false);
+    expect(build({})?.error).toBe(false);
+  });
+
+  it('asks the build log about the selected board only', () => {
+    const asked: number[] = [];
+    toolbarButtons([part(1, 'resistor'), uno(7, 'uno-3')], () => idle, (id) => (asked.push(id), false));
+    expect(asked).toEqual([7]);
   });
 
   it('after an error it carries the red marker and the error in its tooltip', () => {

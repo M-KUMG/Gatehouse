@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Compiler } from './compiler';
 import { pickFirmware } from './firmware';
 import { FirmwareFileCompiler, NOT_COMPILED_NOTE } from './firmwarefile';
-import { buildFirmware, getCompiler, registerCompiler } from './registry';
+import { buildFirmware, COMPILER_UNAVAILABLE_NOTE, getCompiler, hasSketchSources, registerCompiler } from './registry';
 
 const HEX = ':00000001FF\n';
 const pick = (files: Record<string, string>) => pickFirmware({ files });
@@ -72,19 +72,27 @@ describe('compiler registry', () => {
     expect(getCompiler('uno').id).toBe('firmware-file');
   });
 
-  it('uses a registered compiler, and falls back to the firmware file when it is not available', async () => {
-    const input = { boardTypeId: 'uno', files: { 'firmware.hex': HEX } };
+  it('uses a registered compiler for sketch sources, and falls back to the firmware file when it is not available', async () => {
+    const input = { boardTypeId: 'uno', files: { 'main.ino': 'void setup(){}', 'firmware.hex': HEX } };
     undo = registerCompiler('uno', fake(true));
     expect(getCompiler('uno').id).toBe('fake');
     expect(await buildFirmware(input)).toMatchObject({ ok: true, source: 'compiled', hex: 'compiled' });
+    // Without sources the firmware file runs even with a compiler.
+    expect(await buildFirmware({ boardTypeId: 'uno', files: { 'firmware.hex': HEX, 'lib/x.cpp': '' } })).toMatchObject({ source: 'firmware-file', hex: HEX });
     undo();
     undo = registerCompiler('uno', fake(false));
-    expect(await buildFirmware(input)).toMatchObject({ ok: true, source: 'firmware-file', hex: HEX });
+    expect(await buildFirmware(input)).toMatchObject({ ok: true, source: 'firmware-file', hex: HEX, messages: [COMPILER_UNAVAILABLE_NOTE] });
     expect(getCompiler('pico').id).toBe('firmware-file');
+  });
+
+  it('src/ sources count, other folders do not', () => {
+    expect(hasSketchSources({ 'src/a.cpp': '' })).toBe(true);
+    expect(hasSketchSources({ 'Main.INO': '' })).toBe(true);
+    expect(hasSketchSources({ 'lib/a.cpp': '', 'firmware.hex': HEX, 'notes.txt': '' })).toBe(false);
   });
 
   it('turns a throwing compiler into an error result', async () => {
     undo = registerCompiler('uno', { id: 'broken', available: () => true, build: () => Promise.reject(new Error('boom')) });
-    expect(await buildFirmware({ boardTypeId: 'uno', files: {} })).toEqual({ ok: false, errors: ['The build failed: boom'] });
+    expect(await buildFirmware({ boardTypeId: 'uno', files: { 'main.ino': '' } })).toEqual({ ok: false, errors: ['The build failed: boom'] });
   });
 });

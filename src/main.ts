@@ -1,17 +1,22 @@
 import './style.css';
 import { BoardClock } from './boardclock';
 import { ActiveBoard } from './boardcontrols';
+import { BuildCard } from './buildcard';
 import { EXAMPLES } from './examples';
 import { CameraPan } from './camerapan';
 import { cellBoxToWorld, revealTarget } from './camerareveal';
 import { GRID_SIZE, GridView } from './grid';
 import { Editor } from './interaction';
+import { AutoOpen } from './layout/buildautoopen';
+import { BUILD_OUTPUT_ID, BuildOutput } from './layout/buildoutput';
 import { CODE_EDITOR_ID, CodeEditor } from './layout/codeeditor';
 import { DockLayout, isForOtherWindow } from './layout/dock';
 import { onOpenFile } from './layout/fileevents';
 import { FILE_EXPLORER_ID, FileExplorer } from './layout/fileexplorer';
 import { SERIAL_CONSOLE_ID, SerialConsole } from './layout/serialconsole';
 import { createWindowsMenu } from './layout/windowsmenu';
+import { registerCompiler } from './build/registry';
+import { registerBrowserCompilers } from './build/wasm/worker/register';
 import { boundsOf, footprint } from './model';
 import { createPalette } from './palette';
 import { renameBoard } from './project/boardfiles';
@@ -31,6 +36,11 @@ const canvas = document.createElement('canvas');
 canvas.id = 'grid';
 editorArea.append(canvas);
 
+// Compile sketches in the browser (a Worker, toolchain packs from /toolchain-packs/)
+// for the boards with a compiler profile; where the packs are not served
+// (Electron, file://) boards keep running their .hex file. See browserCompilers().
+registerBrowserCompilers(registerCompiler);
+
 // The project owns the circuit and camera; everything below works on them in place.
 const project = new Project();
 const scene = project.scene;
@@ -43,6 +53,12 @@ const activeBoard = new ActiveBoard(() => scene.parts, () => view.selected);
 // Serial output of the boards; "Auto" shows the active board. Made before the
 // layout, which may restore the console window straight away.
 const serialConsole = new SerialConsole(scene, sim, () => activeBoard.partId);
+// Build output: the build log of one board (Auto follows the active board). Made
+// before the layout, which may restore the window straight away. The card at the
+// top of the grid shows the first-time compiler download (from a build or from
+// the window's "Download compiler now" button).
+const buildCard = new BuildCard(editorArea, sim.boards.buildLog);
+const buildOutput = new BuildOutput(scene, sim, project, () => activeBoard.partId, (profile) => buildCard.prefetch(profile));
 // File explorer: the source files of the boards. A change is recorded in the
 // undo history at once (settle) and the grid redraws (requestRender).
 const fileExplorer = new FileExplorer({
@@ -69,6 +85,7 @@ const codeEditor = new CodeEditor({
 onOpenFile((boardId, path, options) => codeEditor.open(boardId, path, options));
 const layout = new DockLayout(dock, editorArea, {
   [SERIAL_CONSOLE_ID]: serialConsole.element,
+  [BUILD_OUTPUT_ID]: buildOutput.element,
   [CODE_EDITOR_ID]: codeEditor.element,
   [FILE_EXPLORER_ID]: fileExplorer.element,
 });
@@ -137,10 +154,29 @@ editor.onOpenConsole = (partId) => {
   layout.open(SERIAL_CONSOLE_ID);
   serialConsole.showBoard(partId);
 };
+// The chip of a failed build: show that board's messages in the Build output window.
+editor.onOpenBuildOutput = (partId) => {
+  layout.open(BUILD_OUTPUT_ID);
+  buildOutput.showBoard(partId);
+};
+// A failed build opens the Build output window once (without taking the keyboard from where it is);
+// closing it again does not bring it back for the same failure.
+const autoOpen = new AutoOpen();
+sim.boards.buildLog.onChange((partId) => {
+  if (partId === null) return autoOpen.forget(null);
+  const state = sim.boards.buildLog.get(partId);
+  if (state.status === 'idle') return autoOpen.forget(partId);
+  if (autoOpen.shouldOpen(partId, state, layout.isOpen(BUILD_OUTPUT_ID))) {
+    buildOutput.showBoard(partId);
+    layout.openQuietly(BUILD_OUTPUT_ID);
+  }
+});
 view.renderListeners.push(() => activeBoard.update());
 view.renderListeners.push(() => serialConsole.update()); // after the active board: Auto follows it
+view.renderListeners.push(() => buildOutput.update());
 view.renderListeners.push(() => fileExplorer.update()); // the highlighted board follows it too
 layout.onChange(() => serialConsole.update());
+layout.onChange(() => buildOutput.update());
 layout.onChange(() => fileExplorer.update());
 // Every edit is followed by a frame, so this notices all of them; the
 // history then records the edit once no gesture is in progress.

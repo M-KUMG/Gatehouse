@@ -1,5 +1,5 @@
 // Floating round buttons next to the selection: rotate, duplicate, edit
-// value, delete, and for one selected board Run / Pause, Reset, the Serial
+// value, delete, and for one selected board Run / Pause, Build, Reset, the Serial
 // console and Rename. Also the small readouts along the bottom edge.
 
 import type { BoardToolbar, ToolbarButtons } from './boardcontrols';
@@ -18,6 +18,7 @@ const ICONS = {
   edit: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
   run: svg('<path d="M8 5.5v13l11-6.5z" fill="currentColor"/>'),
   pause: svg('<path d="M8.5 5.5v13M15.5 5.5v13" stroke-width="3"/>'),
+  build: svg('<rect x="10" y="6" width="11" height="5" rx="1" transform="rotate(45 15.5 8.5)"/><path d="M4.5 19.5L14 10"/>'),
   reset: svg('<path d="M12 3.5v8"/><path d="M6.6 6.8a8 8 0 1 0 10.8 0"/>'),
   console: svg('<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7.5 9.5l3 2.5-3 2.5"/><path d="M13 15h4"/>'),
   rename: svg('<path d="M5 15.5L15.5 5l3.5 3.5L8.5 19H5z"/><path d="M13 7.5l3.5 3.5"/><path d="M12 21.5h8"/>'),
@@ -32,8 +33,9 @@ export interface ToolbarActions {
   duplicate: () => void;
   edit: () => void;
   delete: () => void;
-  /** Board buttons: Run or Pause (whichever the button shows), Reset, Serial console. */
+  /** Board buttons: Run or Pause (whichever the button shows), Build (compile only), Reset, Serial console. */
   run: () => void;
+  build: () => void;
   reset: () => void;
   console: () => void;
   /** Board button: open the rename popup. */
@@ -46,6 +48,7 @@ export class Toolbar {
   private readonly el: HTMLDivElement;
   private readonly buttons: Record<'rotate' | 'duplicate' | 'edit', HTMLButtonElement>;
   private readonly runButton: HTMLButtonElement;
+  private readonly buildButton: HTMLButtonElement;
   private readonly resetButton: HTMLButtonElement;
   private readonly consoleButton: HTMLButtonElement;
   private readonly renameButton: HTMLButtonElement;
@@ -65,11 +68,12 @@ export class Toolbar {
       edit: button('Edit value (double-click)', ICONS.edit, actions.edit),
     };
     this.runButton = button('Run', ICONS.run, actions.run, 'run');
+    this.buildButton = button('Build (compile only)', ICONS.build, actions.build, 'build');
     this.resetButton = button('Reset (rebuild from files)', ICONS.reset, actions.reset);
     this.consoleButton = button('Open serial console', ICONS.console, actions.console);
     this.renameButton = button('Rename board (display name only)', ICONS.rename, actions.rename);
     this.boardGroup.className = 'tool-group';
-    this.boardGroup.append(this.runButton, this.resetButton, this.consoleButton, this.renameButton);
+    this.boardGroup.append(this.runButton, this.buildButton, this.resetButton, this.consoleButton, this.renameButton);
     this.el.append(
       this.boardGroup,
       this.buttons.rotate, this.buttons.duplicate, this.buttons.edit,
@@ -111,7 +115,7 @@ export class Toolbar {
     return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
   }
 
-  /** Run / Reset / Serial console / Rename: shown for one selected board; touched only when what they show changes. */
+  /** Run / Build / Reset / Serial console / Rename: shown for one selected board; touched only when what they show changes. */
   private showBoardButtons(board: BoardToolbar | null): void {
     this.boardGroup.style.display = board ? '' : 'none';
     const key = board ? JSON.stringify(board) : '';
@@ -123,6 +127,10 @@ export class Toolbar {
     this.runButton.setAttribute('aria-label', run.title.split('\n')[0]);
     this.runButton.disabled = run.disabled;
     this.runButton.classList.toggle('has-error', run.error);
+    this.buildButton.title = board.build.title;
+    this.buildButton.setAttribute('aria-label', board.build.title);
+    this.buildButton.disabled = board.build.disabled;
+    this.buildButton.classList.toggle('has-error', board.build.error);
     for (const [b, view] of [[this.resetButton, board.reset], [this.consoleButton, board.console], [this.renameButton, board.rename]] as const) {
       b.title = view.title;
       b.setAttribute('aria-label', view.title);

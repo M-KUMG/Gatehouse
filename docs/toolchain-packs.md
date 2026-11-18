@@ -170,6 +170,8 @@ bytes.
    `core.a`, the library archives, the objects, and `/ldscripts/avr5.xn` from the compiler pack; `objcopy` the ELF. The
    include flags and link line are in `spikes/compiler-startabit/tc.mjs`.
 8. **Electron** reads the same files from the app resources (raw `.pack`, no gzip) and skips Cache Storage.
+   Not done yet: today Electron loads `dist/` from `file://`, where no packs are served, so `getCompilerStatus()`
+   returns `'unavailable'` (no Worker is started, nothing crashes) and boards run their `.hex` file as before.
 9. **Integrity of the manifest.** In a hosted build the manifest and the packs come from the same origin as the app, so
    the sha256 check protects against truncated or stale files, not against a hostile server. Pinning the manifest hash
    into the app bundle at build time would close that gap.

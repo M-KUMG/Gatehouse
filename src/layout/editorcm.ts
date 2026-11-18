@@ -12,9 +12,10 @@ import { cpp } from '@codemirror/lang-cpp';
 import { json } from '@codemirror/lang-json';
 import { python } from '@codemirror/lang-python';
 import { HighlightStyle, indentUnit, syntaxHighlighting } from '@codemirror/language';
-import { Annotation, EditorState, type Extension, type StateEffect } from '@codemirror/state';
-import { keymap } from '@codemirror/view';
+import { Annotation, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
+import { Decoration, keymap } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
+import { resolveJump } from './editorjump';
 import type { EditorLanguage } from './editorlang';
 import { minimalChange } from './editorsync';
 
@@ -39,12 +40,38 @@ export interface CodeSurface {
   /** Forget a document. */
   drop(id: number): void;
   focus(): void;
+  /**
+   * Move the cursor of a shown document to a 1-based line and column (clamped),
+   * scroll it into view and flash the line briefly (CSS class cm-flash-line).
+   * Does nothing unless the document is the one in front.
+   */
+  reveal(id: number, line: number, column?: number): void;
   /** Look at the size again (the window was shown or resized). */
   measure(): void;
 }
 
 /** Marks changes made from outside; they are not reported as edits. */
 const fromOutside = Annotation.define<boolean>();
+
+/** How long a revealed line flashes (matches the animation in codeeditor.css). */
+const FLASH_MS = 1500;
+const flashOn = StateEffect.define<number>();
+const flashOff = StateEffect.define<null>();
+const flashLine = Decoration.line({ class: 'cm-flash-line' });
+
+/** The line that flashes now (document offset of its start), as a line decoration. */
+const flashField = StateField.define({
+  create: () => Decoration.none,
+  update(value, tr) {
+    let next = value.map(tr.changes);
+    for (const e of tr.effects) {
+      if (e.is(flashOff)) next = Decoration.none;
+      else if (e.is(flashOn)) next = Decoration.set([flashLine.range(e.value)]);
+    }
+    return next;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
 
 // Colours of the app (see dock.css, serialconsole.css, fileexplorer.css).
 const COLOR = {
@@ -138,6 +165,7 @@ export function createSurface(parent: HTMLElement, onEdit: (id: number) => void)
     EditorState.tabSize.of(2),
     indentUnit.of('  '),
     theme,
+    flashField,
     syntaxHighlighting(highlight),
     languageExtension(language),
     EditorView.contentAttributes.of({ 'aria-label': readOnly ? 'Code viewer (read only)' : 'Code editor' }),
@@ -152,6 +180,7 @@ export function createSurface(parent: HTMLElement, onEdit: (id: number) => void)
   ];
 
   const view = new EditorView({ parent });
+  let flashTimer = 0;
 
   /** Keep the state and scroll of the document in front. */
   function park(): void {
@@ -174,7 +203,9 @@ export function createSurface(parent: HTMLElement, onEdit: (id: number) => void)
       if (!doc || current === id) return;
       park();
       current = id;
+      window.clearTimeout(flashTimer);
       view.setState(doc.state);
+      view.dispatch({ effects: flashOff.of(null) }); // a flash that was cut short by switching away must not come back
       if (doc.scroll) view.dispatch({ effects: doc.scroll });
     },
 
@@ -198,6 +229,18 @@ export function createSurface(parent: HTMLElement, onEdit: (id: number) => void)
     drop(id) {
       docs.delete(id);
       if (current === id) current = null;
+    },
+
+    reveal(id, line, column) {
+      if (current !== id) return;
+      const place = resolveJump(view.state.doc, { line, column });
+      const from = view.state.doc.line(place.line).from;
+      window.clearTimeout(flashTimer);
+      view.dispatch({
+        selection: { anchor: place.pos },
+        effects: [EditorView.scrollIntoView(place.pos, { y: 'center' }), flashOff.of(null), flashOn.of(from)],
+      });
+      flashTimer = window.setTimeout(() => view.dispatch({ effects: flashOff.of(null) }), FLASH_MS);
     },
 
     focus: () => view.focus(),

@@ -1,7 +1,8 @@
 // What the selected board offers on the grid, as plain data (no DOM):
 //   - which buttons the floating selection toolbar shows (rotate, duplicate,
-//     edit value, and for exactly one selected board: Run / Pause, Reset,
-//     Serial console, Rename) and how each looks (icon, tooltip, disabled, error mark)
+//     edit value, and for exactly one selected board: Run / Pause, Build,
+//     Reset, Serial console, Rename) and how each looks (icon, tooltip,
+//     disabled, error mark)
 //   - the reset button drawn on the board (a hit area in cells, rotates with
 //     the part, like the knob in controls.ts)
 //   - the "active" board the other windows follow (the Serial console's Auto,
@@ -45,9 +46,15 @@ export interface ActionButtonView {
   disabled: boolean;
 }
 
+/** The Build (compile only) button: disabled while a build runs, red marker after a failed build. */
+export interface BuildButtonView extends ActionButtonView {
+  error: boolean;
+}
+
 /** The board buttons of the toolbar. */
 export interface BoardToolbar {
   run: RunButtonView;
+  build: BuildButtonView;
   reset: ActionButtonView;
   console: ActionButtonView;
   /** Opens the small name popup (see nameedit.ts). */
@@ -73,22 +80,33 @@ export function runButtonView(s: BoardRunState): RunButtonView {
   }
 }
 
-export function boardToolbar(s: BoardRunState): BoardToolbar {
+/** `buildFailed`: the board's last build (Run, Reset or Build) failed, as the build log says. */
+export function buildButtonView(s: BoardRunState, buildFailed = false): BuildButtonView {
+  return { title: s.building ? 'Building…' : 'Build (compile only)', disabled: s.building, error: !s.building && buildFailed };
+}
+
+export function boardToolbar(s: BoardRunState, buildFailed = false): BoardToolbar {
   return {
     run: runButtonView(s),
+    build: buildButtonView(s, buildFailed),
     reset: { title: 'Reset (rebuild from files)', disabled: s.building },
     console: { title: 'Open serial console', disabled: false },
     rename: { title: 'Rename board (display name only)', disabled: false },
   };
 }
 
-export function toolbarButtons(selected: readonly PlacedPart[], stateOf: (partId: number) => BoardRunState): ToolbarButtons {
+export function toolbarButtons(
+  selected: readonly PlacedPart[],
+  stateOf: (partId: number) => BoardRunState,
+  /** True when the board's last build failed (the build log's word, which also covers compile-only builds). */
+  buildFailed: (partId: number) => boolean = () => false,
+): ToolbarButtons {
   const board = selectedBoard(selected);
   return {
     rotate: selected.length > 0,
     duplicate: selected.length > 0,
     edit: selected.length === 1 && getPart(selected[0].typeId)?.value !== undefined,
-    board: board ? boardToolbar(stateOf(board.id)) : null,
+    board: board ? boardToolbar(stateOf(board.id), buildFailed(board.id)) : null,
   };
 }
 

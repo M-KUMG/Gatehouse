@@ -1,6 +1,6 @@
 // Runs one Emscripten-built tool (MODULARIZE factory + compiled
 // WebAssembly.Module) on a ToolRequest in a fresh instance with an in-memory
-// filesystem. Shared by the Node runner and the future browser Worker: it
+// filesystem. Shared by the Node runner and the compile Worker (worker/): it
 // uses only the Emscripten module API, no DOM and no Node.
 
 import { resolveMounts, type SysrootSource, type ToolRequest, type ToolResult } from './toolrunner';
@@ -76,17 +76,26 @@ export async function runEmscriptenTool(tool: LoadedTool, request: ToolRequest, 
   const sysFiles = await resolveMounts(sysroot, request.sysroot);
   const stdout: string[] = [];
   const stderr: string[] = [];
-  const M = await tool.factory({
-    noInitialRun: true,
-    thisProgram: request.tool,
-    print: (line: string) => stdout.push(line),
-    printErr: (line: string) => stderr.push(line),
-    stdin: () => null,
-    instantiateWasm(imports: WebAssembly.Imports, done: (instance: WebAssembly.Instance, module: WebAssembly.Module) => void) {
-      WebAssembly.instantiate(tool.module, imports).then((instance) => done(instance, tool.module));
-      return {};
-    },
+  // A failed instantiation (no memory for the instance) never calls `done`, so
+  // the factory would wait forever: race it against the failure.
+  let instantiateFailed: (e: unknown) => void = () => {};
+  const failed = new Promise<never>((_, reject) => {
+    instantiateFailed = reject;
   });
+  const M = await Promise.race([
+    tool.factory({
+      noInitialRun: true,
+      thisProgram: request.tool,
+      print: (line: string) => stdout.push(line),
+      printErr: (line: string) => stderr.push(line),
+      stdin: () => null,
+      instantiateWasm(imports: WebAssembly.Imports, done: (instance: WebAssembly.Instance, module: WebAssembly.Module) => void) {
+        WebAssembly.instantiate(tool.module, imports).then((instance) => done(instance, tool.module), instantiateFailed);
+        return {};
+      },
+    }),
+    failed,
+  ]);
   const FS = M.FS;
   for (const [p, d] of sysFiles) put(FS, p, d);
   for (const [p, d] of request.files) put(FS, p, d);

@@ -9,13 +9,20 @@
 //               files, then run; paused: continue the same emulator.
 //   pauseBoard  stop the clock for this board; the emulator is kept.
 //   resetBoard  build again from the current files, start from zero, stopped.
-// A failed build leaves the board in the 'error' state with the message.
+//   buildBoard  compile only: same build and build log, the board's state
+//               (stopped / paused / running, its emulator) is not touched.
+// Which program a build produces (compiled sketch or the .hex file): see
+// src/build/registry.ts. A failed build leaves the board in the 'error' state
+// with a short message; the full output is in `buildLog` (per board, kept
+// until its next build, removed with the board).
 // Builds are async; onChange listeners hear about every change (also when a
 // build finishes), and `version` is bumped whenever an emulator is created,
 // replaced or dropped.
 
-import type { BuildInput, BuildResult } from '../build/compiler';
+import { BuildLog, idleBuildState, type BoardBuildState } from '../build/buildlog';
+import type { BuildEvent, BuildInput, BuildResult } from '../build/compiler';
 import { buildFirmware } from '../build/registry';
+import { formatMessage, type BuildMessage } from '../build/wasm/diagnostics';
 import type { BoardSpec, SerialBytes } from './board';
 import { HexError, parseIntelHex } from './hex';
 import type { BoardSlot } from './mixedsignal';
@@ -27,6 +34,8 @@ export interface BoardRuntime extends BoardSlot {
   started: boolean;
   /** A build is in progress. */
   building: boolean;
+  /** That build is a buildBoard() (compile only): Run may overtake it. */
+  buildOnly: boolean;
   /** What the last successful build ran (e.g. "firmware.hex"). */
   firmwareName: string | null;
   /** Notes from the last build. */
@@ -73,6 +82,8 @@ export class BoardRuntimes {
   speed = 0;
   /** Serial output per board and port; buffers go with their board (reset, new build, deleted). */
   readonly serial = new SerialStore();
+  /** Build output per board (status, progress, downloads, messages, sizes). */
+  readonly buildLog = new BuildLog();
   private readonly byId = new Map<number, BoardRuntime>();
   private readonly listeners: (() => void)[] = [];
 
@@ -101,6 +112,7 @@ export class BoardRuntimes {
       if (!keep.has(id)) {
         this.byId.delete(id);
         this.serial.removeBoard(id);
+        this.buildLog.clear(id);
         this.version++;
       }
     }
@@ -109,7 +121,7 @@ export class BoardRuntimes {
       if (!rt) {
         rt = {
           partId: p.id, spec: p.spec, io: p.spec.io, electrical: p.spec.electrical, emulator: null, running: false,
-          started: false, building: false, firmwareName: null, messages: [], error: null, generation: 0,
+          started: false, building: false, buildOnly: false, firmwareName: null, messages: [], error: null, generation: 0,
         };
         this.byId.set(p.id, rt);
         this.version++;
@@ -122,6 +134,7 @@ export class BoardRuntimes {
   clear(): void {
     this.byId.clear();
     this.serial.clearAll();
+    this.buildLog.clearAll();
     this.version++;
     this.changed();
   }
@@ -153,7 +166,7 @@ export class BoardRuntimes {
   /** Run: a fresh board builds from its current files first; a paused one continues. */
   async runBoard(id: number): Promise<void> {
     const rt = this.byId.get(id);
-    if (!rt || rt.building || rt.running) return;
+    if (!rt || (rt.building && !rt.buildOnly) || rt.running) return;
     if (rt.started && rt.emulator) {
       rt.running = true;
       this.changed();
@@ -189,15 +202,50 @@ export class BoardRuntimes {
     for (const [port, data] of Object.entries(bytes)) this.serial.write(id, port, data);
   }
 
+  /**
+   * Compile only (Build button): the same build and build log as Run, but the
+   * board keeps its state and emulator. Ignored while Run / Reset builds;
+   * a Run or Reset meanwhile overtakes it. Never throws.
+   */
+  async buildBoard(id: number): Promise<void> {
+    const rt = this.byId.get(id);
+    if (!rt || rt.building) return;
+    const generation = ++rt.generation;
+    rt.building = true;
+    rt.buildOnly = true;
+    this.changed();
+    const result = await this.buildLogged(rt, generation);
+    if (result === null) return; // overtaken: the newer build owns `building`
+    rt.building = false;
+    rt.buildOnly = false;
+    this.changed();
+  }
+
   /** The build result for a board; never throws. */
-  private async buildFor(partId: number): Promise<BuildResult> {
+  private async buildFor(partId: number, onEvent: (e: BuildEvent) => void): Promise<BuildResult> {
     try {
       const input = this.source(partId);
       if (!input) return { ok: false, errors: ['This board has no files to build from.'] };
-      return await this.build(input);
+      return await this.build({ ...input, onEvent });
     } catch (e) {
       return { ok: false, errors: [`The build failed: ${e instanceof Error ? e.message : String(e)}`] };
     }
+  }
+
+  /** Build with the build log kept up to date; null when a newer build or a removal overtook it. */
+  private async buildLogged(rt: BoardRuntime, generation: number): Promise<BuildResult | null> {
+    const id = rt.partId;
+    const current = (): boolean => generation === rt.generation && this.byId.get(id) === rt;
+    const startedAt = Date.now();
+    this.buildLog.update(id, { ...idleBuildState(), status: 'building', progress: { phase: 'prepare', message: 'Starting build' }, startedAt });
+    const result = await this.buildFor(id, (e) => {
+      if (!current()) return;
+      if (e.kind === 'download') this.buildLog.download(id, e.download);
+      else this.buildLog.update(id, { status: 'building', progress: { phase: e.phase, message: e.message, current: e.current, total: e.total } });
+    });
+    if (!current()) return null;
+    this.buildLog.update(id, finishedLog(result, startedAt, Date.now()));
+    return result;
   }
 
   /**
@@ -207,16 +255,17 @@ export class BoardRuntimes {
   private async load(rt: BoardRuntime): Promise<number | null> {
     const generation = ++rt.generation;
     rt.building = true;
+    rt.buildOnly = false;
     this.changed();
-    const result = await this.buildFor(rt.partId);
-    if (generation !== rt.generation || this.byId.get(rt.partId) !== rt) return null;
+    const result = await this.buildLogged(rt, generation);
+    if (result === null) return null;
     rt.building = false;
     rt.emulator = null;
     rt.running = false;
     rt.started = false;
     this.serial.clear(rt.partId);
     if (!result.ok) {
-      rt.error = result.errors.join('\n');
+      rt.error = shortError(result);
       rt.messages = [];
       rt.firmwareName = null;
     } else {
@@ -227,10 +276,46 @@ export class BoardRuntimes {
         rt.error = null;
       } catch (e) {
         rt.error = `${result.name} is not a valid program. ${e instanceof HexError ? e.message : String(e)}`;
+        this.buildLog.update(rt.partId, { status: 'failed', summary: rt.error });
       }
     }
     this.version++;
     this.changed();
     return generation;
   }
+}
+
+/** The board's error text: the firmware-file errors as they are; for a compile, the first error and a count. */
+function shortError(result: Extract<BuildResult, { ok: false }>): string {
+  if (!result.buildMessages) return result.errors.join('\n');
+  const errors = result.buildMessages.filter((m) => m.severity === 'error');
+  if (errors.length === 0) return result.errors.join('\n') || 'Build failed.';
+  const more = errors.length > 1 ? ` (and ${errors.length - 1} more error${errors.length > 2 ? 's' : ''}, see the build output)` : '';
+  return `Build failed: ${formatMessage(errors[0])}${more}`;
+}
+
+const plain = (severity: BuildMessage['severity'], text: string): BuildMessage => ({ severity, message: text, raw: text });
+const pct = (n: number, max: number): number => Math.round((n / max) * 100);
+
+/** The build log's state once a build finished. */
+function finishedLog(result: BuildResult, startedAt: number, finishedAt: number): Partial<BoardBuildState> {
+  const times = { startedAt, finishedAt, durationMs: finishedAt - startedAt };
+  if (!result.ok) {
+    const messages = result.buildMessages ?? result.errors.map((e) => plain('error', e));
+    const n = messages.filter((m) => m.severity === 'error').length;
+    return {
+      ...times, status: 'failed', progress: { phase: 'done', message: 'Failed' }, messages,
+      summary: `Build failed: ${n} error${n === 1 ? '' : 's'}.`, source: result.buildMessages ? 'compiled' : null,
+    };
+  }
+  const messages = result.buildMessages ?? result.messages.map((m) => plain('note', m));
+  const s = result.size;
+  const summary =
+    result.source === 'compiled'
+      ? `Compiled ${result.name}${s ? `: ${s.flashBytes} bytes of flash (${pct(s.flashBytes, s.flashMax)}%), ${s.ramBytes} bytes of RAM (${pct(s.ramBytes, s.ramMax)}%)` : ''}.`
+      : `Running ${result.name} (not compiled).`;
+  return {
+    ...times, status: 'succeeded', progress: { phase: 'done', message: 'Done' }, messages, summary, source: result.source,
+    ...(s ? { flashBytes: s.flashBytes, flashMax: s.flashMax, ramBytes: s.ramBytes, ramMax: s.ramMax } : {}),
+  };
 }

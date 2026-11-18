@@ -25,6 +25,10 @@
 // when the project changes; it is never written back. It is not a board file,
 // so the sync above leaves it alone.
 //
+// Jumping: open() may carry a line and column (a clicked build message). The
+// jump waits until the file is shown (CodeMirror may still be loading), then
+// the cursor goes there, the line scrolls into view and flashes.
+//
 // Keys: the editor is contenteditable, so the grid shortcuts ignore it and
 // CodeMirror's own undo / redo and search keys work. Open tabs are session
 // state; they are not saved in the project.
@@ -103,6 +107,8 @@ export class CodeEditor {
   private manifestTimer = 0;
   /** Focus the editor once the tab in front is shown. */
   private wantFocus = false;
+  /** Put the cursor here once the tab in front is shown. */
+  private jump: { file: TabFile; line: number; column?: number } | null = null;
 
   constructor(private readonly host: CodeEditorHost) {
     const el = this.element;
@@ -171,7 +177,8 @@ export class CodeEditor {
       this.byId.set(open.id, open);
       if (!isVirtualTab(file)) this.takeSnapshot(boardId);
     }
-    this.setTabs(openTab(this.tabs, file), options.focus === true);
+    const jump = options.line !== undefined ? { file, line: options.line, ...(options.column !== undefined ? { column: options.column } : {}) } : null;
+    this.setTabs(openTab(this.tabs, file), options.focus === true, jump);
   }
 
   /** The text of a tab's file: from the board's tree, or generated for gatehouse.json. */
@@ -195,10 +202,11 @@ export class CodeEditor {
   }
 
   /** Switch to a new tab state: write what is pending, redraw the strip, show the front file. */
-  private setTabs(next: TabsState, focus: boolean): void {
+  private setTabs(next: TabsState, focus: boolean, jump: { file: TabFile; line: number; column?: number } | null = null): void {
     this.flushAll();
     this.tabs = next;
     this.wantFocus = focus;
+    this.jump = jump;
     this.renderStrip();
     this.showFront();
   }
@@ -226,6 +234,9 @@ export class CodeEditor {
       }
       surface.show(open.id);
       surface.measure();
+      const jump = this.jump;
+      if (jump && sameTab(jump.file, open.file)) surface.reveal(open.id, jump.line, jump.column);
+      this.jump = null;
       if (this.wantFocus) surface.focus();
       this.wantFocus = false;
     }, (error: unknown) => {

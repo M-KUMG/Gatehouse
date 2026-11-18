@@ -154,3 +154,19 @@
   display: inline-flex;
   color: #e6b36a;
 }
+
+/* The line a build message points at flashes once (editorcm.ts removes the class after the animation). */
+.cm-flash-line {
+  animation: gh-line-flash 1.5s ease-out;
+}
+
+@keyframes gh-line-flash {
+  0%,
+  35% {
+    background-color: rgba(229, 83, 75, 0.35);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}

@@ -115,6 +115,8 @@ export class Editor {
   onRedo: (() => void) | null = null;
   /** Open (or bring forward) the Serial console showing this board (part id). */
   onOpenConsole: ((partId: number) => void) | null = null;
+  /** Open (or bring forward) the Build output window showing this board (a click on the chip of a failed build). */
+  onOpenBuildOutput: ((partId: number) => void) | null = null;
   /** Give a board (part id) a new display name; the project keeps the data (renameBoard). Empty input restores the default. */
   onRenameBoard: ((partId: number, input: string) => FileOpResult) | null = null;
 
@@ -153,6 +155,7 @@ export class Editor {
       edit: () => this.editValue(this.selection.parts()[0]),
       delete: () => this.deleteSelected(),
       run: () => this.toggleRun(),
+      build: () => this.buildSelectedBoard(),
       reset: () => this.resetSelectedBoard(),
       console: () => {
         const board = selectedBoard(this.selection.parts());
@@ -161,6 +164,10 @@ export class Editor {
       rename: () => this.renameSelectedBoard(),
     });
     this.statusChip = new BoardStatusChip(canvas);
+    this.statusChip.onClick = () => {
+      const board = selectedBoard(this.selection.parts());
+      if (board) this.onOpenBuildOutput?.(board.id);
+    };
     this.updateZoomReadout = createZoomReadout(
       overlayParent,
       () => view.camera.zoom,
@@ -549,6 +556,12 @@ export class Editor {
     else void boards.runBoard(board.id);
   }
 
+  /** Compile the selected board's files without running them (the result is in the Build output window and the chip). */
+  private buildSelectedBoard(): void {
+    const board = selectedBoard(this.selection.parts());
+    if (board) void this.sim.boards.buildBoard(board.id);
+  }
+
   private resetSelectedBoard(): void {
     const board = selectedBoard(this.selection.parts());
     if (board) void this.sim.boards.resetBoard(board.id);
@@ -645,13 +658,14 @@ export class Editor {
     const busy = this.placer.active || this.wiring.active || dragging;
     this.toolbar.show(
       box && !busy ? this.view.toScreen(box) : null,
-      toolbarButtons(parts, (id) => this.sim.boards.boardRunState(id)),
+      toolbarButtons(parts, (id) => this.sim.boards.boardRunState(id), (id) => this.sim.boards.buildLog.get(id).status === 'failed'),
     );
     const board = selectedBoard(parts);
     this.statusChip.show(
       board && !busy ? this.view.toScreen(footprint(board)) : null,
       board ? this.sim.boards.boardRunState(board.id) : null,
       board ? boardLabel(board) : '',
+      board ? this.sim.boards.buildLog.get(board.id) : null,
     );
 
     const p = this.pointer;

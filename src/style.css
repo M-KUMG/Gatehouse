@@ -485,8 +485,9 @@ html, body {
   color: #d8dbe0;
 }
 
-/* Run button after a failed build: red marker in its corner. */
-.tool-button.run {
+/* Run and Build buttons after a failed build: red marker in the corner. */
+.tool-button.run,
+.tool-button.build {
   position: relative;
 }
 
@@ -516,6 +517,15 @@ html, body {
   font-variant-numeric: tabular-nums;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   user-select: none;
+}
+
+/* After a failed build the chip opens the Build output window. */
+.board-chip.clickable {
+  cursor: pointer;
+}
+
+.board-chip.clickable:hover {
+  border-color: #e5534b;
 }
 
 .board-chip-row {

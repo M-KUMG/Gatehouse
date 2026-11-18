@@ -59,6 +59,16 @@ export class DockLayout {
     return this.api.getPanel(id) !== undefined;
   }
 
+  /**
+   * Show a window without taking the keyboard focus from where it is (a window
+   * that opens by itself, such as the Build output after a failed build).
+   */
+  openQuietly(id: string): void {
+    const before = document.activeElement;
+    this.open(id);
+    if (before instanceof HTMLElement && before.isConnected && document.activeElement !== before) before.focus({ preventScroll: true });
+  }
+
   /** Show a window: bring it to the front, or dock it at its default place. */
   open(id: string): void {
     const existing = this.api.getPanel(id);
@@ -130,6 +140,11 @@ export class DockLayout {
     switch (id) {
       case 'serial-console':
         return { position: { referencePanel: EDITOR_ID, direction: 'below' }, initialHeight: 180 };
+      case 'build-output':
+        // Next to the console as a tab when it is docked, else under the grid.
+        return docked('serial-console')
+          ? { position: { referencePanel: 'serial-console', direction: 'within' } }
+          : { position: { referencePanel: EDITOR_ID, direction: 'below' }, initialHeight: 180 };
       case 'code-editor':
         return docked('file-explorer')
           ? { position: { referencePanel: 'file-explorer', direction: 'below' } }
