@@ -30,6 +30,11 @@
 // the arrow keys keep browsing); Enter and double-click also move the focus
 // into the editor. A folder click only selects (the arrow toggles it).
 //
+// A click on a board's row, or on a file or folder inside its folder, also
+// selects that board on the grid and pans it into view (host.showBoard); the
+// arrow (fold), keys and the project, gatehouse.json and boards rows leave
+// the grid alone. The explorer only reads the result back through autoBoard().
+//
 // Files dragged in from the desktop are imported into the board folder or
 // folder under the pointer; the Import button does the same into the
 // selected folder (or the file's folder, or the active board's folder).
@@ -59,6 +64,8 @@ export interface ExplorerHost {
   project: Project;
   /** Part id of the board the rest of the app follows (the active board: selected on the grid, else the last one), or null. */
   autoBoard(): number | null;
+  /** A board row (or something in a board's folder) was clicked: select that board part on the grid and bring it into view. */
+  showBoard(partId: number): void;
   /** A change was made to the files: record it in the undo history and redraw. */
   changed(): void;
   undo(): void;
@@ -456,8 +463,17 @@ export class FileExplorer {
     const row = this.rowAt(e.target);
     if (!row || e.button !== 0) return;
     if (isFoldable(row.kind) && e.target instanceof Element && e.target.closest('.fx-twisty')) this.setExpanded(row.id, !row.expanded);
-    else if (rowOps(row.kind).open) this.open(row, false);
+    else {
+      if (rowOps(row.kind).open) this.open(row, false);
+      this.showOnGrid(row);
+    }
   };
+
+  /** A board row, or a file or folder in a board's folder: show that board on the grid (the project, gatehouse.json and boards rows have no board). */
+  private showOnGrid(row: ProjectRow): void {
+    const board = row.boardId === undefined ? undefined : this.boards.find((b) => b.boardId === row.boardId);
+    if (board) this.host.showBoard(board.partId);
+  }
 
   private onDoubleClick = (e: MouseEvent): void => {
     const row = this.rowAt(e.target);

@@ -207,6 +207,18 @@ export class Editor {
     this.refreshHover();
   }
 
+  /**
+   * Make this part the whole selection, as if it was clicked on the grid (a
+   * board picked in the File explorer). False, and nothing changes, when the
+   * part is gone or a gesture is in progress.
+   */
+  selectPart(partId: number): boolean {
+    if (this.drag || this.placer.active || this.wiring.active || !this.scene.find(partId)) return false;
+    this.valueEditor.close();
+    this.selection.set([partId]);
+    return true;
+  }
+
   /** Add a ready-made circuit below what is already there and show it. */
   loadExample(state: ProjectState): void {
     if (this.placer.active || this.drag) return;

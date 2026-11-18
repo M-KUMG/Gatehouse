@@ -2,7 +2,9 @@ import './style.css';
 import { BoardClock } from './boardclock';
 import { ActiveBoard } from './boardcontrols';
 import { EXAMPLES } from './examples';
-import { GridView } from './grid';
+import { CameraPan } from './camerapan';
+import { cellBoxToWorld, revealTarget } from './camerareveal';
+import { GRID_SIZE, GridView } from './grid';
 import { Editor } from './interaction';
 import { CODE_EDITOR_ID, CodeEditor } from './layout/codeeditor';
 import { DockLayout, isForOtherWindow } from './layout/dock';
@@ -10,7 +12,7 @@ import { onOpenFile } from './layout/fileevents';
 import { FILE_EXPLORER_ID, FileExplorer } from './layout/fileexplorer';
 import { SERIAL_CONSOLE_ID, SerialConsole } from './layout/serialconsole';
 import { createWindowsMenu } from './layout/windowsmenu';
-import { boundsOf } from './model';
+import { boundsOf, footprint } from './model';
 import { createPalette } from './palette';
 import { ProjectController } from './project/controller';
 import { Project } from './project/project';
@@ -45,6 +47,7 @@ const serialConsole = new SerialConsole(scene, sim, () => activeBoard.partId);
 const fileExplorer = new FileExplorer({
   project,
   autoBoard: () => activeBoard.partId,
+  showBoard: (partId) => showBoardOnGrid(partId),
   changed: () => {
     controller.history.settle();
     view.requestRender();
@@ -74,6 +77,18 @@ layout.api.onDidLayoutChange(view.requestRender);
 view.sim = sim;
 const editor = new Editor(view, scene, sim, editorArea);
 editor.ignoreKey = (e) => isForOtherWindow(e.target, editorArea);
+// A board picked in the File explorer: select it as if clicked on the grid and,
+// unless it is fully in view, pan to centre it (same zoom). Neither is circuit
+// data, so no undo step and no unsaved mark. A press or the wheel on the grid ends the pan.
+const cameraPan = new CameraPan(project.camera, () => view.cameraChanged());
+for (const type of ['pointerdown', 'wheel']) canvas.addEventListener(type, () => cameraPan.cancel(), { capture: true, passive: true });
+function showBoardOnGrid(partId: number): void {
+  const part = scene.find(partId);
+  if (!part || !editor.selectPart(partId)) return;
+  const rect = cellBoxToWorld(footprint(part), GRID_SIZE);
+  const target = revealTarget(project.camera, { width: canvas.clientWidth, height: canvas.clientHeight }, rect);
+  if (target) cameraPan.panTo(target.x, target.y);
+}
 // Boards run on animation frames while one is running.
 const clock = new BoardClock(sim, view.requestRender);
 // Run / Pause / Reset (toolbar, the board's reset button) and finished builds
