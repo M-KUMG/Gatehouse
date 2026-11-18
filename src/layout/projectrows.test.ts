@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { canonical, listTree } from '../project/filetree';
 import {
-  BOARDS_ID, MANIFEST_ID, PROJECT_ROOT, horizontalMove, lockReason, moveSelection, newItemTarget, projectNodes, reconcile,
+  BOARDS_ID, MANIFEST_ID, PROJECT_ROOT, boardRenameHint, horizontalMove, lockReason, moveSelection, newItemTarget, projectNodes, reconcile,
   resolveActiveBoard, rowId, rowOps, selectionAfterDelete, visibleRows, type BoardNode, type RowKind,
 } from './projectrows';
 
@@ -42,6 +42,15 @@ describe('the project tree', () => {
     const rows = all([uno10, uno2, uno1]).filter((r) => r.kind === 'board');
     expect(rows.map((r) => r.id)).toEqual(['boards/uno-1', 'boards/uno-2', 'boards/uno-10']);
     expect(rows.map((r) => r.name)).toEqual(['Arduino Uno #1', 'Arduino Uno #2', 'Arduino Uno #10']);
+  });
+
+  it('shows a custom name as the row name, still with the folder id as quieter text and the same order', () => {
+    const named: BoardNode = { boardId: 'uno-10', label: 'Alarm', entries: [] };
+    const first: BoardNode = { ...uno2, label: 'Zebra' };
+    const rows = all([named, first, uno1]).filter((r) => r.kind === 'board');
+    expect(rows.map((r) => r.id)).toEqual(['boards/uno-1', 'boards/uno-2', 'boards/uno-10']); // not by name
+    expect(rows.map((r) => r.name)).toEqual(['Arduino Uno #1', 'Zebra', 'Alarm']);
+    expect(rows.map((r) => r.secondary)).toEqual(['uno-1', 'uno-2', 'uno-10']);
   });
 
   it('flags only the active board', () => {
@@ -90,12 +99,13 @@ describe('the active board', () => {
 describe('which operations are allowed on which row', () => {
   const kinds: RowKind[] = ['project', 'manifest', 'boards', 'board', 'folder', 'file'];
 
-  it('only files and folders inside a board can be renamed or deleted', () => {
+  it('only files and folders inside a board can be deleted; board rows can be renamed too (display name)', () => {
     for (const k of kinds) {
       const inside = k === 'folder' || k === 'file';
-      expect(rowOps(k).rename, k).toBe(inside);
+      expect(rowOps(k).rename, k).toBe(inside || k === 'board');
       expect(rowOps(k).remove, k).toBe(inside);
-      expect(lockReason(k) === null, k).toBe(inside);
+      expect(lockReason(k, 'rename') === null, k).toBe(inside || k === 'board');
+      expect(lockReason(k, 'delete') === null, k).toBe(inside);
     }
   });
 
@@ -107,9 +117,15 @@ describe('which operations are allowed on which row', () => {
   });
 
   it('explains why a row is locked', () => {
-    expect(lockReason('manifest')).toMatch(/generated from the circuit/);
-    expect(lockReason('board')).toMatch(/on the grid/);
-    expect(lockReason('boards')).toMatch(/boards folder/);
+    expect(lockReason('manifest', 'delete')).toMatch(/generated from the circuit.*deleted/);
+    expect(lockReason('manifest', 'rename')).toMatch(/generated from the circuit.*renamed/);
+    expect(lockReason('board', 'delete')).toMatch(/cannot be deleted.*on the grid/);
+    expect(lockReason('boards', 'rename')).toMatch(/boards folder cannot be renamed/);
+    expect(lockReason('project', 'delete')).toMatch(/project root cannot be deleted/);
+  });
+
+  it('the Rename button of a board row says that only the display name changes', () => {
+    expect(boardRenameHint('uno-3')).toMatch(/display name only.*"uno-3" keeps its name/);
   });
 });
 

@@ -384,7 +384,7 @@ export class CodeEditor {
   }
 
   private labels(): TabLabel[] {
-    const names = new Map(listBoards(this.host.project).map((b) => [b.boardId, b.label]));
+    const names = new Map(listBoards(this.host.project).map((b) => [b.boardId, b.labelWithId]));
     return tabLabels(this.tabs.tabs, (id) => names.get(id) ?? id);
   }
 

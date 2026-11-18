@@ -1,7 +1,7 @@
 // What the selected board offers on the grid, as plain data (no DOM):
 //   - which buttons the floating selection toolbar shows (rotate, duplicate,
 //     edit value, and for exactly one selected board: Run / Pause, Reset,
-//     Serial console) and how each looks (icon, tooltip, disabled, error mark)
+//     Serial console, Rename) and how each looks (icon, tooltip, disabled, error mark)
 //   - the reset button drawn on the board (a hit area in cells, rotates with
 //     the part, like the knob in controls.ts)
 //   - the "active" board the other windows follow (the Serial console's Auto,
@@ -50,6 +50,8 @@ export interface BoardToolbar {
   run: RunButtonView;
   reset: ActionButtonView;
   console: ActionButtonView;
+  /** Opens the small name popup (see nameedit.ts). */
+  rename: ActionButtonView;
 }
 
 /** Which toolbar buttons show for the current selection. */
@@ -76,6 +78,7 @@ export function boardToolbar(s: BoardRunState): BoardToolbar {
     run: runButtonView(s),
     reset: { title: 'Reset (rebuild from files)', disabled: s.building },
     console: { title: 'Open serial console', disabled: false },
+    rename: { title: 'Rename board (display name only)', disabled: false },
   };
 }
 

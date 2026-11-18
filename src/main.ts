@@ -14,6 +14,7 @@ import { SERIAL_CONSOLE_ID, SerialConsole } from './layout/serialconsole';
 import { createWindowsMenu } from './layout/windowsmenu';
 import { boundsOf, footprint } from './model';
 import { createPalette } from './palette';
+import { renameBoard } from './project/boardfiles';
 import { ProjectController } from './project/controller';
 import { Project } from './project/project';
 import { Simulation } from './simulation';
@@ -128,6 +129,9 @@ const controller = new ProjectController(
 );
 const bar = controller.fileBar.element;
 bar.insertBefore(createWindowsMenu(layout), bar.querySelector('.project-name'));
+// The toolbar's rename button: the project keeps the name (circuit data, so one undo step and a redraw: the
+// grid label, File explorer, Serial console and status chip all follow).
+editor.onRenameBoard = (partId, input) => renameBoard(project, partId, input);
 // The toolbar's console button: open (or bring forward) the Serial console on that board.
 editor.onOpenConsole = (partId) => {
   layout.open(SERIAL_CONSOLE_ID);

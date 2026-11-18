@@ -18,7 +18,7 @@ import { boardsInOrder } from '../boardcontrols';
 import type { BoardEmulator } from '../mcu/board';
 import { nominalBaud, type SerialBuffer } from '../mcu/serialstore';
 import type { PlacedPart, Scene } from '../model';
-import { boardLabel, getPart } from '../parts';
+import { boardLabelWithId, getPart } from '../parts';
 import type { Simulation } from '../simulation';
 
 export const SERIAL_CONSOLE_ID = 'serial-console';
@@ -182,7 +182,7 @@ export class SerialConsole {
 
   private updateBoardSelect(boards: readonly PlacedPart[], part: PlacedPart | null): void {
     const sel = this.boardSelect;
-    const items: [string, string][] = boards.map((p) => [String(p.id), boardLabel(p)]);
+    const items: [string, string][] = boards.map((p) => [String(p.id), boardLabelWithId(p)]);
     const signature = items.map(([v, t]) => `${v}=${t}`).join('|');
     // Rebuild only when the list changes, so an open dropdown is not disturbed every frame.
     // The first time it must be built even for no boards (the empty list matches the initial signature).
@@ -191,7 +191,7 @@ export class SerialConsole {
       sel.replaceChildren(option(AUTO, ''), ...items.map(([v, t]) => option(v, t)));
     }
     const autoText = boards.length === 0 ? 'No board in the project' : this.boardChoice === AUTO && part
-      ? `Auto: selected board (${boardLabel(part)})` : 'Auto: selected board';
+      ? `Auto: selected board (${boardLabelWithId(part)})` : 'Auto: selected board';
     const auto = sel.options[0];
     if (auto.textContent !== autoText) auto.textContent = autoText;
     if (sel.value !== this.boardChoice) sel.value = this.boardChoice;

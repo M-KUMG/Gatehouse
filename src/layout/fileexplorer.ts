@@ -7,10 +7,15 @@
 //
 // What can change: inside a board folder files and folders can be created,
 // renamed, deleted and imported (importfiles.ts, fileimport.ts). The project
-// row, gatehouse.json, `boards` and the board folders themselves cannot (a
-// board folder lives and dies with its board part; see projectrows.ts for
-// what each kind of row allows). New file / new folder with one of those
-// selected goes into the active board's folder.
+// row, gatehouse.json and `boards` cannot, and a board folder can be neither
+// created nor deleted here (it lives and dies with its board part; see
+// projectrows.ts for what each kind of row allows). New file / new folder
+// with one of those selected goes into the active board's folder.
+//
+// A board row can be renamed (F2 or the Rename button), but that changes only
+// the board's display name (project/boardfiles.ts renameBoard); the folder id
+// shown as quieter text (uno-1) never changes. An empty name restores the
+// default. The row shows the name; the order of the boards stays by folder id.
 //
 // All changes go through project/boardfiles.ts, which tells the project at
 // once. This window then calls host.changed() so the undo history records
@@ -41,7 +46,7 @@
 
 import './fileexplorer.css';
 import {
-  createBoardFile, createBoardFolder, deleteBoardPath, listBoardFiles, listBoards, renameBoardPath, type BoardInfo,
+  createBoardFile, createBoardFolder, deleteBoardPath, listBoardFiles, listBoards, renameBoard, renameBoardPath, type BoardInfo,
 } from '../project/boardfiles';
 import { ask, toast } from '../project/dialog';
 import { ancestors, isInside } from '../project/paths';
@@ -53,7 +58,7 @@ import { createFilePicker, filesFromDrop, importFiles, type ImportRequest } from
 import { dropTarget, importTarget, type ImportTarget } from './importfiles';
 import { MANIFEST_TAB, READ_ONLY_NOTE } from './editortabs';
 import {
-  PROJECT_ROOT, horizontalMove, isFoldable, lockReason, moveSelection, newItemTarget, projectNodes, reconcile,
+  PROJECT_ROOT, boardRenameHint, horizontalMove, isFoldable, lockReason, moveSelection, newItemTarget, projectNodes, reconcile,
   resolveActiveBoard, rowId, rowOps, selectionAfterDelete, visibleRows, type NewTarget, type ProjectNode, type ProjectRow,
 } from './projectrows';
 
@@ -364,8 +369,13 @@ export class FileExplorer {
     input.value = edit.value;
     input.spellcheck = false;
     input.autocomplete = 'off';
-    input.setAttribute('aria-label', edit.mode === 'rename' ? 'New name' : edit.folder ? 'Folder name' : 'File name');
+    const boardRename = edit.mode === 'rename' && edit.path === '';
+    input.setAttribute('aria-label', boardRename ? 'Board name' : edit.mode === 'rename' ? 'New name' : edit.folder ? 'Folder name' : 'File name');
     if (edit.mode === 'new') input.placeholder = edit.folder ? 'Folder name' : 'File name (lib/led.h makes the folder too)';
+    if (boardRename) {
+      input.placeholder = this.boards.find((b) => b.boardId === edit.boardId)?.defaultLabel ?? 'Board name';
+      input.title = `Display name only: the folder "${edit.boardId}" keeps its name. Empty restores the default name.`;
+    }
     input.addEventListener('input', () => {
       edit.value = input.value;
       if (edit.error !== null) this.setError(null);
@@ -413,9 +423,9 @@ export class FileExplorer {
     this.setButton(this.importButton, drop === null, drop ? `Import files${into}` : `Import files (${NO_BOARD})`);
 
     const ops = rowOps(kind);
-    const locked = lockReason(kind);
-    this.setButton(this.renameButton, !ops.rename, locked ?? 'Rename (F2)');
-    this.setButton(this.deleteButton, !ops.remove, locked ?? 'Delete (Delete key)');
+    const renameTitle = kind === 'board' && row?.boardId !== undefined ? boardRenameHint(row.boardId) : lockReason(kind, 'rename') ?? 'Rename (F2)';
+    this.setButton(this.renameButton, !ops.rename, renameTitle);
+    this.setButton(this.deleteButton, !ops.remove, lockReason(kind, 'delete') ?? 'Delete (Delete key)');
   }
 
   private setButton(button: HTMLButtonElement, disabled: boolean, title: string): void {
@@ -564,7 +574,7 @@ export class FileExplorer {
     const row = this.selectedRow();
     if (!row) return;
     if (!rowOps(row.kind).rename || row.boardId === undefined || row.path === undefined) {
-      const why = lockReason(row.kind);
+      const why = lockReason(row.kind, 'rename');
       if (why) toast(why);
       return;
     }
@@ -598,6 +608,14 @@ export class FileExplorer {
       return;
     }
 
+    if (edit.path === '') {
+      // A board row: only the display name changes (the folder id stays), and an empty name restores the default.
+      const result = this.apply(() => renameBoard(project, edit.boardId, edit.value));
+      if (!result.ok) return this.setError(result.error);
+      this.finish(edit.id);
+      return;
+    }
+
     const named = checkRename(edit.path, edit.value);
     if (!named.ok) return this.setError(named.error);
     if (named.unchanged) return this.cancelEdit();
@@ -611,7 +629,7 @@ export class FileExplorer {
     const row = this.selectedRow();
     if (this.asking || !row) return;
     if (!rowOps(row.kind).remove || row.boardId === undefined || row.path === undefined) {
-      const why = lockReason(row.kind);
+      const why = lockReason(row.kind, 'delete');
       if (why) toast(why);
       return;
     }

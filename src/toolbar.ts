@@ -1,6 +1,6 @@
 // Floating round buttons next to the selection: rotate, duplicate, edit
-// value, delete, and for one selected board Run / Pause, Reset and the Serial
-// console. Also the small readouts along the bottom edge.
+// value, delete, and for one selected board Run / Pause, Reset, the Serial
+// console and Rename. Also the small readouts along the bottom edge.
 
 import type { BoardToolbar, ToolbarButtons } from './boardcontrols';
 import type { ScreenRect } from './grid';
@@ -20,6 +20,7 @@ const ICONS = {
   pause: svg('<path d="M8.5 5.5v13M15.5 5.5v13" stroke-width="3"/>'),
   reset: svg('<path d="M12 3.5v8"/><path d="M6.6 6.8a8 8 0 1 0 10.8 0"/>'),
   console: svg('<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7.5 9.5l3 2.5-3 2.5"/><path d="M13 15h4"/>'),
+  rename: svg('<path d="M5 15.5L15.5 5l3.5 3.5L8.5 19H5z"/><path d="M13 7.5l3.5 3.5"/><path d="M12 21.5h8"/>'),
   delete: svg(
     '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/>' +
       '<path d="M9 7V4h6v3"/>',
@@ -35,6 +36,8 @@ export interface ToolbarActions {
   run: () => void;
   reset: () => void;
   console: () => void;
+  /** Board button: open the rename popup. */
+  rename: () => void;
 }
 
 const NO_BUTTONS: ToolbarButtons = { rotate: true, duplicate: true, edit: false, board: null };
@@ -45,6 +48,7 @@ export class Toolbar {
   private readonly runButton: HTMLButtonElement;
   private readonly resetButton: HTMLButtonElement;
   private readonly consoleButton: HTMLButtonElement;
+  private readonly renameButton: HTMLButtonElement;
   private readonly boardGroup = document.createElement('div');
   /** What the board buttons show now (so they are only touched when it changes). */
   private boardShown = '';
@@ -63,8 +67,9 @@ export class Toolbar {
     this.runButton = button('Run', ICONS.run, actions.run, 'run');
     this.resetButton = button('Reset (rebuild from files)', ICONS.reset, actions.reset);
     this.consoleButton = button('Open serial console', ICONS.console, actions.console);
+    this.renameButton = button('Rename board (display name only)', ICONS.rename, actions.rename);
     this.boardGroup.className = 'tool-group';
-    this.boardGroup.append(this.runButton, this.resetButton, this.consoleButton);
+    this.boardGroup.append(this.runButton, this.resetButton, this.consoleButton, this.renameButton);
     this.el.append(
       this.boardGroup,
       this.buttons.rotate, this.buttons.duplicate, this.buttons.edit,
@@ -99,7 +104,14 @@ export class Toolbar {
     el.style.top = `${top}px`;
   }
 
-  /** Run / Reset / Serial console: shown for one selected board; touched only when what they show changes. */
+  /** The toolbar's viewport rectangle while it is shown, else null (popups open next to it). */
+  get rect(): ScreenRect | null {
+    if (this.el.style.display === 'none') return null;
+    const r = this.el.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  }
+
+  /** Run / Reset / Serial console / Rename: shown for one selected board; touched only when what they show changes. */
   private showBoardButtons(board: BoardToolbar | null): void {
     this.boardGroup.style.display = board ? '' : 'none';
     const key = board ? JSON.stringify(board) : '';
@@ -111,7 +123,7 @@ export class Toolbar {
     this.runButton.setAttribute('aria-label', run.title.split('\n')[0]);
     this.runButton.disabled = run.disabled;
     this.runButton.classList.toggle('has-error', run.error);
-    for (const [b, view] of [[this.resetButton, board.reset], [this.consoleButton, board.console]] as const) {
+    for (const [b, view] of [[this.resetButton, board.reset], [this.consoleButton, board.console], [this.renameButton, board.rename]] as const) {
       b.title = view.title;
       b.setAttribute('aria-label', view.title);
       b.disabled = view.disabled;

@@ -25,11 +25,12 @@ export interface StatusParts {
   noteIsError: boolean;
   /** First line of the chip: state, time and firmware. */
   line: string;
-  /** Everything, for the tooltip (the chip truncates long text). */
+  /** Everything, for the tooltip (the chip truncates long text); starts with the board's name when it is given. */
   title: string;
 }
 
-export function statusParts(s: BoardRunState): StatusParts {
+/** `boardName`: the board's label (its custom name, else the default), for the tooltip. */
+export function statusParts(s: BoardRunState, boardName?: string): StatusParts {
   const state = s.building
     ? 'Building…'
     : s.state === 'running'
@@ -40,11 +41,13 @@ export function statusParts(s: BoardRunState): StatusParts {
   const noteIsError = s.state === 'error' && s.error !== undefined && s.error !== '';
   const note = noteIsError ? (s.error ?? '') : s.messages.join(' ');
   const line = [state, time, firmware].filter((x) => x !== '').join(' · ');
-  return { dot: s.state, state, time, firmware, note, noteIsError, line, title: note ? `${line}\n${note}` : line };
+  const details = note ? `${line}\n${note}` : line;
+  return { dot: s.state, state, time, firmware, note, noteIsError, line, title: boardName ? `${boardName}\n${details}` : details };
 }
 
 export class BoardStatusChip {
   private readonly el = document.createElement('div');
+  private readonly name = document.createElement('div');
   private readonly dot = document.createElement('span');
   private readonly line = document.createElement('div');
   private readonly note = document.createElement('div');
@@ -52,29 +55,32 @@ export class BoardStatusChip {
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.el.className = 'board-chip';
+    this.name.className = 'board-chip-name';
     this.dot.className = 'board-chip-dot';
     this.line.className = 'board-chip-line';
     this.note.className = 'board-chip-note';
     const first = document.createElement('div');
     first.className = 'board-chip-row';
     first.append(this.dot, this.line);
-    this.el.append(first, this.note);
+    this.el.append(this.name, first, this.note);
     document.body.appendChild(this.el);
     this.show(null, null);
   }
 
-  /** Show the chip below a viewport rectangle (the board), or hide it with null. */
-  show(target: ScreenRect | null, state: BoardRunState | null): void {
+  /** Show the chip below a viewport rectangle (the board), or hide it with null. `boardName` heads the chip. */
+  show(target: ScreenRect | null, state: BoardRunState | null, boardName = ''): void {
     const el = this.el;
     const area = visibleArea(this.canvas);
     if (!target || !state || !isOnScreen(target, area)) {
       el.style.display = 'none';
       return;
     }
-    const p = statusParts(state);
-    const key = `${p.dot}|${p.line}|${p.note}|${p.noteIsError}`;
+    const p = statusParts(state, boardName);
+    const key = `${p.dot}|${p.line}|${p.note}|${p.noteIsError}|${boardName}`;
     if (key !== this.shown) {
       this.shown = key;
+      this.name.textContent = boardName;
+      this.name.hidden = boardName === '';
       this.dot.className = `board-chip-dot ${p.dot}`;
       this.line.textContent = p.line;
       this.note.textContent = p.note;

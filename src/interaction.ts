@@ -12,8 +12,10 @@ import { clickPart, isOnKnob, knobPosition, knobPositionAt, setKnob, setPressed 
 import type { GridView } from './grid';
 import { isTap, type WireTap } from './junctions';
 import { boundsOf, boxesOverlap, footprint, isPinEnd, type GridPoint, type PinRef, type PlacedPart, type ProjectState, type Scene } from './model';
-import { getPart } from './parts';
+import { NameEditor } from './nameedit';
+import { boardLabel, defaultBoardLabel, getPart } from './parts';
 import { findPin, pinAt, wirePointAt, wireRoute } from './pins';
+import type { FileOpResult } from './project/boardfiles';
 import { Placer } from './placing';
 import { Readout, describeJunction, describePart, describePin, describeWire, type ReadoutText } from './readout';
 import { Selection } from './selection';
@@ -98,6 +100,7 @@ export class Editor {
   private readonly statusChip: BoardStatusChip;
   private readonly readout: Readout;
   private readonly valueEditor = new ValueEditor();
+  private readonly nameEditor = new NameEditor();
   private readonly updateZoomReadout: () => void;
   private readonly setStatus: (text: string) => void;
   private drag: Moving | Marquee | Turning | Tapping | null = null;
@@ -112,6 +115,8 @@ export class Editor {
   onRedo: (() => void) | null = null;
   /** Open (or bring forward) the Serial console showing this board (part id). */
   onOpenConsole: ((partId: number) => void) | null = null;
+  /** Give a board (part id) a new display name; the project keeps the data (renameBoard). Empty input restores the default. */
+  onRenameBoard: ((partId: number, input: string) => FileOpResult) | null = null;
 
   constructor(
     private readonly view: GridView,
@@ -153,6 +158,7 @@ export class Editor {
         const board = selectedBoard(this.selection.parts());
         if (board) this.onOpenConsole?.(board.id);
       },
+      rename: () => this.renameSelectedBoard(),
     });
     this.statusChip = new BoardStatusChip(canvas);
     this.updateZoomReadout = createZoomReadout(
@@ -171,21 +177,21 @@ export class Editor {
   startPlacing(typeId: string, e: PointerEvent): void {
     if (this.placer.active || this.drag) return;
     this.wiring.cancel();
-    this.valueEditor.close();
+    this.closePopups();
     this.selection.clear();
     this.placer.start(typeId, e);
   }
 
   /** A gesture is half done (dragging, drawing a wire, placing a part, typing a value). */
   get busy(): boolean {
-    return this.placer.active || this.wiring.active || this.drag !== null || this.valueEditor.isOpen;
+    return this.placer.active || this.wiring.active || this.drag !== null || this.valueEditor.isOpen || this.nameEditor.isOpen;
   }
 
   /** Drop the gesture in progress, putting back what a drag changed (e.g. before undo). */
   cancelGesture(): void {
     this.placer.end();
     this.wiring.cancel();
-    this.valueEditor.close();
+    this.closePopups();
     this.cancelDrag();
     this.setHover(NO_HOVER);
   }
@@ -214,7 +220,7 @@ export class Editor {
    */
   selectPart(partId: number): boolean {
     if (this.drag || this.placer.active || this.wiring.active || !this.scene.find(partId)) return false;
-    this.valueEditor.close();
+    this.closePopups();
     this.selection.set([partId]);
     return true;
   }
@@ -238,7 +244,7 @@ export class Editor {
 
   private onCanvasDown = (e: PointerEvent): void => {
     if (e.button !== 0 || this.placer.active || this.drag) return;
-    this.valueEditor.close();
+    this.closePopups();
     this.pointer = { x: e.clientX, y: e.clientY };
     const canvas = this.view.canvas;
     if (this.wiring.active) {
@@ -567,6 +573,29 @@ export class Editor {
     this.valueEditor.open(part, this.view.toScreen(footprint(part)), this.view.canvas.getBoundingClientRect(), this.view.requestRender);
   }
 
+  /** Open the name popup next to the toolbar for the selected board. */
+  private renameSelectedBoard(): void {
+    const board = selectedBoard(this.selection.parts());
+    if (!board || this.drag || !this.onRenameBoard) return;
+    const rename = this.onRenameBoard;
+    const anchor = this.toolbar.rect ?? this.view.toScreen(footprint(board));
+    this.closePopups();
+    this.nameEditor.open(
+      boardLabel(board),
+      defaultBoardLabel(board),
+      anchor,
+      this.view.canvas.getBoundingClientRect(),
+      (input) => rename(board.id, input),
+      this.view.requestRender, // the render also records the undo step
+    );
+  }
+
+  /** Close the value and name popups. */
+  private closePopups(): void {
+    this.valueEditor.close();
+    this.nameEditor.close();
+  }
+
   private onKeyDown = (e: KeyboardEvent): void => {
     const target = e.target as HTMLElement | null;
     if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
@@ -622,10 +651,11 @@ export class Editor {
     this.statusChip.show(
       board && !busy ? this.view.toScreen(footprint(board)) : null,
       board ? this.sim.boards.boardRunState(board.id) : null,
+      board ? boardLabel(board) : '',
     );
 
     const p = this.pointer;
-    const text = p && !this.placer.active && !dragging && !this.valueEditor.isOpen ? this.hoverText() : null;
+    const text = p && !this.placer.active && !dragging && !this.valueEditor.isOpen && !this.nameEditor.isOpen ? this.hoverText() : null;
     this.readout.show(text, p?.x, p?.y);
   };
 

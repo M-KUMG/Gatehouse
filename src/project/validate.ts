@@ -6,6 +6,8 @@ import {
   endKey, isPinEnd, sameEnd, type GridPoint, type Junction, type PinRef, type PlacedPart, type Rotation, type Wire, type WireEnd,
 } from '../model';
 import { getPart, type PartState } from '../parts';
+import { isBoardType } from './boardid';
+import { normalizeBoardName } from './boardname';
 import { PROJECT_FORMAT, PROJECT_VERSION, ProjectError, type CameraState, type ProjectFile } from './format';
 import { boardsAndFiles, partBoardId } from './validateboards';
 
@@ -61,14 +63,25 @@ function bool(o: Obj, key: string, where: string): boolean {
 
 const ROTATIONS: readonly number[] = [0, 90, 180, 270];
 
+/** A board's custom name: only boards have one, and it follows the rules of boardname.ts. Returns it cleaned up. */
+function boardName(text: string, typeId: string, where: string): string {
+  if (!isBoardType(typeId)) fail(`${where} is only allowed on boards, but a ${typeId} part is not a board.`);
+  const named = normalizeBoardName(text);
+  if (!named.ok) fail(`${where} is not a valid board name. ${named.error}`);
+  if (named.name === null) fail(`${where} must not be empty (leave it out for the default name).`);
+  return named.name;
+}
+
 function partState(v: unknown, typeId: string, where: string): PartState {
   const o = obj(v, where);
   // v4: a board's program is a .hex file in its folder, no longer part state.
-  onlyKeys(o, ['closed', 'position', 'value', 'burned'], where);
+  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'name'], where);
   const state: PartState = {};
   for (const key of Object.keys(o)) {
     if (key === 'closed' || key === 'burned') {
       state[key] = bool(o, key, where);
+    } else if (key === 'name') {
+      state.name = boardName(str(o, key, where), typeId, `${where}.name`);
     } else if (key === 'position') {
       const p = num(o, key, where);
       if (p < 0 || p > 1) fail(`${where}.position must be between 0 and 1 (got ${p}).`);

@@ -11,6 +11,7 @@
 //   writeBoardFile(project, boardId, path, content): FileOpResult
 //   renameBoardPath(project, boardId, from, to): FileOpResult   (folders move their contents)
 //   deleteBoardPath(project, boardId, path): FileOpResult       (folders with their contents)
+//   renameBoard(project, partId | boardId, input): FileOpResult  the board's display name (state.name), not its folder
 // User mistakes come back as { ok: false, error } with a message to show;
 // nothing throws. A successful change goes through Project.checkForChanges,
 // so listeners, the unsaved marker and autosave see it at once; the undo
@@ -18,8 +19,9 @@
 // the UI should request a render, or call controller.history.settle()).
 // Fast repeated writes to the same board fold into one undo step.
 
-import { boardLabel } from '../parts';
+import { boardLabel, boardLabelWithId, defaultBoardLabel } from '../parts';
 import { compareBoardIds } from './boardidparse';
+import { normalizeBoardName } from './boardname';
 import {
   createFile, createFolder, deletePath, listTree, readFile, renamePath, writeFile, copyTree,
   type BoardTree, type ReadResult, type TreeEntry, type TreeResult,
@@ -30,8 +32,12 @@ export interface BoardInfo {
   boardId: string;
   partId: number;
   typeId: string;
-  /** e.g. "Arduino Uno #4" (see boardLabel). */
+  /** The user's name for the board, else e.g. "Arduino Uno #4" (see boardLabel). */
   label: string;
+  /** Like label; with the folder id after a custom name ("Blinker (uno-1)"), for lists where names may repeat. */
+  labelWithId: string;
+  /** e.g. "Arduino Uno #4", whatever the board is named. */
+  defaultLabel: string;
 }
 
 export type FileOpResult = { ok: true } | { ok: false; error: string };
@@ -39,7 +45,9 @@ export type FileOpResult = { ok: true } | { ok: false; error: string };
 /** The boards, in a fixed order that does not depend on selection or draw order (bring-to-front). */
 export function listBoards(project: Project): BoardInfo[] {
   return project.scene.parts
-    .flatMap((p) => (p.boardId ? [{ boardId: p.boardId, partId: p.id, typeId: p.typeId, label: boardLabel(p) }] : []))
+    .flatMap((p) => (p.boardId ? [{
+      boardId: p.boardId, partId: p.id, typeId: p.typeId, label: boardLabel(p), labelWithId: boardLabelWithId(p), defaultLabel: defaultBoardLabel(p),
+    }] : []))
     .sort((a, b) => compareBoardIds(a.boardId, b.boardId));
 }
 
@@ -96,4 +104,26 @@ export function renameBoardPath(project: Project, boardId: string, from: string,
 
 export function deleteBoardPath(project: Project, boardId: string, path: string): FileOpResult {
   return change(project, boardId, (t) => deletePath(t, path));
+}
+
+/**
+ * Give a board a display name, or take it away (empty input, or the default
+ * label itself, goes back to the default). `target` is the board part's id
+ * (number) or its boardId (text). The folder id never changes. Names are
+ * circuit data: the change is one undo step once the history settles.
+ */
+export function renameBoard(project: Project, target: number | string, input: string): FileOpResult {
+  const part = project.scene.parts.find((p) => p.boardId !== undefined && (typeof target === 'number' ? p.id === target : p.boardId === target));
+  if (!part) return typeof target === 'string' ? noBoard(target) : { ok: false, error: 'This board is no longer in the project.' };
+  const named = normalizeBoardName(input);
+  if (!named.ok) return named;
+  const name = named.name !== null && named.name !== defaultBoardLabel(part) ? named.name : null;
+  if ((part.state?.name ?? null) === name) return { ok: true };
+  const state = { ...part.state };
+  if (name === null) delete state.name;
+  else state.name = name;
+  if (Object.keys(state).length > 0) part.state = state;
+  else delete part.state;
+  project.checkForChanges();
+  return { ok: true };
 }

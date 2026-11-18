@@ -101,7 +101,7 @@ describe('board identity', () => {
 describe('board files API', () => {
   it('lists boards with labels and their files', () => {
     const { p, boardId } = withBoard();
-    expect(listBoards(p)).toEqual([{ boardId, partId: 2, typeId: 'uno', label: 'Arduino Uno #1' }]);
+    expect(listBoards(p)).toEqual([{ boardId, partId: 2, typeId: 'uno', label: 'Arduino Uno #1', labelWithId: 'Arduino Uno #1', defaultLabel: 'Arduino Uno #1' }]);
     expect(listBoardFiles(p, boardId)?.map((e) => e.path)).toEqual(['empty dir', 'lib', 'lib/led.h', 'main.ino']);
     expect(boardTree(p, 'uno-9')).toBeNull();
     expect(createBoardFile(p, 'uno-9', 'x.ino')).toEqual({ ok: false, error: 'There is no board "uno-9" in this project.' });

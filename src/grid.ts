@@ -1,6 +1,7 @@
 import { FlowPhases, frameSeconds, needsAnimation } from './animation';
 import { ART_CELL } from './art/common';
 import { screenToWorld, worldToScreen, zoomAround, type Camera, type Point } from './camera';
+import { drawBoardNames } from './gridlabel';
 import { footprint, type CellBox, type GridPoint, type PinRef, type Placement, type Scene } from './model';
 import { getPart } from './parts';
 import type { SimView } from './simulation';
@@ -252,6 +253,7 @@ export class GridView {
 
     drawPins(this, ctx, this.scene);
     drawWarnings(this, ctx, this.scene);
+    drawBoardNames(ctx, this.scene.parts, (box) => this.boxToCanvas(box), { width, height });
     drawDraft(this, ctx, this.scene);
     drawTapHint(this, ctx);
 

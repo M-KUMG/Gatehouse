@@ -35,6 +35,14 @@ describe('board status text', () => {
     expect(p.title).toBe(`${p.line}\n${p.note}`);
   });
 
+  it('puts the board name first in the tooltip when it is given (not in the first line)', () => {
+    const p = statusParts({ ...base, state: 'running', speed: 1, time: 1 }, 'Blinker');
+    expect(p.line).toBe('Running 1.00x · 1.0 s');
+    expect(p.title).toBe('Blinker\nRunning 1.00x · 1.0 s');
+    expect(statusParts({ ...base, state: 'error', error: 'boom' }, 'Arduino Uno #1').title).toBe('Arduino Uno #1\nError\nboom');
+    expect(statusParts(base).title).toBe(statusParts(base, '').title);
+  });
+
   it('the error state shows the error text, a red dot and no time', () => {
     const p = parts({ state: 'error', error: 'No firmware: import a .hex into the board folder' });
     expect(p).toMatchObject({

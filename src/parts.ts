@@ -34,6 +34,8 @@ export interface PartState {
   value?: number;
   /** Destroyed by too much current. */
   burned?: boolean;
+  /** Boards only: the user's display name (see project/boardname.ts); without it the board shows its default label. */
+  name?: string;
 }
 
 export interface PinDef {
@@ -240,13 +242,37 @@ export function getPart(id: string): PartType | undefined {
   return PARTS.find((p) => p.id === id);
 }
 
+/** What the labels of a placed board are made from. */
+interface BoardLike {
+  typeId: string;
+  boardId?: string;
+  state?: PartState;
+}
+
 /**
- * Short name of a placed board, e.g. "Arduino Uno #2" for the board folder
+ * Default name of a placed board, e.g. "Arduino Uno #2" for the board folder
  * "uno-2": the type name and the counter of its boardId, which never changes
  * (also across saving) and is what the board's folder is called.
  */
-export function boardLabel(part: { typeId: string; boardId?: string }): string {
+export function defaultBoardLabel(part: BoardLike): string {
   const name = getPart(part.typeId)?.name ?? 'Board';
   const parsed = part.boardId === undefined ? null : parseBoardId(part.boardId);
   return parsed ? `${name} #${parsed.n}` : name;
+}
+
+/** The user's name for a board, or undefined when it has none. */
+export function customBoardName(part: BoardLike): string | undefined {
+  const name = part.state?.name;
+  return typeof name === 'string' && name !== '' ? name : undefined;
+}
+
+/** Short name of a placed board: the user's name when set, else the default label. */
+export function boardLabel(part: BoardLike): string {
+  return customBoardName(part) ?? defaultBoardLabel(part);
+}
+
+/** Like boardLabel, plus the folder id when the name is the user's ("Blinker (uno-1)"), so equal names can be told apart. */
+export function boardLabelWithId(part: BoardLike): string {
+  const custom = customBoardName(part);
+  return custom !== undefined && part.boardId !== undefined ? `${custom} (${part.boardId})` : boardLabel(part);
 }

@@ -25,7 +25,7 @@ export type RowKind = 'project' | 'manifest' | 'boards' | 'board' | 'folder' | '
 
 export interface ProjectNode {
   id: string;
-  /** Text shown: the project name, a file or folder name, a board's label. */
+  /** Text shown: the project name, a file or folder name, a board's label (its custom name, else the default). */
   name: string;
   kind: RowKind;
   /** 0 for the project row. */
@@ -48,7 +48,7 @@ export interface ProjectRow extends ProjectNode {
 /** What the tree needs to know about a board. */
 export interface BoardNode {
   boardId: string;
-  /** e.g. "Arduino Uno #1" (the number is the boardId's counter). */
+  /** The board's custom name, else e.g. "Arduino Uno #1" (the number is the boardId's counter). Never changes the order or the folder id. */
   label: string;
   entries: readonly TreeEntry[];
 }
@@ -116,7 +116,8 @@ export function rowOps(kind: RowKind | null): RowOps {
   switch (kind) {
     case 'project': case 'boards': return { ...NO_OPS, fold: true };
     case 'manifest': return { ...NO_OPS, open: true };
-    case 'board': return { ...NO_OPS, fold: true, acceptsDrop: true };
+    // A board row renames the board's display name, not its folder (project/boardfiles.ts renameBoard).
+    case 'board': return { ...NO_OPS, rename: true, fold: true, acceptsDrop: true };
     case 'folder': return { open: false, rename: true, remove: true, fold: true, acceptsDrop: true };
     case 'file': return { open: true, rename: true, remove: true, fold: false, acceptsDrop: true };
     default: return NO_OPS;
@@ -124,14 +125,21 @@ export function rowOps(kind: RowKind | null): RowOps {
 }
 
 /** Why a row cannot be renamed or deleted (a tooltip), or null when it can. */
-export function lockReason(kind: RowKind | null): string | null {
+export function lockReason(kind: RowKind | null, action: 'rename' | 'delete'): string | null {
+  const what = action === 'rename' ? 'renamed' : 'deleted';
   switch (kind) {
-    case 'project': return 'The project root cannot be renamed or deleted here.';
-    case 'manifest': return 'gatehouse.json is generated from the circuit: it cannot be renamed or deleted.';
-    case 'boards': return 'The boards folder cannot be renamed or deleted.';
-    case 'board': return 'A board folder follows its board on the grid: add or remove the board there.';
+    case 'project': return `The project root cannot be ${what} here.`;
+    case 'manifest': return `gatehouse.json is generated from the circuit: it cannot be ${what}.`;
+    case 'boards': return `The boards folder cannot be ${what}.`;
+    // A board row can be renamed (display name only); its folder lives and dies with the board on the grid.
+    case 'board': return action === 'delete' ? 'A board folder cannot be deleted here: it goes when you remove the board on the grid.' : null;
     default: return null;
   }
+}
+
+/** Tooltip of the Rename button on a board row: the name changes, the folder id does not. */
+export function boardRenameHint(boardId: string): string {
+  return `Rename board (F2): changes the display name only; the folder "${boardId}" keeps its name`;
 }
 
 /** Where "New file" / "New folder" puts an item. */

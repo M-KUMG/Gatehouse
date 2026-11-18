@@ -28,6 +28,7 @@ describe('which toolbar buttons show', () => {
     expect(b.board?.run).toMatchObject({ icon: 'run', title: 'Run', disabled: false, error: false });
     expect(b.board?.reset).toEqual({ title: 'Reset (rebuild from files)', disabled: false });
     expect(b.board?.console).toEqual({ title: 'Open serial console', disabled: false });
+    expect(b.board?.rename).toEqual({ title: 'Rename board (display name only)', disabled: false });
   });
 
   it('one board among other parts still gets them; two boards do not', () => {
