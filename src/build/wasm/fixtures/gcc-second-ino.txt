@@ -1,0 +1,11 @@
+/sketch/b_helpers.ino: In function 'void blinkOnce(int)':
+/sketch/b_helpers.ino:4:3: error: 'dealy' was not declared in this scope
+   dealy(ms);
+   ^~~~~
+/sketch/b_helpers.ino:4:3: note: suggested alternative: 'delay'
+   dealy(ms);
+   ^~~~~
+   delay
+/sketch/b_helpers.ino:6:1: error: expected ';' before '}' token
+ }
+ ^

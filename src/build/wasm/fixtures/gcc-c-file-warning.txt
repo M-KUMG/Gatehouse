@@ -1,0 +1,4 @@
+/sketch/src/mathc.c: In function 'int add3(int, int, int)':
+/sketch/src/mathc.c:5:48: warning: invalid conversion from 'void*' to 'int*' [-fpermissive]
+ int add3(int a, int b, int c) { int *p = malloc(4); return positive(a) ? a + b + c : 0; }
+                                          ~~~~~~^~~

@@ -1,0 +1,3 @@
+ld: /build/b.cpp.o: in function `tick()':
+/sketch/b.cpp:3: multiple definition of `tick()'; /build/a.cpp.o:/sketch/a.cpp:3: first defined here
+ld: /build/b.cpp.o:/sketch/b.cpp:2: multiple definition of `counter'; /build/a.cpp.o:/sketch/a.cpp:2: first defined here

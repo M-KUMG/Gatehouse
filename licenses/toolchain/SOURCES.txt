@@ -1,0 +1,79 @@
+Where each licence text in this folder comes from
+=================================================
+
+Every file was fetched or copied on 2026-11-18 as described below. "sha256" is the
+digest of the file in this folder. Nothing here was written from memory.
+
+Not found / open points (TODO):
+  - TODO: the GCC Runtime Library Exception 3.1 was taken from the GCC 7.3.0 source
+    tag (see below), not from gnu.org (no .txt published there).
+  - TODO: the exact source of Arduino's libgcc.a, libc.a, libm.a and crt (avr-libc
+    2.0.0) is Arduino's toolchain-avr build 7.3.0-atmel3.6.1-arduino7, whose native
+    binary tarball we do not mirror. avr-libc is BSD licensed (no source offer
+    needed, notice kept in NOTICE). Whether gcc-7.3.0 + atmel-patches-gcc.7.3.0-arduino2
+    is exactly the libgcc source was not verified (see docs/compiler-spike-startabit.md).
+  - TODO: which Emscripten runtime parts (musl, libc++, libc++abi) are really linked
+    into each .wasm was not checked by inspecting the binaries; the texts are included
+    to be safe.
+  - TODO (optional): compiler-rt/libunwind (LLVM) texts were not added.
+
+
+GPL-3.0.txt
+  sha256: 3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986
+  bytes:  35149
+  source: https://www.gnu.org/licenses/gpl-3.0.txt
+  note:   Fetched 2026-11-18. Byte-identical to the COPYING file of the startabit/avr-gcc-wasm release v1 (sha256 3972dc97...6986). Applies to GCC 7.3.0 (cc1plus), GNU binutils 2.42 (as, ld, objcopy) and the GCC headers/libgcc together with the Runtime Library Exception.
+
+LGPL-3.0.txt
+  sha256: e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118
+  bytes:  7652
+  source: https://www.gnu.org/licenses/lgpl-3.0.txt
+  note:   Fetched 2026-11-18. Applies to GMP 6.2.1, MPFR 4.1.0, MPC 1.2.1 (linked into cc1plus.wasm) and Adafruit NeoPixel 1.15.5.
+
+LGPL-2.1.txt
+  sha256: 20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95
+  bytes:  26419
+  source: https://www.gnu.org/licenses/lgpl-2.1.txt
+  note:   Fetched 2026-11-18. Applies to the Arduino AVR core 1.8.8 (core.a), Wire, SoftwareSerial, EEPROM, Servo 1.3.0 and (dual with GPL-2.0) SPI.
+
+GCC-Runtime-Library-Exception-3.1.txt
+  sha256: 9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74
+  bytes:  3324
+  source: https://raw.githubusercontent.com/gcc-mirror/gcc/releases/gcc-7.3.0/COPYING.RUNTIME
+  note:   Fetched 2026-11-18 from the GCC 7.3.0 release tag (the file COPYING.RUNTIME shipped in the GCC source that built libgcc). https://www.gnu.org/licenses/gcc-exception-3.1.txt answers 404 (gnu.org publishes only gcc-exception-3.1.html), so the GNU page itself was not used.
+
+avr-libc-BSD.txt
+  sha256: a034997abd9809cfccf01307e0c69d66da10bde6bcf3f3076e709d09cb401cda
+  bytes:  2346
+  source: NOTICE (lines 40-109), copied from the avr-libc user manual of WinAVR 20100110
+  note:   Verbatim copy of the avr-libc licence section that was already in NOTICE. The headers of avr-libc 2.0.0 and of the Atmel device headers in the sysroot carry the same three-clause BSD text (checked: avr/io.h, avr/iom328p.h). The copyright holder list is the one of the 2008 manual.
+
+HC-SR04-MIT.txt
+  sha256: be64a7b85da29e40dfc0843206b3156e1f6eb10c95909fc65da70298f6e27515
+  bytes:  1082
+  source: LICENSE inside https://github.com/startabit/avr-gcc-wasm/releases/download/v1/arduino-lib-hc-sr04-2.0.0.tar.gz (sha256 b0e99601...2aed)
+  note:   Copy of the LICENSE file of the HC-SR04 library 2.0.0 (Martin Sosic), taken from the archive whose sha256 matches the release digest.
+
+Emscripten-MIT-and-NCSA.txt
+  sha256: 620a78084fc7ca97c0b5dea9abf891f3ffcadfdbf305276f099c9c4e12fc1d86
+  bytes:  5093
+  source: https://raw.githubusercontent.com/emscripten-core/emscripten/4.0.10/LICENSE
+  note:   Fetched 2026-11-18 from the emscripten 4.0.10 tag (the version that built the tools). The .mjs glue files of the release carry NO licence header at all (checked all four: no "license" or "copyright" text), so this is the licence of the Emscripten runtime code they contain, taken from upstream. MIT and University of Illinois/NCSA, offered as alternatives.
+
+musl-MIT.txt
+  sha256: f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af
+  bytes:  6204
+  source: https://raw.githubusercontent.com/emscripten-core/emscripten/4.0.10/system/lib/libc/musl/COPYRIGHT
+  note:   Fetched 2026-11-18 (emscripten 4.0.10 tag). Emscripten links its libc, derived from musl, into every .wasm. NOT verified inside the binaries (no string evidence checked).
+
+LLVM-libcxx-Apache-2.0-with-LLVM-exception.txt
+  sha256: 539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b
+  bytes:  16703
+  source: https://raw.githubusercontent.com/emscripten-core/emscripten/4.0.10/system/lib/libcxx/LICENSE.TXT
+  note:   Fetched 2026-11-18 (emscripten 4.0.10 tag). libc++/libc++abi (same terms) are Emscripten's C++ runtime; cc1plus.wasm is a C++ program and contains the string "__cxxabiv1", so parts are probably linked in. Not verified further. Public-domain dlmalloc (Doug Lea) is also part of Emscripten's runtime and needs no notice.
+
+Arduino-AVR-core-and-libraries-notices.txt
+  sha256: 0fa0abb9f14813f414af4fd61212b5e555a38534bf99f45911ac94c9609a6bb7
+  bytes:  11568
+  source: generated for Gatehouse from the file headers of avr-1.8.8.tar.bz2, Servo-1.3.0.tar.gz, Adafruit_NeoPixel-1.15.5.tar.gz (sources: see scripts/lib/toolchain-pins.mjs for the digests)
+  note:   Quotes the licence header blocks verbatim from the archives, which were downloaded from the release and checked against the pinned sha256 on 2026-11-18. Records the licence of each library, including the non-LGPL files of the core (ISC-style USB code, MIT Udp.h) and the GPL-or-LGPL SPI.

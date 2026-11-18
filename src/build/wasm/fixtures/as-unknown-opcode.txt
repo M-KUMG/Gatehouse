@@ -1,0 +1,2 @@
+/build/unit.s: Assembler messages:
+/build/unit.s:22: Error: unknown opcode `bogus'

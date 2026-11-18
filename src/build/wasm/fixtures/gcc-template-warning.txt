@@ -1,0 +1,9 @@
+/sketch/warn.ino: In function 'void setup()':
+/sketch/warn.ino:4:21: warning: large integer implicitly truncated to unsigned type [-Woverflow]
+   unsigned char c = 300;
+                     ^~~
+/sketch/warn.ino: In instantiation of 'T twice(T) [with T = int]':
+/sketch/warn.ino:5:18:   required from here
+/sketch/warn.ino:2:43: error: request for member 'x' in 't', which is of non-class type 'int'
+ template<class T> T twice(T t) { return t.x * 2; }
+                                         ~~^

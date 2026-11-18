@@ -1,0 +1,2 @@
+# Licence texts are hashed (licenses/toolchain/SOURCES.txt): never convert line endings
+licenses/** -text

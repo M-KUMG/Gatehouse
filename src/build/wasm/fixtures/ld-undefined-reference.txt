@@ -1,0 +1,4 @@
+ld: /build/undefref.ino.o: in function `setup':
+/sketch/undefref.ino:3:(.text.setup+0x0): undefined reference to `foo()'
+ld: /build/undefref.ino.o: in function `loop':
+/sketch/undefref.ino:4:(.text.loop+0x4): undefined reference to `helper(int)'

@@ -149,3 +149,141 @@ release has these exceptions in files that were found:
 
 To do: copy the exception text from the header of gcc/config/avr/libgcc.S
 in the GCC 4.3.3 source release into this section.
+
+
+WebAssembly AVR toolchain (development and browser compiler)
+=============================================================
+
+What this covers
+----------------
+
+Gatehouse compiles Arduino sketches with the GNU AVR toolchain built as
+WebAssembly by the project https://github.com/startabit/avr-gcc-wasm (release
+v1, built from commit 6972a73, published under GPL-3.0). The files are
+downloaded, never committed to this repository (npm run toolchain:fetch puts
+them in toolchain/, which is git-ignored). Every copy of Gatehouse that
+includes or downloads these files (the web build's compiler packs and the
+Electron app's resources) is covered by this section, and the licence texts in
+licenses/toolchain/ (dist/licenses/ in the built app) go with it.
+
+The files are:
+
+  - four programs, each a .wasm module with its Emscripten JavaScript glue
+    (.mjs): cc1plus (the C++ compiler), as (assembler), ld (linker) and
+    objcopy (hex converter);
+  - a "sysroot": GCC and avr-libc header files, the start-up code and
+    libraries for the ATmega328P (crtatmega328p.o, libc.a, libm.a, libgcc.a,
+    libatmega328p.a), the linker scripts (ldscripts/avr5.*), and the Arduino
+    AVR core and libraries as precompiled archives with their headers
+    (core.a, Wire, SPI, SoftwareSerial, EEPROM, Servo, Adafruit NeoPixel,
+    HC-SR04).
+
+Components and licences
+-----------------------
+
+  GCC 7.3.0 with the Arduino/Atmel AVR patch (cc1plus)
+      GNU General Public License v3 or later. Text: licenses/toolchain/GPL-3.0.txt
+  GCC headers and libgcc (libgcc.a, stdarg.h and other GCC headers)
+      GPL v3 or later WITH the GCC Runtime Library Exception 3.1.
+      Text: licenses/toolchain/GCC-Runtime-Library-Exception-3.1.txt
+      Programs compiled with this toolchain are not covered by the GPL
+      because of that exception (a program that links libgcc.a or includes
+      these headers is not made GPL by doing so).
+  GNU Binutils 2.42 (as, ld, objcopy) and its linker scripts
+      GNU General Public License v3 or later. The linker scripts say
+      "Copying and distribution of this script, with or without modification,
+      are permitted in any medium without royalty".
+  GMP 6.2.1 (inside cc1plus.wasm)
+      Dual: GNU LGPL v3 or later, or GNU GPL v2 or later. Used under the
+      LGPL v3 (and as part of the GPL v3 program cc1plus).
+      Text: licenses/toolchain/LGPL-3.0.txt
+  MPFR 4.1.0 and MPC 1.2.1 (inside cc1plus.wasm)
+      GNU LGPL v3 or later. Text: licenses/toolchain/LGPL-3.0.txt
+  avr-libc 2.0.0 (libc.a, libm.a, crt, libatmega328p.a, the C library
+  headers and the Atmel device headers such as avr/iom328p.h)
+      Modified BSD licence, the text in the "avr-libc licence" section above
+      (also licenses/toolchain/avr-libc-BSD.txt).
+  Arduino AVR core 1.8.8 (core.a and the core headers)
+      GNU LGPL v2.1 or later. Text: licenses/toolchain/LGPL-2.1.txt
+      Exceptions inside the core: the USB files (CDC.cpp, USBCore.*,
+      USBDesc.h) are under an ISC-style permissive licence and Udp.h is MIT.
+  Wire, SoftwareSerial and EEPROM libraries (Arduino AVR core 1.8.8)
+      GNU LGPL v2.1 or later.
+  SPI library (Arduino AVR core 1.8.8)
+      GNU GPL v2 OR GNU LGPL v2.1 (dual); used under the LGPL v2.1.
+  Servo 1.3.0
+      GNU LGPL v2.1 or later.
+  Adafruit NeoPixel 1.15.5
+      GNU LGPL v3 or later (licenses/toolchain/LGPL-3.0.txt).
+  HC-SR04 library 2.0.0 (Martin Sosic)
+      MIT. Text: licenses/toolchain/HC-SR04-MIT.txt
+  Emscripten runtime (compiled into every .wasm and in the .mjs glue)
+      MIT or University of Illinois/NCSA (alternatives), with parts of musl
+      libc (MIT) and of LLVM libc++/libc++abi (Apache-2.0 with LLVM
+      exceptions). Texts: licenses/toolchain/Emscripten-MIT-and-NCSA.txt,
+      musl-MIT.txt, LLVM-libcxx-Apache-2.0-with-LLVM-exception.txt.
+      The glue files themselves carry no licence header; the texts come from
+      the Emscripten 4.0.10 source tree (see licenses/toolchain/SOURCES.txt).
+
+The exact statements of each Arduino core file and library are quoted in
+licenses/toolchain/Arduino-AVR-core-and-libraries-notices.txt. Where each
+licence text was taken from, and what could not be confirmed, is in
+licenses/toolchain/SOURCES.txt.
+
+Your sketches
+-------------
+
+The code you write and compile in Gatehouse stays yours (this paragraph is a
+summary, not legal advice). The compiled result
+contains parts of avr-libc, the Arduino core, the libraries you #include and
+libgcc. Their licences apply to those parts: the BSD licence of avr-libc needs
+the notice above when you redistribute the binary; the LGPL of the Arduino
+core and libraries (Wire, SPI, SoftwareSerial, EEPROM, Servo, NeoPixel) asks
+that people who receive your compiled sketch can get the LGPL parts' source
+and can relink them (for LGPL v3 libraries, with the other conditions of that
+licence). The GCC Runtime Library Exception means libgcc does not make your
+program GPL.
+
+How Gatehouse uses these programs
+---------------------------------
+
+The tools are separate programs. Gatehouse (MIT licensed) starts each of them
+as an independent WebAssembly module in its own memory (a Web Worker in the
+browser, Node in tests) and only exchanges files and command-line arguments
+with them, the same way a build system calls gcc. Gatehouse does not link
+their code into its own and does not modify them. Because of that Gatehouse's
+own code stays MIT licensed and the tools stay under their own licences.
+
+Written offer of source code
+----------------------------
+
+For the GPL and LGPL parts above (GCC with the Arduino patch, GNU Binutils,
+GMP, MPFR, MPC, the Arduino AVR core and the Wire, SPI, SoftwareSerial, EEPROM,
+Servo and NeoPixel libraries), Gatehouse offers the complete corresponding
+source code, free of charge, at:
+
+  https://github.com/M-KUMG/Gatehouse/releases   (release tag toolchain-sources-v1)
+
+That release contains the source archives (gcc-7.3.0, the Arduino GCC patch,
+binutils-2.42, gmp-6.2.1, mpfr-4.1.0, mpc-1.2.1, the Arduino AVR core
+avr-1.8.8, Servo 1.3.0, Adafruit NeoPixel 1.15.5, HC-SR04 2.0.0), the build
+scripts that control the build (scripts/build.sh, scripts/sysroot.py,
+.github/workflows/build.yml and the checksum list of the recipe at commit
+6972a73) and the file SOURCES.md with the sha256 of every file. The same
+archives are published by the upstream build at
+https://github.com/startabit/avr-gcc-wasm/releases/tag/v1.
+
+This offer is valid for as long as Gatehouse distributes these binaries, and
+for at least three years after the last distribution. You can also ask for the
+source on a physical medium by opening an issue at
+https://github.com/M-KUMG/Gatehouse/issues; we may charge only the cost of
+doing so.
+
+Not mirrored: the upstream release also lists Arduino's compiled Linux
+toolchain (avr-gcc-7.3.0-atmel3.6.1-arduino7-x86_64-pc-linux-gnu.tar.bz2).
+That file is a native binary, not source, and Gatehouse does not distribute
+it. Five library files taken from that toolchain are used (libc.a, libm.a,
+libgcc.a, crtatmega328p.o, libatmega328p.a); their sources are avr-libc 2.0.0
+(BSD licence) and, for libgcc, GCC 7.3.0 with the Arduino patch from the
+archives above. Arduino builds these at
+https://github.com/arduino/toolchain-avr (tag 7.3.0-atmel3.6.1-arduino7).

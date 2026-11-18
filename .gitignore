@@ -4,3 +4,6 @@ out/
 .DS_Store
 *.log
 THIRD_PARTY_LICENSES.txt
+
+# WebAssembly AVR toolchain downloads, unpacked files and packs (never commit)
+/toolchain/

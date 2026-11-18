@@ -1,0 +1,10 @@
+In file included from /arduino/core/Arduino.h:28:0,
+                 from /sketch/toolarge.ino.cpp:1:
+/sketch/toolarge.ino:1:26: error: size of array 'big' is too large
+ const uint8_t big[33000] PROGMEM = {1, 2, 3};
+                          ^
+/sketch/toolarge.ino: In function 'void loop()':
+/sketch/toolarge.ino:3:30: error: 'big' was not declared in this scope
+ void loop() { pgm_read_byte(&big[1]); }
+                              ^
+/sketch/toolarge.ino:3:30: note: suggested alternative: 'bit'

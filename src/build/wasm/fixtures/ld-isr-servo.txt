@@ -1,0 +1,2 @@
+ld: /arduino/libraries/Servo.a(avr_Servo.cpp.o): in function `__vector_11':
+Servo.cpp:(.text.__vector_11+0x0): multiple definition of `__vector_11'; /build/isrservo.ino.o:/sketch/isrservo.ino:3: first defined here

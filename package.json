@@ -6,11 +6,14 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && node scripts/third-party-licenses.mjs THIRD_PARTY_LICENSES.txt dist/THIRD_PARTY_LICENSES.txt && node -e \"require('fs').copyFileSync('NOTICE', 'dist/NOTICE')\"",
+    "build": "tsc && vite build && node scripts/third-party-licenses.mjs THIRD_PARTY_LICENSES.txt dist/THIRD_PARTY_LICENSES.txt && node -e \"const fs=require('fs'); fs.copyFileSync('NOTICE','dist/NOTICE'); fs.cpSync('licenses','dist/licenses',{recursive:true})\"",
     "typecheck": "tsc",
     "test": "vitest run",
     "start": "npm run build && electron .",
-    "licenses": "node scripts/third-party-licenses.mjs"
+    "licenses": "node scripts/third-party-licenses.mjs",
+    "toolchain:fetch": "node scripts/fetch-toolchain.mjs",
+    "toolchain:sources": "node scripts/fetch-toolchain-sources.mjs",
+    "toolchain:packs": "node scripts/make-packs.mjs"
   },
   "devDependencies": {
     "electron": "^33.0.0",
