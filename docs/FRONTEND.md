@@ -1,0 +1,36 @@
+# Frontend notes for Claude (and whoever drives it)
+
+Read this before touching the UI. `docs/PLAN.md` is the project's memory (status, decisions); this file only says what is safe to change in the look and feel, and what is not. The human working on the frontend does it through Claude, so these notes are written for the agent.
+
+## Ground rules
+- One small task at a time. Run `npm run typecheck` and `npm test` before saying a change is done; hand-testing in the browser is the human's job (give numbered steps).
+- Keep `docs/PLAN.md` "Current status" honest after each task. Do not put tokens in git remote URLs. Pull before starting, push when asked.
+- Never name the product with Arduino, Raspberry Pi or Pico. Keep "Gatehouse" in one constant.
+
+## Safe to change freely (looks and feel)
+- **CSS**: `src/style.css` (app shell, palette, file bar, toolbar, readouts), `src/layout/dock.css`, `src/layout/*.css` (per-window styles), `src/buildcard.css`. There are no CSS variables yet: colours and sizes are hard-coded. First good cleanup: introduce `:root` tokens (colours, spacing, radius, font) and replace the literals, so the whole look can change in one place. Canvas drawing colours live in TS (`grid.ts`, `wireview.ts`, `art/*.ts`) and need the same treatment (one palette module).
+- **Dock look**: dockview is themed through `THEME` in `src/layout/dock.ts` plus `dock.css`.
+- **Animations**: current-flow dashes (`src/animation.ts`, `wireview.ts`), LED glow, the camera pan in `camerapan.ts`, window/tab transitions. Animation is visual only: it may read simulation results but must never write to the scene, the simulation or any board, and the frame loop must stop when nothing moves (`needsAnimation`), or an idle page burns CPU.
+- **Part art**: `src/art/*.ts` are SVG strings in "art units" (`ART_CELL` = 20 units = one grid cell). A part is `cols x rows` cells; leads end exactly on grid points. Restyling a drawing is safe as long as the pin positions in `src/parts.ts` still sit on the same grid points (the pin list is authoritative, the drawing only has to agree). Sprites are rasterised per zoom in `sprites.ts`; a part with state-dependent looks goes through `PartType.variant` (cache key must be unique per look).
+- **Feel of interaction**: snap radius for pins (`pinRadius` in `wiring.ts`), the placement ghost (`placing.ts`), hover readouts (`readout.ts`, `devicereadouts.ts`), zoom limits (`camera.ts`), the floating toolbar (`toolbar.ts`). Today these numbers are scattered; gathering the tunable ones (snap radius, animation speeds, ghost opacity, zoom steps) in one small config module is a good first task before big feel changes.
+
+## Change only with care (behaviour, saved data)
+- **Pin ids and positions** (`parts.ts`): connectivity comes from pin ids and grid positions, never from drawings. Moving or renaming a pin breaks saved projects. Changing a part's cols/rows or pin x/y shifts every saved placement of it.
+- **Touching-pin contacts and junctions** (`contacts.ts`, `junctions.ts`, `wiring.ts`, `Scene.tidyJunctions`): these are rules with tests, not styling. Snapping may change how it feels (what is highlighted, how far the cursor reaches) but not which things end up connected, and wires must still end on grid points.
+- **Project format and undo** (`src/project/*`): the file is versioned (`.gth` zip, format v4, migrations in `migrate.ts`). UI-only state (camera, selection, dock layout, which window is open) is NOT part of the circuit and must not create undo steps or the unsaved mark. If a UI change needs a new saved field, that is a format change: bump the version, add a migration and tests, and ask the owner first.
+- **Simulation and emulators** (`src/sim`, `src/mcu`): not frontend. Timing comes from CPU cycle counts, never wall-clock timers; rendering speed must never change results.
+- **Layout persistence** (`src/layout/persist.ts`): the saved dock layout has a format version; if you change panel ids or structure, bump it so old layouts are dropped cleanly instead of crashing restore.
+
+## How the shell fits together
+- `src/main.ts` builds everything and wires it by hand: `Project` (scene + camera), `Simulation`, `GridView` (canvas + render loop), `Editor` (input), then the dock windows (Serial console, Build output, Code editor, File explorer). It is the file to read first.
+- **Dock**: `src/layout/dock.ts` (`DockLayout`) over dockview. The **Circuit** panel is ONE dock panel holding the canvas and the Parts menu (a foldable column inside it); it can be moved, tabbed, floated, docked on any side, but never closed (custom tab without a close button, only Float in its menu, delete/backspace blocked, listed always-ticked in the Windows menu). Other windows are described in `src/layout/panels.ts` (`WINDOWS`); each window's content is one long-lived element that panels adopt, so state survives closing. The canvas resizes through a ResizeObserver, so moving or hiding panels must never leave it with a stale size (watch zero-size: background tab).
+- **Keyboard**: grid shortcuts (Ctrl+Z, R, Delete ...) live in `Editor`; `isForOtherWindow` makes them ignore keys aimed at other windows and tab strips. New windows with their own inputs must stay out of the grid's way the same way.
+- **Windows menu** (`windowsmenu.ts`): stays open after a choice, closes when the mouse leaves, on Escape or on an outside press.
+- **Rendering**: `GridView` draws on a canvas in a requestAnimationFrame loop that runs only while something moves; ask for a redraw with `view.requestRender()`. Overlays beside the selection follow the canvas through `layout.api.onDidLayoutChange(view.requestRender)`.
+
+## Things that bite
+- A hidden or zero-size canvas must not throw or divide by zero.
+- Anything that listens to window-level events must be removed when the panel is hidden or rebuilt (dockview may rebuild a panel on restore and reset).
+- Do not make `main.ts` bigger with feature logic: put it in its own module with a DOM-free part that has unit tests (the existing `*rows.ts`, `*model.ts` files show the pattern).
+- Narrow screens / phone layout are not done (bottom-sheet fallback is an open item in PLAN.md).
+- If the dev server looks half-broken (stale cache), restart with `npx vite --port 5173 --force`.
