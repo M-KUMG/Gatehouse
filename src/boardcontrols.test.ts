@@ -15,7 +15,7 @@ const uno = (id: number, boardId: string, extra: Partial<PlacedPart> = {}) => pa
 
 describe('which toolbar buttons show', () => {
   it('nothing selected: no buttons to speak of, no board buttons', () => {
-    expect(toolbarButtons([], stateOf())).toEqual({ rotate: false, duplicate: false, edit: false, board: null });
+    expect(toolbarButtons([], stateOf())).toEqual({ rotate: false, flipH: false, flipV: false, duplicate: false, edit: false, board: null });
   });
 
   it('a resistor: rotate, duplicate and edit, no board buttons', () => {
@@ -30,6 +30,14 @@ describe('which toolbar buttons show', () => {
     expect(b.board?.reset).toEqual({ title: 'Reset (rebuild from files)', disabled: false });
     expect(b.board?.console).toEqual({ title: 'Open serial console', disabled: false });
     expect(b.board?.rename).toEqual({ title: 'Rename board (display name only)', disabled: false });
+  });
+
+  it('offers flip when at least one selected part can be mirrored', () => {
+    expect(toolbarButtons([part(1, 'led'), part(3, 'resistor')], stateOf())).toMatchObject({ flipH: true, flipV: true });
+    expect(toolbarButtons([uno(2, 'uno-1'), part(3, 'led')], stateOf())).toMatchObject({ flipH: true, flipV: true });
+    expect(toolbarButtons([uno(2, 'uno-1')], stateOf())).toMatchObject({ flipH: false, flipV: false });
+    expect(toolbarButtons([part(3, 'resistor')], stateOf())).toMatchObject({ flipH: false, flipV: false });
+    expect(toolbarButtons([uno(2, 'uno-1'), part(3, 'resistor')], stateOf())).toMatchObject({ flipH: false, flipV: false });
   });
 
   it('one board among other parts still gets them; two boards do not', () => {
@@ -94,7 +102,7 @@ describe('the reset button on the board', () => {
   const rotations: Rotation[] = [0, 90, 180, 270];
   /** Where a point of the unrotated board is on the grid for a part. */
   const at = (p: PlacedPart, x: number, y: number) => {
-    const r = rotatePoint(x, y, type, p.rotation);
+    const r = rotatePoint(x, y, type, p);
     return { col: p.col + r.x, row: p.row + r.y };
   };
 

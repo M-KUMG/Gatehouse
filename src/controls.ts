@@ -10,7 +10,7 @@ import { unrotatePoint } from './pins';
 function fromKnob(part: PlacedPart, col: number, row: number): { dx: number; dy: number; r: number } | null {
   const type = getPart(part.typeId);
   if (!type?.knob) return null;
-  const p = unrotatePoint(col - part.col, row - part.row, type, part.rotation);
+  const p = unrotatePoint(col - part.col, row - part.row, type, part);
   return { dx: p.x - type.knob.x, dy: p.y - type.knob.y, r: type.knob.r };
 }
 

@@ -335,6 +335,16 @@ export class GridView {
     else if (p.rotation === 180) ctx.translate(w, h);
     else if (p.rotation === 270) ctx.translate(0, w);
     ctx.rotate((p.rotation * Math.PI) / 180);
+    // Mirrored inside its own box before the rotation, like pins.ts rotatePoint.
+    // The sprite bitmap is the same either way (text on the art reads mirrored).
+    if (p.mirrorX) {
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+    }
+    if (p.mirrorY) {
+      ctx.translate(0, h);
+      ctx.scale(1, -1);
+    }
     if (ghost) {
       ctx.globalAlpha = 0.6;
     } else {

@@ -1,13 +1,17 @@
 // Dragging a new part from the parts menu onto the grid.
 
 import { GRID_SIZE, type GridView } from './grid';
-import { nextRotation, rotatedSize, type PlacedPart, type Rotation, type Scene } from './model';
+import {
+  flipOrientation, isMirrorable, nextRotation, rotatedSize, setOrientation, type FlipAxis, type PlacedPart, type Rotation, type Scene,
+} from './model';
 import { getPart } from './parts';
 import { partImageUrl } from './sprites';
 
 interface Placing {
   typeId: string;
   rotation: Rotation;
+  mirrorX?: boolean;
+  mirrorY?: boolean;
   float: HTMLImageElement; // shown under the cursor while it is over the menu
   pointerId: number;
   lastX: number;
@@ -59,6 +63,14 @@ export class Placer {
     this.update(p.lastX, p.lastY);
   }
 
+  /** Mirror the part being placed (not for boards). */
+  flip(axis: FlipAxis): void {
+    const p = this.placing;
+    if (!p || !isMirrorable(p.typeId)) return;
+    setOrientation(p, flipOrientation(p, axis));
+    this.update(p.lastX, p.lastY);
+  }
+
   /** Re-place the ghost after the camera moved under a still cursor. */
   refresh(): void {
     if (this.placing) this.update(this.placing.lastX, this.placing.lastY);
@@ -96,6 +108,8 @@ export class Placer {
       this.view.ghost = {
         typeId: p.typeId,
         rotation: p.rotation,
+        ...(p.mirrorX ? { mirrorX: true } : {}),
+        ...(p.mirrorY ? { mirrorY: true } : {}),
         col: Math.round(cell.col - cols / 2),
         row: Math.round(cell.row - rows / 2),
       };
@@ -110,7 +124,9 @@ export class Placer {
       p.float.style.height = `${(type?.rows ?? 1) * cell}px`;
       p.float.style.left = `${x}px`;
       p.float.style.top = `${y}px`;
-      p.float.style.transform = `translate(-50%, -50%) rotate(${p.rotation}deg)`;
+      // CSS applies the right-most function first: mirror, then rotate (as on the grid).
+      const mirror = p.mirrorX || p.mirrorY ? ` scale(${p.mirrorX ? -1 : 1}, ${p.mirrorY ? -1 : 1})` : '';
+      p.float.style.transform = `translate(-50%, -50%) rotate(${p.rotation}deg)${mirror}`;
     }
     this.view.requestRender();
   }

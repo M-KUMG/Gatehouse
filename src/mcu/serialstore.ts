@@ -44,7 +44,8 @@ export function decodeSerial(bytes: readonly number[], state: DecodeState): stri
   return out;
 }
 
-const STANDARD_BAUDS = [
+/** Usual baud rates (the Scope's UART decoder offers them too). */
+export const STANDARD_BAUDS = [
   300, 600, 1200, 2400, 4800, 9600, 14400, 19200, 28800, 31250, 38400, 57600, 74880, 76800,
   115200, 230400, 250000, 460800, 500000, 921600, 1000000, 2000000,
 ];

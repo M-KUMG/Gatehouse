@@ -165,6 +165,11 @@ export class DockLayout {
         return docked('serial-console')
           ? { position: { referencePanel: 'serial-console', direction: 'within' } }
           : { ...beside('below'), initialHeight: 180 };
+      case 'scope':
+        // Like the Build output: a tab beside the console when it is docked, else under the grid.
+        return docked('serial-console')
+          ? { position: { referencePanel: 'serial-console', direction: 'within' } }
+          : { ...beside('below'), initialHeight: 220 };
       case 'code-editor':
         return docked('file-explorer')
           ? { position: { referencePanel: 'file-explorer', direction: 'below' } }

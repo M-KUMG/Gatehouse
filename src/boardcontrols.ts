@@ -1,5 +1,5 @@
 // What the selected board offers on the grid, as plain data (no DOM):
-//   - which buttons the floating selection toolbar shows (rotate, duplicate,
+//   - which buttons the floating selection toolbar shows (rotate, flip, duplicate,
 //     edit value, and for exactly one selected board: Run / Pause, Build,
 //     Reset, Serial console, Rename) and how each looks (icon, tooltip,
 //     disabled, error mark)
@@ -9,6 +9,7 @@
 //     the File explorer's highlight): the selected board, else the last one.
 
 import type { BoardRunState } from './mcu/runtime';
+import { canFlip } from './flip';
 import type { PlacedPart } from './model';
 import { getPart } from './parts';
 import { unrotatePoint } from './pins';
@@ -64,6 +65,9 @@ export interface BoardToolbar {
 /** Which toolbar buttons show for the current selection. */
 export interface ToolbarButtons {
   rotate: boolean;
+  /** Flip horizontal / vertical: at least one selected part can be mirrored (see flip.ts). */
+  flipH: boolean;
+  flipV: boolean;
   duplicate: boolean;
   edit: boolean;
   /** Exactly one board selected: its buttons; else null. */
@@ -102,8 +106,11 @@ export function toolbarButtons(
   buildFailed: (partId: number) => boolean = () => false,
 ): ToolbarButtons {
   const board = selectedBoard(selected);
+  const flip = canFlip(selected);
   return {
     rotate: selected.length > 0,
+    flipH: flip,
+    flipV: flip,
     duplicate: selected.length > 0,
     edit: selected.length === 1 && getPart(selected[0].typeId)?.value !== undefined,
     board: board ? boardToolbar(stateOf(board.id), buildFailed(board.id)) : null,
@@ -117,7 +124,7 @@ export function isOnReset(part: PlacedPart, col: number, row: number): boolean {
   const type = getPart(part.typeId);
   const box = type?.resetButton;
   if (!type || !box) return false;
-  const p = unrotatePoint(col - part.col, row - part.row, type, part.rotation);
+  const p = unrotatePoint(col - part.col, row - part.row, type, part);
   return p.x >= box.x && p.x <= box.x + box.w && p.y >= box.y && p.y <= box.y + box.h;
 }
 

@@ -43,7 +43,7 @@
 //   charge held (one tiny step that is not kept).
 
 import { solveCircuit, solveStep, type PartResult, type PinDrive, type SimInput, type SimResult, type TransientState } from '../sim';
-import type { BoardElectrical, BoardEmulator, DriveCode, IoPinDef, SerialBytes } from './board';
+import type { BoardElectrical, BoardEmulator, DriveCode, IoPinDef, SerialBytes, SliceResult } from './board';
 import { MAX_STEPS_PER_SLICE, isReactive, stepSeconds } from './timestep';
 
 /** Simulated time between pin feedback steps. */
@@ -67,6 +67,18 @@ export interface BoardSlot {
   emulator: BoardEmulator | null;
   /** Only running boards execute code; the others keep their pins as they are. */
   running: boolean;
+}
+
+/**
+ * Watches the boards' slices (the Scope's recorder, src/scope/recorder.ts).
+ * Read-only: an observer must not change the slots or slice results it is
+ * given, so watching never changes the simulation.
+ */
+export interface SliceObserver {
+  /** The set of boards (or one of their emulators) may have changed (every setCircuit). */
+  boards(slots: readonly BoardSlot[]): void;
+  /** A running board ran one slice: its cycle-exact pin events. */
+  slice(slot: BoardSlot, run: SliceResult): void;
 }
 
 /** Thevenin model of one pin for its drive code. */
@@ -181,6 +193,8 @@ export class MixedSignal {
   private step = SLICE_SECONDS;
   /** Circuits per pin setup for the time steps. */
   private readonly inputs = new Map<string, SimInput>();
+  /** Told about every slice of every running board (the Scope's recorder); null: nobody watches. */
+  observer: SliceObserver | null = null;
 
   constructor(
     private readonly solve: (input: SimInput) => SimResult = solveCircuit,
@@ -191,6 +205,7 @@ export class MixedSignal {
   setCircuit(circuit: SimInput, slots: BoardSlot[]): void {
     this.circuit = circuit;
     this.slots = slots;
+    this.observer?.boards(slots);
     this.cache.clear();
     this.inputs.clear();
     this.levels = slots.map((s) => s.io.map(() => false));
@@ -250,6 +265,7 @@ export class MixedSignal {
     this.slots.forEach((s, i) => {
       if (!s.running || !s.emulator) return;
       const run = s.emulator.run(Math.round(dt * s.emulator.clockHz));
+      this.observer?.slice(s, run);
       current[i] = run.drives;
       const span = Math.max(1, run.end - run.start);
       for (const e of run.events) changes.push({ at: (Math.min(Math.max(e.cycle - run.start, 0), span) / span) * dt, slot: i, drives: e.drives });

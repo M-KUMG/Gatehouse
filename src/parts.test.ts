@@ -27,7 +27,7 @@ describe('part types', () => {
         expect(Number.isInteger(pin.x) && Number.isInteger(pin.y), `${type.id}.${pin.id}`).toBe(true);
         expect(pin.x >= 0 && pin.x <= type.cols && pin.y >= 0 && pin.y <= type.rows, `${type.id}.${pin.id}`).toBe(true);
         for (const r of ROTATIONS) {
-          const p = rotatePoint(pin.x, pin.y, type, r);
+          const p = rotatePoint(pin.x, pin.y, type, { rotation: r });
           expect(Number.isInteger(p.x) && Number.isInteger(p.y), `${type.id}.${pin.id} at ${r}`).toBe(true);
         }
       }

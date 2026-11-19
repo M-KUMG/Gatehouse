@@ -1,0 +1,154 @@
+/* Scope window (scope.ts). Reuses the Serial console's bar, select, button and
+   hint classes (serialconsole.css); only what is new is here. Canvas colours
+   are in COLORS in scope.ts. */
+
+.scope-window {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #18191c;
+  color: #c3c7ce;
+  font: 12px system-ui, sans-serif;
+}
+
+.scope-bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 5px 8px;
+  border-bottom: 1px solid #3a3d44;
+  background: #25272c;
+}
+
+.scope-note {
+  color: #e0a040;
+}
+
+.scope-window .serial-button.scope-on {
+  border-color: #4ea1ff;
+  background: #2f5f99;
+  color: #fff;
+}
+
+.scope-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.scope-list {
+  flex: none;
+  width: 240px;
+  align-self: flex-start;
+  border-right: 1px solid #3a3d44;
+  background: #1e1f22;
+}
+
+.scope-list-header {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border-bottom: 1px solid #3a3d44;
+  color: #7d828c;
+}
+
+.scope-channel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 6px;
+  border-bottom: 1px solid #2a2c31;
+}
+
+.scope-channel-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.scope-name {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #d8dbe0;
+  font: inherit;
+}
+
+.scope-name:hover {
+  border-color: #3a3d44;
+}
+
+.scope-name:focus-visible {
+  border-color: #4ea1ff;
+  background: #18191c;
+  outline: none;
+}
+
+.scope-remove {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #9aa0aa;
+  font: 14px/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.scope-remove:hover {
+  border-color: #d0544c;
+  color: #fff;
+}
+
+.scope-small-select {
+  min-width: 0;
+  max-width: 90px;
+  padding: 1px 2px;
+  font-size: 11px;
+}
+
+.scope-plot {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  align-self: flex-start;
+}
+
+.scope-canvas {
+  display: block;
+  width: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.scope-canvas:focus {
+  outline: none;
+}
+
+.scope-readout {
+  flex: none;
+  min-height: 18px;
+  padding: 3px 8px;
+  overflow: hidden;
+  border-top: 1px solid #3a3d44;
+  background: #25272c;
+  color: #9aa0aa;
+  font: 11px ui-monospace, Consolas, monospace;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

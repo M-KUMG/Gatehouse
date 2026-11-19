@@ -17,6 +17,7 @@ import type { Scene, WireEnd } from './model';
 import { MixedSignal } from './mcu/mixedsignal';
 import { BoardRuntimes, type BoardPartInfo } from './mcu/runtime';
 import { getPart } from './parts';
+import { SignalRecorder } from './scope/recorder';
 import { linkCurrents, terminalKey, type PartResult, type SimInput, type SimResult } from './sim';
 import { transportState, type TransportState } from './transportmodel';
 
@@ -85,6 +86,8 @@ export function buildInput(scene: Scene, partId: number): BuildInput | null {
 export class Simulation implements SimView {
   readonly boards = new BoardRuntimes((partId) => buildInput(this.scene, partId));
   readonly bridge = new MixedSignal();
+  /** Pin edges of the channels the Scope window armed (fed by the bridge, read-only towards it). */
+  readonly recorder = new SignalRecorder();
   /** How long the last solve took, for the status line only. */
   solveMs = 0;
   maxVoltage = 0;
@@ -100,7 +103,9 @@ export class Simulation implements SimView {
   constructor(
     private readonly scene: Scene,
     private readonly netlist: NetlistBuilder = buildNetlist,
-  ) {}
+  ) {
+    this.bridge.observer = this.recorder;
+  }
 
   get result(): SimResult | null {
     return this.bridge.result;

@@ -3,7 +3,7 @@
 // serializable data (see ProjectState), so a project file holds it as-is.
 // Contacts between touching pins are not stored: see contacts.ts.
 
-import { getPart, type PartState } from './parts';
+import { canMirror, getPart, type PartState } from './parts';
 import { coveringCounters, isBoardType, nextBoardId, type BoardCounters } from './project/boardid';
 import { copyTree, defaultTree, type SourceFiles } from './project/filetree';
 
@@ -19,9 +19,28 @@ export interface PlacedPart {
   col: number; // grid cell of the top-left corner of the (rotated) cell box
   row: number;
   rotation: Rotation; // clockwise degrees
+  /**
+   * Mirrored in the part's own (unrotated) cell box: x -> cols - x
+   * (mirrorX) and y -> rows - y (mirrorY), applied BEFORE the rotation (see
+   * pins.ts rotatePoint). Absent means false; only mirrorable parts (see
+   * canMirror in parts.ts) have them. Pin ids never change, only
+   * where the pins are.
+   */
+  mirrorX?: boolean;
+  mirrorY?: boolean;
   /** Switch position, resistance and the like; see PartState. */
   state?: PartState;
 }
+
+/** How a part is turned: mirrored in its own box first, then rotated clockwise. */
+export interface Orientation {
+  rotation: Rotation;
+  mirrorX?: boolean;
+  mirrorY?: boolean;
+}
+
+/** A mirror line on screen: 'h' flips left/right, 'v' flips top/bottom. */
+export type FlipAxis = 'h' | 'v';
 
 /** A grid point (line crossing), in cells. */
 export interface GridPoint {
@@ -112,6 +131,42 @@ export function nextRotation(r: Rotation): Rotation {
   return ((r + 90) % 360) as Rotation;
 }
 
+/** True when parts of this type can be mirrored (the asymmetric ones; see PartType.mirrorable). */
+export function isMirrorable(typeId: string): boolean {
+  const type = getPart(typeId);
+  return type !== undefined && canMirror(type);
+}
+
+/**
+ * The orientation after mirroring on screen (around the part's own centre;
+ * the cell box keeps its size and place). A screen flip of a part turned by
+ * 90 or 270 degrees is the other local mirror under the same rotation.
+ * Mirroring in both directions is a half turn, so the result never has both
+ * set: it is stored as rotation + 180 instead (one form per look).
+ */
+export function flipOrientation(o: Orientation, axis: FlipAxis): Orientation {
+  const quarter = o.rotation % 180 !== 0;
+  let mirrorX = o.mirrorX === true;
+  let mirrorY = o.mirrorY === true;
+  if ((axis === 'h') !== quarter) mirrorX = !mirrorX;
+  else mirrorY = !mirrorY;
+  let rotation = o.rotation;
+  if (mirrorX && mirrorY) {
+    mirrorX = mirrorY = false;
+    rotation = ((rotation + 180) % 360) as Rotation;
+  }
+  return { rotation, ...(mirrorX ? { mirrorX } : {}), ...(mirrorY ? { mirrorY } : {}) };
+}
+
+/** Set a part's (or ghost's) orientation in place; mirror fields are only present when true. */
+export function setOrientation(p: Orientation, o: Orientation): void {
+  p.rotation = o.rotation;
+  if (o.mirrorX) p.mirrorX = true;
+  else delete p.mirrorX;
+  if (o.mirrorY) p.mirrorY = true;
+  else delete p.mirrorY;
+}
+
 /** Cell size of a part type after rotation (cols/rows swap on 90/270). */
 export function rotatedSize(typeId: string, rotation: Rotation): { cols: number; rows: number } {
   const type = getPart(typeId);
@@ -170,6 +225,7 @@ export class Scene {
     const part: PlacedPart = {
       id: this.nextId++, typeId: p.typeId, ...(boardId ? { boardId } : {}), col: p.col, row: p.row, rotation: p.rotation,
     };
+    if (isMirrorable(p.typeId)) setOrientation(part, p);
     if (state) part.state = { ...state };
     if (boardId) this.files[boardId] = defaultTree();
     this.parts.push(part);

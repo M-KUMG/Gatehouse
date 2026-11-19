@@ -78,6 +78,12 @@ export interface PartType {
   readout?(result: PartResult): string[];
   /** Electrical model; its pin names are this part's pin ids. */
   sim?(state: PartState): ComponentModel;
+  /**
+   * True for parts whose mirror image is a different layout (see "Which parts
+   * can be mirrored" above PARTS). Absent means false. See canMirror and
+   * PlacedPart.mirrorX.
+   */
+  mirrorable?: boolean;
   /** A microcontroller board: runs programs (see src/mcu). */
   board?: BoardSpec;
   /**
@@ -143,15 +149,28 @@ const TO220_PINS: readonly PinDef[] = [
   { id: 'g', name: 'Gate', x: 1, y: 7 }, { id: 'd', name: 'Drain', x: 2, y: 7 }, { id: 's', name: 'Source', x: 3, y: 7 },
 ];
 
+// Which parts can be mirrored (`mirrorable: true`): only those whose mirror
+// image cannot be had by rotating, judged by where the pins are:
+//   led, bjt, pnp, nmos, pmos, pot  - pins in a row along one edge; a mirror
+//                                     swaps the outer legs (anode/cathode, C/E,
+//                                     G/S, the pot's ends).
+//   battery9v                       - both terminals on the right edge; a
+//                                     mirror puts + below -, no turn does that.
+// Not mirrorable: battery, ground, resistor, capacitor, inductor, diode,
+// switch, button (pins on the box's centre line, or the button's linked
+// pairs, so a mirror equals a 180-degree turn or nothing) and the boards (a
+// mirrored board does not exist). A new polarized part with an asymmetric pin
+// layout sets `mirrorable: true`. In a mixed group flip the others only move
+// (see flip.ts).
 export const PARTS: readonly PartType[] = [
   {
     id: 'battery', name: 'Battery (AA)', ...BATTERY_ART,
-    pins: [{ id: 'neg', name: '−', x: 0, y: 1 }, { id: 'pos', name: '+', x: 6, y: 1 }],
+    pins: [{ id: 'neg', name: 'â’', x: 0, y: 1 }, { id: 'pos', name: '+', x: 6, y: 1 }],
     sim: () => ({ kind: 'battery', volts: 1.5, rInternal: 0.2 }),
   },
   {
-    id: 'battery9v', name: 'Battery (9 V)', ...BATTERY_9V_ART,
-    pins: [{ id: 'pos', name: '+', x: 5, y: 1 }, { id: 'neg', name: '−', x: 5, y: 2 }],
+    id: 'battery9v', name: 'Battery (9 V)', ...BATTERY_9V_ART, mirrorable: true,
+    pins: [{ id: 'pos', name: '+', x: 5, y: 1 }, { id: 'neg', name: 'â’', x: 5, y: 2 }],
     sim: () => ({ kind: 'battery', volts: 9, rInternal: 1.5 }),
   },
   {
@@ -163,7 +182,7 @@ export const PARTS: readonly PartType[] = [
     id: 'resistor', name: 'Resistor', ...RESISTOR_ART,
     pins: [{ id: 'a', name: '1', x: 0, y: 1 }, { id: 'b', name: '2', x: 4, y: 1 }],
     defaults: { value: DEFAULT_OHMS },
-    value: { label: 'Resistance', unit: 'Ω', min: 1, max: 10e6 },
+    value: { label: 'Resistance', unit: 'Î©', min: 1, max: 10e6 },
     variant: (s) => resistorArt(s.value ?? DEFAULT_OHMS),
     sim: (s) => ({ kind: 'resistor', ohms: s.value ?? DEFAULT_OHMS }),
   },
@@ -184,8 +203,8 @@ export const PARTS: readonly PartType[] = [
     sim: (s) => ({ kind: 'inductor', henries: s.value ?? DEFAULT_HENRIES, dcr: REACTIVE_SERIES_OHMS }),
   },
   {
-    id: 'led', name: 'LED', ...LED_ART,
-    pins: [{ id: 'cathode', name: 'Cathode (−)', x: 1, y: 4 }, { id: 'anode', name: 'Anode (+)', x: 2, y: 4 }],
+    id: 'led', name: 'LED', ...LED_ART, mirrorable: true,
+    pins: [{ id: 'cathode', name: 'Cathode (â’)', x: 1, y: 4 }, { id: 'anode', name: 'Anode (+)', x: 2, y: 4 }],
     warnAbove: LED_WARN_AMPS,
     burnAbove: 0.1,
     variant: (s) => (s.burned ? { key: 'burned', svg: LED_BURNED_SVG } : null),
@@ -215,10 +234,10 @@ export const PARTS: readonly PartType[] = [
     sim: (s) => ({ kind: 'switch', closed: s.closed === true }),
   },
   {
-    id: 'pot', name: 'Potentiometer', ...POT_ART,
+    id: 'pot', name: 'Potentiometer', ...POT_ART, mirrorable: true,
     pins: [{ id: 'a', name: '1', x: 1, y: 4 }, { id: 'w', name: 'Wiper', x: 2, y: 4 }, { id: 'b', name: '3', x: 3, y: 4 }],
     defaults: { value: DEFAULT_POT_OHMS, position: 0.5 },
-    value: { label: 'Resistance', unit: 'Ω', min: 10, max: 10e6 },
+    value: { label: 'Resistance', unit: 'Î©', min: 10, max: 10e6 },
     control: 'knob',
     knob: { x: POT_KNOB.x / ART_CELL, y: POT_KNOB.y / ART_CELL, r: POT_KNOB.r / ART_CELL },
     overlay: (ctx, s) => drawPotPointer(ctx, s.position ?? 0.5),
@@ -227,30 +246,30 @@ export const PARTS: readonly PartType[] = [
   {
     // Pin ids are the diode model's, like the LED's; the band marks the cathode.
     id: 'diode', name: 'Diode (1N4148)', ...DIODE_ART,
-    pins: [{ id: 'anode', name: 'Anode (+)', x: 0, y: 1 }, { id: 'cathode', name: 'Cathode (−, band)', x: 4, y: 1 }],
+    pins: [{ id: 'anode', name: 'Anode (+)', x: 0, y: 1 }, { id: 'cathode', name: 'Cathode (â’, band)', x: 4, y: 1 }],
     readout: diodeReadout,
     sim: () => D1N4148,
   },
   {
     // The id stays 'bjt' (saved projects use it).
-    id: 'bjt', name: 'NPN transistor (BC547)', ...TRANSISTOR_ART,
+    id: 'bjt', name: 'NPN transistor (BC547)', ...TRANSISTOR_ART, mirrorable: true,
     pins: TO92_PINS,
     sim: () => BC547,
   },
   {
-    id: 'pnp', name: 'PNP transistor (BC557)', ...PNP_ART,
+    id: 'pnp', name: 'PNP transistor (BC557)', ...PNP_ART, mirrorable: true,
     pins: TO92_PINS,
     readout: pnpReadout,
     sim: () => BC557,
   },
   {
-    id: 'nmos', name: 'N-MOSFET (logic level)', ...NMOS_ART,
+    id: 'nmos', name: 'N-MOSFET (logic level)', ...NMOS_ART, mirrorable: true,
     pins: TO220_PINS,
     readout: (r) => mosfetReadout(r, 1),
     sim: () => LOGIC_NMOS,
   },
   {
-    id: 'pmos', name: 'P-MOSFET', ...PMOS_ART,
+    id: 'pmos', name: 'P-MOSFET', ...PMOS_ART, mirrorable: true,
     pins: TO220_PINS,
     readout: (r) => mosfetReadout(r, -1),
     sim: () => POWER_PMOS,
@@ -281,6 +300,11 @@ export const PARTS: readonly PartType[] = [
 
 export function getPart(id: string): PartType | undefined {
   return PARTS.find((p) => p.id === id);
+}
+
+/** True when placed parts of this type can be mirrored (PartType.mirrorable, default false). */
+export function canMirror(type: PartType): boolean {
+  return type.mirrorable === true && type.board === undefined;
 }
 
 /** What the labels of a placed board are made from. */

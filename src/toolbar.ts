@@ -1,4 +1,4 @@
-// Floating round buttons next to the selection: rotate, duplicate, edit
+// Floating round buttons next to the selection: rotate, flip, duplicate, edit
 // value, delete, and for one selected board Run / Pause, Build, Reset, the Serial
 // console and Rename. Also the small readouts along the bottom edge.
 
@@ -14,6 +14,9 @@ const svg = (body: string): string =>
 
 const ICONS = {
   rotate: svg('<path d="M20 11a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>'),
+  // A dashed mirror line between a filled shape and its outlined mirror image.
+  flipH: svg('<path d="M12 3v18" stroke-dasharray="2 2.5"/><path d="M9 6L3 18h6z" fill="currentColor"/><path d="M15 6l6 12h-6z"/>'),
+  flipV: svg('<path d="M3 12h18" stroke-dasharray="2 2.5"/><path d="M6 9L18 3v6z" fill="currentColor"/><path d="M6 15l12 6v-6z"/>'),
   duplicate: svg('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>'),
   edit: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
   run: svg('<path d="M8 5.5v13l11-6.5z" fill="currentColor"/>'),
@@ -30,6 +33,9 @@ const ICONS = {
 
 export interface ToolbarActions {
   rotate: () => void;
+  /** Mirror left/right and top/bottom. */
+  flipH: () => void;
+  flipV: () => void;
   duplicate: () => void;
   edit: () => void;
   delete: () => void;
@@ -42,11 +48,13 @@ export interface ToolbarActions {
   rename: () => void;
 }
 
-const NO_BUTTONS: ToolbarButtons = { rotate: true, duplicate: true, edit: false, board: null };
+const NO_BUTTONS: ToolbarButtons = { rotate: true, flipH: true, flipV: true, duplicate: true, edit: false, board: null };
+
+const SIMPLE_BUTTONS = ['rotate', 'flipH', 'flipV', 'duplicate', 'edit'] as const;
 
 export class Toolbar {
   private readonly el: HTMLDivElement;
-  private readonly buttons: Record<'rotate' | 'duplicate' | 'edit', HTMLButtonElement>;
+  private readonly buttons: Record<(typeof SIMPLE_BUTTONS)[number], HTMLButtonElement>;
   private readonly runButton: HTMLButtonElement;
   private readonly buildButton: HTMLButtonElement;
   private readonly resetButton: HTMLButtonElement;
@@ -64,6 +72,8 @@ export class Toolbar {
     this.el.className = 'selection-toolbar';
     this.buttons = {
       rotate: button('Rotate 90° clockwise (R)', ICONS.rotate, actions.rotate),
+      flipH: button('Flip horizontal (H)', ICONS.flipH, actions.flipH),
+      flipV: button('Flip vertical (V)', ICONS.flipV, actions.flipV),
       duplicate: button('Duplicate (Ctrl+D)', ICONS.duplicate, actions.duplicate),
       edit: button('Edit value (double-click)', ICONS.edit, actions.edit),
     };
@@ -76,7 +86,7 @@ export class Toolbar {
     this.boardGroup.append(this.runButton, this.buildButton, this.resetButton, this.consoleButton, this.renameButton);
     this.el.append(
       this.boardGroup,
-      this.buttons.rotate, this.buttons.duplicate, this.buttons.edit,
+      ...SIMPLE_BUTTONS.map((name) => this.buttons[name]),
       button('Delete (Del)', ICONS.delete, actions.delete, 'danger'),
     );
     document.body.appendChild(this.el);
@@ -86,7 +96,7 @@ export class Toolbar {
   /** Show the toolbar beside a viewport rectangle, or hide it with null. */
   show(target: ScreenRect | null, buttons: ToolbarButtons = NO_BUTTONS): void {
     const el = this.el;
-    for (const name of ['rotate', 'duplicate', 'edit'] as const) {
+    for (const name of SIMPLE_BUTTONS) {
       this.buttons[name].style.display = buttons[name] ? '' : 'none';
     }
     this.showBoardButtons(buttons.board);

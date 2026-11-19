@@ -11,7 +11,9 @@ import { BoardStatusChip } from './boardstatus';
 import { clickPart, isOnKnob, knobPosition, knobPositionAt, setKnob, setPressed } from './controls';
 import type { GridView } from './grid';
 import { isTap, type WireTap } from './junctions';
-import { boundsOf, boxesOverlap, footprint, isPinEnd, type GridPoint, type PinRef, type PlacedPart, type ProjectState, type Scene } from './model';
+import {
+  boundsOf, boxesOverlap, footprint, isPinEnd, type FlipAxis, type GridPoint, type PinRef, type PlacedPart, type ProjectState, type Scene,
+} from './model';
 import { NameEditor } from './nameedit';
 import { boardLabel, defaultBoardLabel, getPart } from './parts';
 import { findPin, pinAt, wirePointAt, wireRoute } from './pins';
@@ -153,6 +155,8 @@ export class Editor {
     });
     this.toolbar = new Toolbar(canvas, {
       rotate: () => this.rotateSelected(),
+      flipH: () => this.flipSelected('h'),
+      flipV: () => this.flipSelected('v'),
       duplicate: () => this.duplicateSelected(),
       edit: () => this.editValue(this.selection.parts()[0]),
       delete: () => this.deleteSelected(),
@@ -536,8 +540,18 @@ export class Editor {
   // ---- Commands --------------------------------------------------------
 
   private rotateSelected(): void {
-    if (this.wiring.active || this.drag?.kind === 'knob' || !this.selection.rotate()) return;
-    // Rotating mid-drag: continue the drag from the rotated positions.
+    this.reorientSelected(() => this.selection.rotate());
+  }
+
+  /** Mirror the selected parts on screen ('h' left/right, 'v' top/bottom). */
+  private flipSelected(axis: FlipAxis): void {
+    this.reorientSelected(() => this.selection.flip(axis));
+  }
+
+  /** Rotate or mirror the selection (`change` returns false when nothing changed). */
+  private reorientSelected(change: () => boolean): void {
+    if (this.wiring.active || this.drag?.kind === 'knob' || !change()) return;
+    // Rotating or mirroring mid-drag: continue the drag from the new positions.
     const d = this.drag;
     if (d?.kind === 'move' && this.pointer) {
       const cell = this.view.toCell(this.pointer.x, this.pointer.y);
@@ -628,6 +642,10 @@ export class Editor {
     } else if (key === 'r' && !mod && !e.altKey) {
       if (this.placer.active) this.placer.rotate();
       else this.rotateSelected();
+    } else if ((key === 'h' || key === 'v') && !mod && !e.altKey) {
+      const axis: FlipAxis = key === 'h' ? 'h' : 'v';
+      if (this.placer.active) this.placer.flip(axis);
+      else this.flipSelected(axis);
     } else if (e.key === 'Backspace' && this.wiring.active) {
       this.wiring.undo();
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && !busy) {

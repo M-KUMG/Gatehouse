@@ -5,7 +5,7 @@ import { MAX_ZOOM, MIN_ZOOM } from '../camera';
 import {
   endKey, isPinEnd, sameEnd, type GridPoint, type Junction, type PinRef, type PlacedPart, type Rotation, type Wire, type WireEnd,
 } from '../model';
-import { getPart, type PartState } from '../parts';
+import { canMirror, getPart, type PartState } from '../parts';
 import { isBoardType } from './boardid';
 import { normalizeBoardName } from './boardname';
 import { PROJECT_FORMAT, PROJECT_VERSION, ProjectError, type CameraState, type ProjectFile } from './format';
@@ -100,16 +100,23 @@ function partState(v: unknown, typeId: string, where: string): PartState {
 
 function part(v: unknown, where: string): PlacedPart {
   const o = obj(v, where);
-  onlyKeys(o, ['id', 'typeId', 'boardId', 'col', 'row', 'rotation', 'state'], where);
+  onlyKeys(o, ['id', 'typeId', 'boardId', 'col', 'row', 'rotation', 'mirrorX', 'mirrorY', 'state'], where);
   const id = int(o, 'id', where);
   const typeId = str(o, 'typeId', where);
-  if (!getPart(typeId)) fail(`${where} uses an unknown part type "${typeId}". It may need a newer version of the app.`);
+  const type = getPart(typeId);
+  if (!type) fail(`${where} uses an unknown part type "${typeId}". It may need a newer version of the app.`);
   const boardId = partBoardId(o, typeId, where);
   const rotation = int(o, 'rotation', where);
   if (!ROTATIONS.includes(rotation)) fail(`${where}.rotation must be 0, 90, 180 or 270 (got ${rotation}).`);
   const out: PlacedPart = {
     id, typeId, ...(boardId ? { boardId } : {}), col: int(o, 'col', where), row: int(o, 'row', where), rotation: rotation as Rotation,
   };
+  // Optional (absent = false, older files lack them); kept only when true, and
+  // only on a part that can be mirrored: a file saved when more parts could be
+  // keeps loading, the flag is dropped.
+  for (const key of ['mirrorX', 'mirrorY'] as const) {
+    if (o[key] !== undefined && bool(o, key, where) && canMirror(type)) out[key] = true;
+  }
   if (o.state !== undefined) out.state = partState(o.state, typeId, `${where}.state`);
   return out;
 }

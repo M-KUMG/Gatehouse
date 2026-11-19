@@ -13,6 +13,7 @@ import { CODE_EDITOR_ID, CodeEditor } from './layout/codeeditor';
 import { DockLayout, isForOtherWindow } from './layout/dock';
 import { onOpenFile } from './layout/fileevents';
 import { FILE_EXPLORER_ID, FileExplorer } from './layout/fileexplorer';
+import { SCOPE_ID, ScopeWindow } from './layout/scope';
 import { SERIAL_CONSOLE_ID, SerialConsole } from './layout/serialconsole';
 import { createWindowsMenu } from './layout/windowsmenu';
 import { registerCompiler } from './build/registry';
@@ -58,6 +59,8 @@ const activeBoard = new ActiveBoard(() => scene.parts, () => view.selected);
 // Serial output of the boards; "Auto" shows the active board. Made before the
 // layout, which may restore the console window straight away.
 const serialConsole = new SerialConsole(scene, sim, () => activeBoard.partId);
+// Scope: digital traces of armed pins (sim.recorder) with UART decoding; the channel list is session-only.
+const scope = new ScopeWindow(scene, sim, () => activeBoard.partId);
 // Build output: the build log of one board (Auto follows the active board). Made
 // before the layout, which may restore the window straight away. The card at the
 // top of the grid shows the first-time compiler download (from a build or from
@@ -93,6 +96,7 @@ const layout = new DockLayout(dock, circuitView, {
   [BUILD_OUTPUT_ID]: buildOutput.element,
   [CODE_EDITOR_ID]: codeEditor.element,
   [FILE_EXPLORER_ID]: fileExplorer.element,
+  [SCOPE_ID]: scope.element,
 });
 const view = new GridView(canvas, scene, project.camera);
 // Overlays beside the selection follow the canvas when windows move around it.
@@ -193,9 +197,11 @@ view.renderListeners.push(() => clock.wake());
 view.renderListeners.push(() => serialConsole.update()); // after the active board: Auto follows it
 view.renderListeners.push(() => buildOutput.update());
 view.renderListeners.push(() => fileExplorer.update()); // the highlighted board follows it too
+view.renderListeners.push(() => scope.update());
 layout.onChange(() => serialConsole.update());
 layout.onChange(() => buildOutput.update());
 layout.onChange(() => fileExplorer.update());
+layout.onChange(() => scope.update());
 // Every edit is followed by a frame, so this notices all of them; the
 // history then records the edit once no gesture is in progress.
 view.renderListeners.push(() => project.checkForChanges());

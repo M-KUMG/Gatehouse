@@ -1,8 +1,9 @@
 // The selected parts and wires, and the commands that act on them.
 // The ids live on the view (it draws the highlights); this wraps them.
 
+import { flipGroup } from './flip';
 import type { GridView } from './grid';
-import { boundsOf, type CellBox, type PlacedPart, type Scene, type Wire } from './model';
+import { boundsOf, type CellBox, type FlipAxis, type PlacedPart, type Scene, type Wire } from './model';
 import { pathBounds, wireRoute } from './pins';
 
 export class Selection {
@@ -69,6 +70,17 @@ export class Selection {
     if (parts.length === 0) return false;
     if (parts.length === 1) this.scene.rotate(parts[0]);
     else this.scene.rotateGroup(parts);
+    this.view.requestRender();
+    return true;
+  }
+
+  /**
+   * Mirror the selected parts on screen ('h': left/right, 'v': top/bottom),
+   * as one block around their bounding box's centre when several (see
+   * flip.ts). False when no selected part can be mirrored.
+   */
+  flip(axis: FlipAxis): boolean {
+    if (!flipGroup(this.scene, this.parts(), axis)) return false;
     this.view.requestRender();
     return true;
   }

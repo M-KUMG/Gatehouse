@@ -2,7 +2,8 @@
 // after rotation, which way they point, and the path a wire takes.
 
 import {
-  footprint, isPinEnd, type CellBox, type GridPoint, type PinRef, type PlacedPart, type Rotation, type Scene, type Wire, type WireEnd,
+  footprint, isPinEnd, type CellBox, type GridPoint, type Orientation, type PinRef, type PlacedPart, type Rotation, type Scene, type Wire,
+  type WireEnd,
 } from './model';
 import { getPart, type PinDef, type PartType } from './parts';
 
@@ -16,38 +17,56 @@ export interface Pin {
   dir: GridPoint;
 }
 
-/** A point of the unrotated cell box, moved to where it is in the rotated box. */
-export function rotatePoint(x: number, y: number, type: PartType, rotation: Rotation): { x: number; y: number } {
+/** A point of the unrotated cell box mirrored in that box (mirroring is its own inverse). */
+function mirrorPoint(x: number, y: number, type: PartType, o: Orientation): { x: number; y: number } {
+  return { x: o.mirrorX ? type.cols - x : x, y: o.mirrorY ? type.rows - y : y };
+}
+
+function turnPoint(x: number, y: number, type: PartType, rotation: Rotation): { x: number; y: number } {
   if (rotation === 90) return { x: type.rows - y, y: x };
   if (rotation === 180) return { x: type.cols - x, y: type.rows - y };
   if (rotation === 270) return { x: y, y: type.cols - x };
   return { x, y };
 }
 
-/** Inverse of rotatePoint. */
-export function unrotatePoint(x: number, y: number, type: PartType, rotation: Rotation): { x: number; y: number } {
-  if (rotation === 90) return { x: y, y: type.rows - x };
-  if (rotation === 180) return { x: type.cols - x, y: type.rows - y };
-  if (rotation === 270) return { x: type.cols - y, y: x };
-  return { x, y };
+/**
+ * A point of the part's own (unrotated, unmirrored) cell box, moved to
+ * where it is in the placed box: mirrored first, then rotated. The one
+ * place where a part's orientation is applied to its geometry (pins, knob,
+ * reset button; the drawing in grid.ts does the same with a transform).
+ */
+export function rotatePoint(x: number, y: number, type: PartType, o: Orientation): { x: number; y: number } {
+  const m = mirrorPoint(x, y, type, o);
+  return turnPoint(m.x, m.y, type, o.rotation);
 }
 
-function pinDirection(type: PartType, def: PinDef, rotation: Rotation): GridPoint {
+/** Inverse of rotatePoint: un-rotate, then un-mirror. */
+export function unrotatePoint(x: number, y: number, type: PartType, o: Orientation): { x: number; y: number } {
+  let p = { x, y };
+  if (o.rotation === 90) p = { x: y, y: type.rows - x };
+  else if (o.rotation === 180) p = { x: type.cols - x, y: type.rows - y };
+  else if (o.rotation === 270) p = { x: type.cols - y, y: x };
+  return mirrorPoint(p.x, p.y, type, o);
+}
+
+function pinDirection(type: PartType, def: PinDef, o: Orientation): GridPoint {
   let dc = def.x === 0 ? -1 : def.x === type.cols ? 1 : 0;
   let dr = dc !== 0 ? 0 : def.y === 0 ? -1 : def.y === type.rows ? 1 : 0;
-  for (let r = 0; r < rotation; r += 90) [dc, dr] = [-dr, dc]; // quarter turn clockwise
-  return { col: dc, row: dr };
+  if (o.mirrorX) dc = -dc;
+  if (o.mirrorY) dr = -dr;
+  for (let r = 0; r < o.rotation; r += 90) [dc, dr] = [-dr, dc]; // quarter turn clockwise
+  return { col: dc + 0, row: dr + 0 }; // + 0 turns -0 into 0
 }
 
 export function pinsOf(part: PlacedPart): Pin[] {
   const type = getPart(part.typeId);
   if (!type) return [];
   return type.pins.map((def) => {
-    const p = rotatePoint(def.x, def.y, type, part.rotation);
+    const p = rotatePoint(def.x, def.y, type, part);
     return {
       ref: { partId: part.id, pinId: def.id }, def, part,
       col: part.col + p.x, row: part.row + p.y,
-      dir: pinDirection(type, def, part.rotation),
+      dir: pinDirection(type, def, part),
     };
   });
 }
