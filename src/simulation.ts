@@ -16,7 +16,8 @@ import { endTerminal, findContacts } from './contacts';
 import type { Scene, WireEnd } from './model';
 import { MixedSignal } from './mcu/mixedsignal';
 import { BoardRuntimes, type BoardPartInfo } from './mcu/runtime';
-import { getPart } from './parts';
+import { burnReason, getPart } from './parts';
+import { AnalogRecorder } from './scope/analog';
 import { SignalRecorder } from './scope/recorder';
 import { linkCurrents, terminalKey, type PartResult, type SimInput, type SimResult } from './sim';
 import { transportState, type TransportState } from './transportmodel';
@@ -86,8 +87,10 @@ export function buildInput(scene: Scene, partId: number): BuildInput | null {
 export class Simulation implements SimView {
   readonly boards = new BoardRuntimes((partId) => buildInput(this.scene, partId));
   readonly bridge = new MixedSignal();
-  /** Pin edges of the channels the Scope window armed (fed by the bridge, read-only towards it). */
+  /** Pin edges of the channels the Logic analyzer window armed (fed by the bridge, read-only towards it). */
   readonly recorder = new SignalRecorder();
+  /** Values of the part the Scope window follows (fed by the bridge per solved instant, read-only towards it; cleared by reset()). */
+  readonly analog = new AnalogRecorder();
   /** How long the last solve took, for the status line only. */
   solveMs = 0;
   maxVoltage = 0;
@@ -105,6 +108,7 @@ export class Simulation implements SimView {
     private readonly netlist: NetlistBuilder = buildNetlist,
   ) {
     this.bridge.observer = this.recorder;
+    this.bridge.stepObserver = this.analog;
   }
 
   get result(): SimResult | null {
@@ -156,14 +160,22 @@ export class Simulation implements SimView {
     return this.burnParts(result);
   }
 
-  /** Destroy parts carrying far too much current. True when the circuit changed. */
+  /**
+   * Destroy parts beyond their limits: too much current (PartType.burnAbove)
+   * or a rating rule (PartType.burnWhen, e.g. a reversed electrolytic). The
+   * reason is kept in state.burnedBy. Only a converged result counts (a
+   * failed solve reports zeros). True when the circuit changed.
+   */
   private burnParts(result: SimResult): boolean {
+    if (!result.converged) return false;
     let burned = false;
     for (const part of this.scene.parts) {
-      const limit = getPart(part.typeId)?.burnAbove;
-      const amps = Math.abs(result.parts[part.id]?.current ?? 0);
-      if (limit === undefined || amps <= limit || part.state?.burned) continue;
-      part.state = { ...part.state, burned: true };
+      const type = getPart(part.typeId);
+      const r = result.parts[part.id];
+      if (!type || !r) continue;
+      const reason = burnReason(type, r, part.state ?? {});
+      if (reason === null) continue;
+      part.state = { ...part.state, burned: true, burnedBy: reason };
       burned = true;
     }
     return burned;
@@ -237,6 +249,7 @@ export class Simulation implements SimView {
     for (const { id } of boardParts(this.scene)) void this.boards.resetBoard(id);
     this.update();
     this.bridge.reset();
+    this.analog.clear();
     this.afterSolve();
   }
 

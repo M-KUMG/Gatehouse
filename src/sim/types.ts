@@ -33,11 +33,31 @@ export type ComponentModel =
    */
   | { kind: 'mosfet'; polarity: 1 | -1; vth: number; kp: number; lambda: number }
   /**
+   * Insulated-gate bipolar transistor, expanded by the solver into the usual
+   * equivalent circuit (no device physics of its own; see solve.ts): a
+   * Level-1 MOSFET (polarity, vth, kp, lambda as in `mosfet`) whose drain
+   * drives the base of a bipolar transistor of the opposite type (is, bf, br
+   * as in `npn` / `pnp`) at an internal node. N-channel (polarity 1): the
+   * PNP's emitter is the IGBT collector, its collector the IGBT emitter, the
+   * MOSFET's source the IGBT emitter. P-channel (polarity -1, vth negative):
+   * the complement (P-MOSFET + NPN). Optional `rc`: series resistance of the
+   * collector (drift region, ohms); optional `rleak`: resistance from the
+   * internal base node to the emitter (off-state leakage, keeps the node
+   * from floating). Pins: g, c, e.
+   */
+  | {
+    kind: 'igbt'; polarity: 1 | -1; vth: number; kp: number; lambda: number;
+    is: number; bf: number; br: number; rc?: number; rleak?: number;
+  }
+  /**
    * Capacitor of `farads` with an optional equivalent series resistance
    * (ohms, default 0). The DC solve sees it as open; the transient solver
-   * (transient.ts) integrates it. Pins: a, b.
+   * (transient.ts) integrates it. Pins: a, b; a `polarized` one (an
+   * electrolytic) has pos and neg instead (pos in the place of a), otherwise
+   * it is the same element. `ratedVolts` is rating data only: the part
+   * inspector and the burn rules read it (see ratings.ts).
    */
-  | { kind: 'capacitor'; farads: number; esr?: number }
+  | { kind: 'capacitor'; farads: number; esr?: number; polarized?: boolean; ratedVolts?: number }
   /**
    * Inductor of `henries` with an optional winding resistance (ohms,
    * default 0). The DC solve sees it as a near short (1 mOhm); the

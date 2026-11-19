@@ -74,6 +74,41 @@ export const EXAMPLES: readonly Example[] = [
     },
   },
   {
+    // The switch puts the battery's 9 V on the gate (10 k pulls it down when open);
+    // the LED and 220 ohm hang from battery + to the collector, the emitter is grounded.
+    name: 'IGBT low-side switch',
+    hint: 'A toggle switch drives an IGBT that switches the LED. Click the switch. The gate needs about 9 V or more '
+      + '(Vge(th) is about 4.5 V): 5 V from a board barely passes the threshold and gives at most about 0.5 A, '
+      + 'too weak for a real load.',
+    state: {
+      version: 4,
+      parts: [
+        part(1, 'battery9v', 0, 0),
+        part(2, 'ground', 5, 3),
+        part(3, 'switch', 7, 0),
+        part(4, 'resistor', 12, 3, 90, { value: 10_000 }),
+        part(5, 'ground', 12, 9),
+        part(6, 'igbt', 16, 2),
+        part(7, 'ground', 20, 12),
+        part(8, 'resistor', 22, -1, 90, { value: 220 }),
+        part(9, 'led', 22, 4, 180),
+      ],
+      wires: [
+        wire(11, '1.neg', '2.gnd'),
+        wire(12, '1.pos', '3.a'),
+        { id: 13, from: { partId: 3, pinId: 'b' }, to: { junctionId: 30 }, waypoints: [] },
+        { id: 14, from: { junctionId: 30 }, to: { partId: 6, pinId: 'g' }, waypoints: [{ col: 15, row: 1 }, { col: 15, row: 12 }, { col: 17, row: 12 }] },
+        { id: 15, from: { junctionId: 30 }, to: { partId: 4, pinId: 'a' }, waypoints: [] },
+        wire(16, '4.b', '5.gnd'),
+        wire(17, '6.e', '7.gnd', [[19, 11], [21, 11]]),
+        wire(18, '1.pos', '8.a', [[5, -2], [23, -2]]),
+        wire(19, '8.b', '9.anode'),
+        wire(20, '9.cathode', '6.c', [[24, 2], [26, 2], [26, 14], [18, 14]]),
+      ],
+      junctions: [{ id: 30, col: 13, row: 1 }],
+    },
+  },
+  {
     name: 'Uno blink',
     hint: 'Arduino Uno with the Blink program: pin 13 → 220 Ω → LED → GND. Select the board and press Run.',
     state: {

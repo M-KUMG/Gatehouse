@@ -1,6 +1,8 @@
-// The Scope window (logic analyzer for now): digital traces of board pins over
-// simulated time, with UART decoding. Analog traces and probing by clicking a
-// part come later (docs/PLAN.md step 7b).
+// The Logic analyzer window (panel id 'logic-analyzer'; it was the first
+// "Scope" window, id 'scope', and saved layouts are migrated, see persist.ts):
+// digital traces of board pins over simulated time, with UART decoding. The
+// analog part inspector is now the Scope window (inspector.ts). Probing by
+// clicking a part comes later (docs/PLAN.md step 7b).
 //
 // - Channels: "Add channel" with a Board and a Pin dropdown (the board's io
 //   pins, named like on the part). Adding arms the pin in the recorder
@@ -36,7 +38,7 @@ import {
 } from '../scope/uart';
 import type { Simulation } from '../simulation';
 
-export const SCOPE_ID = 'scope';
+export const LOGIC_ANALYZER_ID = 'logic-analyzer';
 
 /** Heights in CSS pixels: the time axis, one channel row, the decoded-byte band at a row's top. */
 const AXIS_H = 22;
@@ -97,7 +99,7 @@ interface Channel {
 
 const LEVEL_NAMES: Record<Level, string> = { [LOW]: 'low', [HIGH]: 'high', [HI_Z]: 'hi-Z', [PULL_UP]: 'pull-up' };
 
-export class ScopeWindow {
+export class LogicAnalyzerWindow {
   /** The window's content; DockLayout adopts it whenever the window opens. */
   readonly element = document.createElement('div');
   private readonly boardSelect = document.createElement('select');

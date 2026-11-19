@@ -13,7 +13,7 @@ import {
 } from './devices';
 import { solveLinear } from './linear';
 import { makeMosfet, mosfetResult, stampMosfet, updateMosfet, type Mosfet } from './mosfet';
-import { buildNets } from './nets';
+import { buildNets, modelPins } from './nets';
 import { companionOf, stampReactive, type Companion, type Reactive, type ReactiveState } from './reactive';
 import { stampInto, type Stamp } from './stamp';
 import type { PartResult, SimInput, SimResult } from './types';
@@ -76,13 +76,26 @@ interface Diode {
   is: number; nvt: number; vCrit: number;
   v: number; // junction voltage the model is linearized at
 }
+/**
+ * An IGBT expanded into its equivalent circuit: `mos` and `bjt` are ordinary
+ * elements (in `mosfets` / `bjts`, with part -1 so they report nothing of
+ * their own) joined at the internal node `base`; the IGBT's result is made
+ * from theirs (igbtResult).
+ */
+interface Igbt {
+  part: number; g: number; c: number; e: number; base: number;
+  polarity: 1 | -1;
+  mos: Mosfet; bjt: Bjt;
+}
 interface Elements {
   resistors: Resistor[];
   sources: Source[];
   diodes: Diode[];
   bjts: Bjt[];
   mosfets: Mosfet[];
-  reactives: (Reactive & { kind: 'capacitor' | 'inductor' })[];
+  igbts: Igbt[];
+  /** `pins`: the model's two pin names (a, b; pos, neg for a polarized capacitor). */
+  reactives: (Reactive & { kind: 'capacitor' | 'inductor'; pins: readonly string[] })[];
   drives: Drive[];
   nodes: number; // including the reference and internal nodes
 }
@@ -91,7 +104,7 @@ function buildElements(
   input: SimInput, netOf: (part: number, pin: string) => number, netCount: number, step: Companion | undefined,
 ): Elements {
   const el: Elements = {
-    resistors: [], sources: [], diodes: [], bjts: [], mosfets: [], reactives: [], drives: [], nodes: netCount,
+    resistors: [], sources: [], diodes: [], bjts: [], mosfets: [], igbts: [], reactives: [], drives: [], nodes: netCount,
   };
   const resistor = (part: number, pinA: string, pinB: string, ohms: number): void => {
     el.resistors.push({ part, a: netOf(part, pinA), b: netOf(part, pinB), g: 1 / ohms, pinA, pinB });
@@ -135,14 +148,35 @@ function buildElements(
         el.mosfets.push(makeMosfet(id, nodes, m.polarity, m.vth, m.kp, m.lambda));
         break;
       }
+      case 'igbt': {
+        // N: MOSFET d = base, s = e; PNP e = c (behind rc), b = base, c = e.
+        // P: the complement (P-MOSFET, NPN), same wiring.
+        const g = netOf(id, 'g');
+        const c = netOf(id, 'c');
+        const e = netOf(id, 'e');
+        const base = el.nodes++;
+        const rc = m.rc ?? 0;
+        const cInner = rc > 0 ? el.nodes++ : c;
+        if (rc > 0) el.resistors.push({ part: -1, a: c, b: cInner, g: 1 / rc, pinA: '', pinB: '' });
+        if (m.rleak !== undefined && m.rleak > 0) {
+          el.resistors.push({ part: -1, a: base, b: e, g: 1 / m.rleak, pinA: '', pinB: '' });
+        }
+        const mos = makeMosfet(-1, { d: base, g, s: e }, m.polarity, m.vth, m.kp, m.lambda);
+        const bjt = makeBjt(-1, { c: e, b: base, e: cInner }, m.polarity === 1 ? -1 : 1, m.is, m.bf, m.br);
+        el.mosfets.push(mos);
+        el.bjts.push(bjt);
+        el.igbts.push({ part: id, g, c, e, base, polarity: m.polarity, mos, bjt });
+        break;
+      }
       case 'capacitor':
       case 'inductor': {
-        const a = netOf(id, 'a');
+        const pins = modelPins(m);
+        const a = netOf(id, pins[0]);
         const series = (m.kind === 'capacitor' ? m.esr : m.dcr) ?? 0;
         const inner = series > 0 ? el.nodes++ : a;
         if (series > 0) el.resistors.push({ part: -1, a, b: inner, g: 1 / series, pinA: '', pinB: '' });
         el.reactives.push({
-          kind: m.kind, part: id, a, b: netOf(id, 'b'), inner, ...companionOf(m, step, step?.stored[id]),
+          kind: m.kind, part: id, pins, a, b: netOf(id, pins[1]), inner, ...companionOf(m, step, step?.stored[id]),
         });
         break;
       }
@@ -630,13 +664,37 @@ function collectResults(
     const v = volt(d.anode) - volt(d.cathode);
     parts[d.part] = { voltage: v, current: i, power: v * i, pins: { anode: i, cathode: -i } };
   }
-  for (const q of el.bjts) parts[q.part] = bjtResult(q, volt);
-  for (const q of el.mosfets) parts[q.part] = mosfetResult(q, volt);
+  for (const q of el.bjts) if (q.part >= 0) parts[q.part] = bjtResult(q, volt);
+  for (const q of el.mosfets) if (q.part >= 0) parts[q.part] = mosfetResult(q, volt);
+  for (const q of el.igbts) parts[q.part] = igbtResult(q, volt);
   for (const r of el.reactives) {
     const i = r.g * (volt(r.inner) - volt(r.b)) + r.ieq;
     const v = volt(r.a) - volt(r.b);
-    parts[r.part] = { voltage: v, current: i, power: v * i, pins: { a: i, b: -i } };
+    parts[r.part] = { voltage: v, current: i, power: v * i, pins: { [r.pins[0]]: i, [r.pins[1]]: -i } };
   }
+}
+
+/**
+ * An IGBT's result from its MOSFET and bipolar halves: voltage Vce, current
+ * the collector current into the part (negative for a conducting P-IGBT),
+ * pins g, c, e; volts holds every pin against the emitter plus `base`, the
+ * internal node (the MOSFET's drain), for the part inspector.
+ */
+function igbtResult(q: Igbt, volt: (n: number) => number): PartResult {
+  const m = mosfetResult(q.mos, volt);
+  const b = bjtResult(q.bjt, volt);
+  const ig = m.pins.g;
+  const ic = b.pins.e; // into the bipolar emitter = into the IGBT collector (rc is in series)
+  const ve = volt(q.e);
+  const vce = volt(q.c) - ve;
+  const vge = volt(q.g) - ve;
+  return {
+    voltage: vce,
+    current: ic,
+    power: vce * ic + vge * ig,
+    pins: { g: ig, c: ic, e: -(ic + ig) },
+    volts: { g: vge, c: vce, e: 0, base: volt(q.base) - ve },
+  };
 }
 
 /** Per board: volts and current at every pin, and what it delivers to the circuit. */

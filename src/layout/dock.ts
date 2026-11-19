@@ -166,10 +166,13 @@ export class DockLayout {
           ? { position: { referencePanel: 'serial-console', direction: 'within' } }
           : { ...beside('below'), initialHeight: 180 };
       case 'scope':
-        // Like the Build output: a tab beside the console when it is docked, else under the grid.
-        return docked('serial-console')
-          ? { position: { referencePanel: 'serial-console', direction: 'within' } }
-          : { ...beside('below'), initialHeight: 220 };
+      case 'logic-analyzer': {
+        // Like the Build output: a tab beside the console (or the other of these two) when it is docked, else under the grid.
+        const neighbour = ['serial-console', id === 'scope' ? 'logic-analyzer' : 'scope', 'build-output'].find(docked);
+        return neighbour
+          ? { position: { referencePanel: neighbour, direction: 'within' } }
+          : { ...beside('below'), initialHeight: 240 };
+      }
       case 'code-editor':
         return docked('file-explorer')
           ? { position: { referencePanel: 'file-explorer', direction: 'below' } }

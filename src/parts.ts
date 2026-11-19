@@ -4,6 +4,7 @@
 // To add a part: draw its art in src/art and add one entry below.
 
 import { CAPACITOR_ART } from './art/capacitor';
+import { ECAP_ART, ECAP_BURNED_SVG } from './art/ecap';
 import { INDUCTOR_ART } from './art/inductor';
 import { BATTERY_ART } from './art/battery';
 import { BATTERY_9V_ART } from './art/battery9v';
@@ -15,16 +16,19 @@ import { PUSH_BUTTON_ART, PUSH_BUTTON_PRESSED_SVG } from './art/pushbutton';
 import { RESISTOR_ART, resistorArt } from './art/resistor';
 import { TOGGLE_ART, TOGGLE_ON_SVG } from './art/toggle';
 import { NMOS_ART, PMOS_ART } from './art/to220';
+import { IGBT_ART, IGBT_BURNED_SVG, PIGBT_ART, PIGBT_BURNED_SVG } from './art/to247';
 import { PNP_ART, TRANSISTOR_ART } from './art/transistor';
 import { NANO_ART, NANO_LEFT, NANO_RESET, NANO_RIGHT, drawNanoLeds } from './art/nano';
 import { UNO_ART, UNO_BOTTOM, UNO_RESET, UNO_TOP, drawUnoLeds, type HeaderPin } from './art/uno';
 import { ART_CELL } from './art/common';
-import { diodeReadout, mosfetReadout, pnpReadout, reactiveReadout } from './devicereadouts';
+import { diodeReadout, ecapReadout, igbtReadout, mosfetReadout, pnpReadout, reactiveReadout } from './devicereadouts';
 import type { BoardSpec } from './mcu/board';
 import { NANO_SPEC, UNO_SPEC } from './mcu/avr/uno';
 import { parseBoardId } from './project/boardidparse';
+import { ledBrightness } from './sim/inspect';
+import { dielectricVolts, igbtStress, polarizedCapStress, type Stress } from './sim/ratings';
 import {
-  BC547, BC557, D1N4148, LOGIC_NMOS, POWER_PMOS, RED_LED, type ComponentModel, type PartResult,
+  BC547, BC557, D1N4148, GENERIC_IGBT, GENERIC_PIGBT, LOGIC_NMOS, POWER_PMOS, RED_LED, type ComponentModel, type PartResult,
 } from './sim';
 
 /** What a placed part remembers besides its position. Plain serializable data. */
@@ -35,8 +39,10 @@ export interface PartState {
   position?: number;
   /** Editable main value (ohms for resistors and potentiometers, farads for capacitors, henries for inductors). */
   value?: number;
-  /** Destroyed by too much current. */
+  /** Destroyed (too much current, or a rating rule: see PartType.burnWhen). */
   burned?: boolean;
+  /** Why it burned ("too much current", "reverse voltage ..."), set together with `burned`. */
+  burnedBy?: string;
   /** Boards only: the user's display name (see project/boardname.ts); without it the board shows its default label. */
   name?: string;
 }
@@ -70,6 +76,18 @@ export interface PartType {
   /** Amps above which the part is warned about / destroyed. */
   warnAbove?: number;
   burnAbove?: number;
+  /**
+   * Rating rules beyond the current limits above (voltage, polarity, ...):
+   * the warning text while the part is overstressed, or null. Shown in the
+   * hover readout and as the red "!" (see partWarning).
+   */
+  warnWhen?(result: PartResult, state: PartState): string | null;
+  /**
+   * The reason the part is destroyed by this result, or null. A burned part
+   * stays burned (state.burned, state.burnedBy) until it is clicked; its
+   * `sim` and `variant` show it burned. See burnReason and Simulation.burnParts.
+   */
+  burnWhen?(result: PartResult, state: PartState): string | null;
   /** Different artwork for some states (key identifies the look), or null for `svg`. */
   variant?(state: PartState): { key: string; svg: string } | null;
   /** Live drawing on top of the artwork; the canvas is in art units, unrotated. */
@@ -108,12 +126,52 @@ const DEFAULT_HENRIES = 10e-3;
 /** Series resistance that keeps an ideal reactive part from making a singular matrix. */
 const REACTIVE_SERIES_OHMS = 0.01;
 export const LED_WARN_AMPS = 0.03;
+const DEFAULT_ECAP_FARADS = 100e-6;
+/**
+ * Rated voltage of the electrolytic capacitor. A constant of the part type
+ * for now; it becomes data (and editable) in the component library (PLAN step 10).
+ */
+export const ECAP_RATED_VOLTS = 16;
 
-/** 0..1 for an LED current: just visible near 0.3 mA, dim at 1 mA, full at 15 mA. */
-export function ledBrightness(amps: number): number {
-  if (!(amps > 0.0003)) return 0;
-  return Math.min(1, Math.log(amps / 0.0003) / Math.log(0.015 / 0.0003));
+/**
+ * Typical ESR of a general-purpose aluminium electrolytic: 5 ohm / sqrt(C in
+ * uF), i.e. 0.5 ohm at 100 uF, 5 ohm at 1 uF, 0.16 ohm at 1000 uF, kept
+ * within 0.01..20 ohm at the ends of the value range.
+ */
+export function ecapEsr(farads: number): number {
+  return Math.min(20, Math.max(0.01, 5 / Math.sqrt(farads / 1e-6)));
 }
+
+/** The electrolytic capacitor against its ratings (polarity and rated voltage, see sim/ratings.ts). */
+function ecapStress(r: PartResult, s: PartState): Stress {
+  const esr = ecapEsr(s.value ?? DEFAULT_ECAP_FARADS);
+  return polarizedCapStress(dielectricVolts(r.voltage, r.current, esr), ECAP_RATED_VOLTS);
+}
+
+/** An IGBT against its ratings, in its own frame (a P-IGBT's values with the signs turned round). */
+function igbtPartStress(r: PartResult, polarity: 1 | -1): Stress {
+  return igbtStress(polarity * (r.volts?.c ?? r.voltage), polarity * r.current, polarity * (r.volts?.g ?? 0));
+}
+
+const warnText = (st: Stress): string | null => (st.level === 'ok' ? null : st.reason);
+const burnText = (st: Stress): string | null => (st.level === 'burn' ? st.reason : null);
+
+/** Why a part is overstressed now (the readout's warning and the red "!"), or null; never for a burned part. */
+export function partWarning(type: PartType, r: PartResult, state: PartState): string | null {
+  if (state.burned) return null;
+  if (type.warnAbove !== undefined && Math.abs(r.current) > type.warnAbove) return 'Too much current: add a series resistor.';
+  return type.warnWhen?.(r, state) ?? null;
+}
+
+/** Why a part is destroyed by this result (burnAbove first, then burnWhen), or null; never for a part already burned. */
+export function burnReason(type: PartType, r: PartResult, state: PartState): string | null {
+  if (state.burned) return null;
+  if (type.burnAbove !== undefined && Math.abs(r.current) > type.burnAbove) return 'too much current';
+  return type.burnWhen?.(r, state) ?? null;
+}
+
+/** 0..1 for an LED current (defined with the part inspector's values, src/sim/inspect.ts). */
+export { ledBrightness };
 
 /** Readout name of an Uno header pin, e.g. "D13 (LED L)", "D9 (PWM)". */
 function unoPinName(p: HeaderPin): string {
@@ -144,6 +202,20 @@ const TO92_PINS: readonly PinDef[] = [
   { id: 'e', name: 'Emitter', x: 3, y: 4 },
 ];
 
+/** TO-247 N-IGBT: G C E, left to right seen from the front. */
+const TO247_N_PINS: readonly PinDef[] = [
+  { id: 'g', name: 'Gate', x: 1, y: 8 }, { id: 'c', name: 'Collector', x: 2, y: 8 }, { id: 'e', name: 'Emitter', x: 3, y: 8 },
+];
+
+/**
+ * TO-247 P-IGBT: G E C. The P part is the N part's complement, so its
+ * positive side (the emitter) takes the middle lead where the N part has
+ * its collector.
+ */
+const TO247_P_PINS: readonly PinDef[] = [
+  { id: 'g', name: 'Gate', x: 1, y: 8 }, { id: 'e', name: 'Emitter', x: 2, y: 8 }, { id: 'c', name: 'Collector', x: 3, y: 8 },
+];
+
 /** TO-220 MOSFETs: G D S, left to right seen from the front (the tab is the drain too). */
 const TO220_PINS: readonly PinDef[] = [
   { id: 'g', name: 'Gate', x: 1, y: 7 }, { id: 'd', name: 'Drain', x: 2, y: 7 }, { id: 's', name: 'Source', x: 3, y: 7 },
@@ -151,12 +223,12 @@ const TO220_PINS: readonly PinDef[] = [
 
 // Which parts can be mirrored (`mirrorable: true`): only those whose mirror
 // image cannot be had by rotating, judged by where the pins are:
-//   led, bjt, pnp, nmos, pmos, pot  - pins in a row along one edge; a mirror
-//                                     swaps the outer legs (anode/cathode, C/E,
-//                                     G/S, the pot's ends).
+//   led, bjt, pnp, nmos, pmos, pot, - pins in a row along one edge; a mirror
+//   igbt, pigbt                       swaps the outer legs (anode/cathode, C/E,
+//                                     G/S, G/E or G/C, the pot's ends).
 //   battery9v                       - both terminals on the right edge; a
 //                                     mirror puts + below -, no turn does that.
-// Not mirrorable: battery, ground, resistor, capacitor, inductor, diode,
+// Not mirrorable: battery, ground, resistor, capacitor, ecap, inductor, diode,
 // switch, button (pins on the box's centre line, or the button's linked
 // pairs, so a mirror equals a 180-degree turn or nothing) and the boards (a
 // mirrored board does not exist). A new polarized part with an asymmetric pin
@@ -193,6 +265,23 @@ export const PARTS: readonly PartType[] = [
     value: { label: 'Capacitance', unit: 'F', min: 1e-12, max: 1 },
     readout: reactiveReadout,
     sim: (s) => ({ kind: 'capacitor', farads: s.value ?? DEFAULT_FARADS, esr: REACTIVE_SERIES_OHMS }),
+  },
+  {
+    // Polarized: pos (+) and neg (\u2212) on the centre line, so a 180-degree turn swaps them (not mirrorable).
+    id: 'ecap', name: 'Electrolytic capacitor', ...ECAP_ART,
+    pins: [{ id: 'pos', name: 'Positive (+)', x: 0, y: 1 }, { id: 'neg', name: 'Negative (\u2212, stripe)', x: 4, y: 1 }],
+    defaults: { value: DEFAULT_ECAP_FARADS },
+    value: { label: 'Capacitance', unit: 'F', min: 1e-12, max: 1 },
+    readout: ecapReadout,
+    warnWhen: (r, s) => warnText(ecapStress(r, s)),
+    burnWhen: (r, s) => burnText(ecapStress(r, s)),
+    // Burned: open (a vented can holds no charge and conducts nothing), like the LED.
+    variant: (s) => (s.burned ? { key: 'burned', svg: ECAP_BURNED_SVG } : null),
+    sim: (s) => {
+      if (s.burned) return { kind: 'open' };
+      const farads = s.value ?? DEFAULT_ECAP_FARADS;
+      return { kind: 'capacitor', farads, esr: ecapEsr(farads), polarized: true, ratedVolts: ECAP_RATED_VOLTS };
+    },
   },
   {
     id: 'inductor', name: 'Inductor', ...INDUCTOR_ART,
@@ -273,6 +362,25 @@ export const PARTS: readonly PartType[] = [
     pins: TO220_PINS,
     readout: (r) => mosfetReadout(r, -1),
     sim: () => POWER_PMOS,
+  },
+  {
+    // One part with its own model (MOSFET + PNP inside), so the legs cannot be swapped.
+    id: 'igbt', name: 'IGBT (N-channel)', ...IGBT_ART, mirrorable: true,
+    pins: TO247_N_PINS,
+    readout: (r) => igbtReadout(r, 1),
+    warnWhen: (r) => warnText(igbtPartStress(r, 1)),
+    burnWhen: (r) => burnText(igbtPartStress(r, 1)),
+    variant: (s) => (s.burned ? { key: 'burned', svg: IGBT_BURNED_SVG } : null),
+    sim: (s) => (s.burned ? { kind: 'open' } : GENERIC_IGBT),
+  },
+  {
+    id: 'pigbt', name: 'IGBT (P-channel)', ...PIGBT_ART, mirrorable: true,
+    pins: TO247_P_PINS,
+    readout: (r) => igbtReadout(r, -1),
+    warnWhen: (r) => warnText(igbtPartStress(r, -1)),
+    burnWhen: (r) => burnText(igbtPartStress(r, -1)),
+    variant: (s) => (s.burned ? { key: 'burned', svg: PIGBT_BURNED_SVG } : null),
+    sim: (s) => (s.burned ? { kind: 'open' } : GENERIC_PIGBT),
   },
   {
     id: 'uno', name: 'Arduino Uno', ...UNO_ART,

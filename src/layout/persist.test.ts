@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SerializedDockview } from 'dockview';
-import { LAYOUT_KEY, LAYOUT_VERSION, clearLayout, loadLayout, saveLayout, type LayoutStorage } from './persist';
+import { LAYOUT_KEY, LAYOUT_VERSION, clearLayout, loadLayout, migrateLayout, saveLayout, type LayoutStorage } from './persist';
 
 class MemoryStorage implements LayoutStorage {
   readonly items = new Map<string, string>();
@@ -75,5 +75,45 @@ describe('layout persistence', () => {
     saveLayout(storage, LAYOUT);
     clearLayout(storage);
     expect(loadLayout(storage, 'editor')).toBeNull();
+  });
+
+  it('migrates a version 2 layout: the old Scope window becomes the Logic analyzer', () => {
+    const v2 = {
+      grid: {
+        root: {
+          type: 'branch',
+          data: [
+            { type: 'leaf', data: { id: '1', views: ['editor'], activeView: 'editor' }, size: 400 },
+            { type: 'leaf', data: { id: '2', views: ['serial-console', 'scope'], activeView: 'scope' }, size: 200 },
+          ],
+        },
+        width: 800, height: 600, orientation: 'VERTICAL',
+      },
+      panels: {
+        editor: { id: 'editor', contentComponent: 'editor', title: 'Circuit' },
+        'serial-console': { id: 'serial-console', contentComponent: 'serial-console', title: 'Serial console' },
+        scope: { id: 'scope', contentComponent: 'scope', tabComponent: 'gh-tab', title: 'Scope' },
+      },
+      floatingGroups: [{ data: { id: '3', views: ['scope'], activeView: 'scope' }, position: { left: 0, top: 0, width: 10, height: 10 } }],
+      activeGroup: '2',
+    };
+    const storage = new MemoryStorage();
+    storage.setItem(LAYOUT_KEY, JSON.stringify({ version: 2, dock: v2 }));
+    const loaded = loadLayout(storage, 'editor') as unknown as typeof v2 & { panels: Record<string, unknown> };
+    expect(loaded).not.toBeNull();
+    expect(Object.keys(loaded.panels)).toEqual(['editor', 'serial-console', 'logic-analyzer']);
+    expect(loaded.panels['logic-analyzer']).toEqual({ id: 'logic-analyzer', contentComponent: 'logic-analyzer', tabComponent: 'gh-tab', title: 'Logic analyzer' });
+    const leaf = (loaded.grid.root.data[1] as { data: { views: string[]; activeView: string } }).data;
+    expect(leaf.views).toEqual(['serial-console', 'logic-analyzer']);
+    expect(leaf.activeView).toBe('logic-analyzer');
+    expect(loaded.floatingGroups[0].data.views).toEqual(['logic-analyzer']);
+    expect(loaded.activeGroup).toBe('2');
+    expect(JSON.stringify(loaded)).not.toContain('"scope"');
+    // The stored text is not touched (the next save writes version 3).
+    expect(JSON.parse(storage.getItem(LAYOUT_KEY)!).dock.panels.scope).toBeDefined();
+    // A version 3 layout keeps 'scope' (the part inspector) as it is.
+    expect(migrateLayout({ panels: { scope: { id: 'scope' } } }, LAYOUT_VERSION)).toEqual({ panels: { scope: { id: 'scope' } } });
+    expect(migrateLayout({}, 1)).toBeNull();
+    expect(migrateLayout({}, LAYOUT_VERSION + 1)).toBeNull();
   });
 });

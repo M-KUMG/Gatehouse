@@ -18,7 +18,7 @@ export function createWindowsMenu(layout: DockLayout): HTMLElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'file-button';
-  button.title = 'Windows (circuit, serial console, build output, code editor, file explorer)';
+  button.title = 'Windows (circuit, serial console, build output, code editor, file explorer, scope, logic analyzer)';
   button.setAttribute('aria-label', button.title);
   button.setAttribute('aria-haspopup', 'menu');
   button.innerHTML = ICON;

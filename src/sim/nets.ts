@@ -12,6 +12,7 @@ export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readon
   npn: ['c', 'b', 'e'],
   pnp: ['c', 'b', 'e'],
   mosfet: ['g', 'd', 's'],
+  igbt: ['g', 'c', 'e'],
   capacitor: ['a', 'b'],
   inductor: ['a', 'b'],
   ground: ['gnd'],
@@ -19,12 +20,16 @@ export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readon
   node: ['n'],
 };
 
+/** Pins of a polarized capacitor (an electrolytic), in place of a, b: pos is a, neg is b. */
+export const POLARIZED_PINS: readonly string[] = ['pos', 'neg'];
+
 /** The one pin of a `node` model (a wire junction). */
 export const NODE_PIN = 'n';
 
 /** Pin names of a model, in a fixed order. */
 export function modelPins(model: ComponentModel): readonly string[] {
   if (model.kind === 'board') return ['gnd', ...Object.keys(model.rails), ...Object.keys(model.io)];
+  if (model.kind === 'capacitor' && model.polarized) return POLARIZED_PINS;
   return MODEL_PINS[model.kind];
 }
 

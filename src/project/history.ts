@@ -13,7 +13,7 @@ import type { PartState, PlacedPart } from '../model';
 import type { Circuit } from './format';
 
 /** PartState fields that are simulation interaction, not circuit edits. */
-export const LIVE_STATE_FIELDS = ['closed', 'position', 'burned'] as const satisfies readonly (keyof PartState)[];
+export const LIVE_STATE_FIELDS = ['closed', 'position', 'burned', 'burnedBy'] as const satisfies readonly (keyof PartState)[];
 
 /** Most undo steps kept; the oldest are dropped. */
 export const HISTORY_LIMIT = 100;

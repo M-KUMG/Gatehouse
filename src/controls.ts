@@ -46,7 +46,9 @@ export function setPressed(part: PlacedPart, down: boolean): boolean {
 /** A click without dragging: flips a toggle switch, replaces a burned part. */
 export function clickPart(part: PlacedPart): void {
   if (part.state?.burned) {
-    part.state = { ...part.state, burned: false };
+    const state = { ...part.state, burned: false };
+    delete state.burnedBy;
+    part.state = state;
   } else if (getPart(part.typeId)?.control === 'toggle') {
     part.state = { ...part.state, closed: !part.state?.closed };
   }

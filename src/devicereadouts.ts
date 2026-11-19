@@ -30,3 +30,18 @@ export function mosfetReadout(r: PartResult, polarity: 1 | -1): string[] {
 export function reactiveReadout(r: PartResult): string[] {
   return [`V ${formatSI(r.voltage, 'V')} · I ${formatSI(r.current, 'A')} (a→b)`, formatSI(r.power, 'W')];
 }
+
+/** Electrolytic capacitor: signed voltage + to − and current into +. */
+export function ecapReadout(r: PartResult): string[] {
+  return [`V ${formatSI(r.voltage, 'V')} (+ to −) · I ${formatSI(r.current, 'A')} (into +)`, formatSI(r.power, 'W')];
+}
+
+/** IGBT: collector current, Vge, Vce and dissipation. A P-IGBT conducts from emitter to collector (shown positive). */
+export function igbtReadout(r: PartResult, polarity: 1 | -1): string[] {
+  const vge = r.volts?.g ?? 0;
+  const vce = r.volts?.c ?? r.voltage;
+  if (polarity > 0) {
+    return [`Ic ${formatSI(r.current, 'A')} · Vge ${formatSI(vge, 'V')}`, `Vce ${formatSI(vce, 'V')} · ${formatSI(r.power, 'W')}`];
+  }
+  return [`Ic ${formatSI(-r.current, 'A')} (E→C) · Veg ${formatSI(-vge, 'V')}`, `Vec ${formatSI(-vce, 'V')} · ${formatSI(r.power, 'W')}`];
+}

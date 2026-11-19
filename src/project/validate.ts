@@ -72,14 +72,21 @@ function boardName(text: string, typeId: string, where: string): string {
   return named.name;
 }
 
+const MAX_BURN_REASON = 200;
+
 function partState(v: unknown, typeId: string, where: string): PartState {
   const o = obj(v, where);
   // v4: a board's program is a .hex file in its folder, no longer part state.
-  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'name'], where);
+  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'burnedBy', 'name'], where);
   const state: PartState = {};
   for (const key of Object.keys(o)) {
     if (key === 'closed' || key === 'burned') {
       state[key] = bool(o, key, where);
+    } else if (key === 'burnedBy') {
+      // Why the part burned (readout text only): optional, plain and short.
+      const reason = str(o, key, where);
+      if (reason === '' || reason.length > MAX_BURN_REASON) fail(`${where}.burnedBy must be 1 to ${MAX_BURN_REASON} characters.`);
+      state.burnedBy = reason;
     } else if (key === 'name') {
       state.name = boardName(str(o, key, where), typeId, `${where}.name`);
     } else if (key === 'position') {

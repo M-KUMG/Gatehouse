@@ -1,0 +1,83 @@
+/* Scope window, the part inspector (inspector.ts). Builds on the Logic
+   analyzer's classes (scope.css: .scope-window, .scope-bar, .scope-canvas,
+   .scope-readout, .scope-list-header, .scope-on) and the Serial console's
+   buttons and hint (serialconsole.css); only what is new is here. Canvas
+   colours are in COLORS / TRACE_COLORS in inspector.ts. */
+
+.inspector-title {
+  color: #e8eaed;
+  font-weight: 600;
+}
+
+.inspector-mode {
+  color: #7d828c;
+}
+
+.inspector-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.inspector-table {
+  flex: none;
+  width: 250px;
+  overflow-y: auto;
+  border-right: 1px solid #3a3d44;
+  background: #1e1f22;
+}
+
+.inspector-group {
+  padding: 6px 8px 2px;
+  border-top: 1px solid #2a2c31;
+  color: #7d828c;
+}
+
+.inspector-row {
+  display: grid;
+  grid-template-columns: 16px 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.inspector-row:hover {
+  background: #25272c;
+}
+
+.inspector-row-text {
+  cursor: default;
+}
+
+.inspector-check {
+  margin: 0;
+}
+
+.inspector-swatch {
+  width: 10px;
+  height: 3px;
+  border-radius: 1px;
+}
+
+.inspector-label {
+  overflow: hidden;
+  color: #9aa0aa;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-value {
+  color: #e8eaed;
+  font: 12px ui-monospace, Consolas, monospace;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.inspector-plot {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}

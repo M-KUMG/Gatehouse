@@ -3,7 +3,7 @@
 
 import { formatSI } from './format';
 import type { JunctionRef, PlacedPart, Wire } from './model';
-import { getPart } from './parts';
+import { getPart, partWarning } from './parts';
 import type { Pin } from './pins';
 import type { Simulation } from './simulation';
 
@@ -24,7 +24,7 @@ export function describePart(part: PlacedPart, sim: Simulation): ReadoutText | n
   const text: ReadoutText = { title: [type.name, ...facts].join(' · '), lines: [] };
 
   if (state.burned) {
-    text.warning = 'Burned out by too much current. Click it to replace it.';
+    text.warning = `Burned out by ${state.burnedBy ?? 'too much current'}. Click it to replace it.`;
     return text;
   }
   const r = sim.partResult(part.id);
@@ -42,9 +42,8 @@ export function describePart(part: PlacedPart, sim: Simulation): ReadoutText | n
   } else {
     text.lines.push(`${formatSI(Math.abs(r.voltage), 'V')} · ${formatSI(Math.abs(r.current), 'A')}`, formatSI(r.power, 'W'));
   }
-  if (type.warnAbove !== undefined && Math.abs(r.current) > type.warnAbove) {
-    text.warning = 'Too much current: add a series resistor.';
-  }
+  const warning = partWarning(type, r, state);
+  if (warning !== null) text.warning = warning;
   return text;
 }
 

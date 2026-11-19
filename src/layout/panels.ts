@@ -1,5 +1,5 @@
 // The dockable windows beside the grid. All are real: their long-lived
-// content comes from serialconsole.ts, buildoutput.ts, codeeditor.ts, fileexplorer.ts and scope.ts (the
+// content comes from serialconsole.ts, buildoutput.ts, codeeditor.ts, fileexplorer.ts, logicanalyzer.ts and inspector.ts (the
 // placeholder text is only the fallback for a window the app gives no content).
 
 import type { IContentRenderer, ITabRenderer } from 'dockview';
@@ -23,7 +23,10 @@ export const WINDOWS: readonly WindowSpec[] = [
   { id: 'build-output', title: 'Build output', placeholder: 'Build output' },
   { id: 'code-editor', title: 'Code editor', placeholder: 'Code editor' },
   { id: 'file-explorer', title: 'File explorer', placeholder: 'File explorer' },
+  /** The part inspector (analog values of the selected part over time). */
   { id: 'scope', title: 'Scope', placeholder: 'Scope' },
+  /** Digital pin traces with UART decoding; was the window 'scope' in layouts of version 2 (see persist.ts). */
+  { id: 'logic-analyzer', title: 'Logic analyzer', placeholder: 'Logic analyzer' },
 ];
 
 export function findWindow(id: string): WindowSpec | undefined {

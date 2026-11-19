@@ -7,7 +7,7 @@ import { findContacts } from './contacts';
 import type { GridView } from './grid';
 import { anchorPoint, isTap, type Anchor } from './junctions';
 import { endKey, footprint, isPinEnd, samePin, type GridPoint, type Scene, type WireEnd } from './model';
-import { getPart } from './parts';
+import { getPart, partWarning } from './parts';
 import { endPoint, pinsOf, routeFrom, wireRoute, type Pin } from './pins';
 
 /** A wire being drawn: fixed start, corners so far, the end under the cursor and what it would attach to. */
@@ -223,12 +223,12 @@ export function drawDraft(view: GridView, ctx: CanvasRenderingContext2D, scene: 
   if (to && draft.target && (isTap(draft.target) || !isPinEnd(draft.target))) attachMark(view, ctx, to, true);
 }
 
-/** A red "!" on parts that carry more current than they should. */
+/** A red "!" on parts that are overstressed (too much current, a rating rule: see partWarning). */
 export function drawWarnings(view: GridView, ctx: CanvasRenderingContext2D, scene: Scene): void {
   for (const part of scene.parts) {
-    const limit = getPart(part.typeId)?.warnAbove;
-    const amps = Math.abs(view.sim?.partResult(part.id)?.current ?? 0);
-    if (limit === undefined || amps <= limit || part.state?.burned) continue;
+    const type = getPart(part.typeId);
+    const result = view.sim?.partResult(part.id);
+    if (!type || !result || partWarning(type, result, part.state ?? {}) === null) continue;
     const box = footprint(part);
     const p = view.cellToCanvas(box.col + box.cols, box.row);
     const r = Math.min(11, Math.max(6, 8 * view.camera.zoom));

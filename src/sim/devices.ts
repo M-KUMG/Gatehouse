@@ -49,6 +49,25 @@ export const LOGIC_NMOS: ComponentModel = { kind: 'mosfet', polarity: 1, vth: 2.
  */
 export const POWER_PMOS: ComponentModel = { kind: 'mosfet', polarity: -1, vth: -3.0, kp: 1.2, lambda: 0.02 };
 
+/**
+ * Generic 600 V / 20 A N-channel IGBT in TO-247 (the usual MOSFET + PNP
+ * equivalent, see the `igbt` model). Vge(th) 4.5 V; the PNP has a low gain
+ * (bf 1: half the collector current is the MOSFET's), its Veb is about
+ * 0.74 V at 10 A, and rc (23 mOhm drift region) brings Vce(sat) to about
+ * 1.7 V at 20 A with Vge = 15 V. Measured with this model (Ic at Vce = 2 V /
+ * Vce at Ic = 20 A, see semiconductors.test.ts):
+ *   Vge  5 V: 0.51 A (saturates at about 0.5 A: too weak to switch a load)
+ *   Vge 10 V: 17 A   / 2.2 V
+ *   Vge 15 V: 26 A   / 1.7 V
+ * Off-state leakage through rleak (10 MOhm, times 1 + bf): 0.12 mA at 600 V.
+ */
+export const GENERIC_IGBT: ComponentModel = {
+  kind: 'igbt', polarity: 1, vth: 4.5, kp: 2, lambda: 0.01, is: 2.5e-12, bf: 1, br: 0.1, rc: 0.023, rleak: 1e7,
+};
+
+/** The P-channel complement of GENERIC_IGBT (P-MOSFET + NPN): the same curves with every sign reversed. */
+export const GENERIC_PIGBT: ComponentModel = { ...GENERIC_IGBT, polarity: -1, vth: -4.5 } as ComponentModel;
+
 const MAX_EXP_ARG = 80;
 
 /** Shockley current and conductance of a junction at `v` (nvt = n * VT). */

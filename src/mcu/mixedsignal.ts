@@ -55,6 +55,7 @@
 
 import { solveCircuit, solveStep, type PartResult, type PinDrive, type SimInput, type SimResult, type TransientState } from '../sim';
 import { ADAPTIVE_DEFAULTS, AdaptiveStepper } from '../sim/adaptive';
+import type { StepObserver } from '../scope/analog';
 import type { BoardElectrical, BoardEmulator, DriveCode, IoPinDef, SerialBytes, SliceResult } from './board';
 import { AVERAGE_ABOVE, MAX_STEPS_PER_SLICE, isReactive, stepSeconds } from './timestep';
 
@@ -215,8 +216,15 @@ export class MixedSignal {
   private engine: AdaptiveStepper | null = null;
   /** Circuits per pin setup for the time steps. */
   private readonly inputs = new Map<string, SimInput>();
-  /** Told about every slice of every running board (the Scope's recorder); null: nobody watches. */
+  /** Told about every slice of every running board (the Logic analyzer's recorder); null: nobody watches. */
   observer: SliceObserver | null = null;
+  /**
+   * Told about every solved instant kept while time advances (the Scope's
+   * analog recorder, src/scope/analog.ts): each accepted transient step, the
+   * start and end of each pin segment of a DC slice, and the slice end.
+   * Read-only like `observer`; skipped entirely while it is not `active`.
+   */
+  stepObserver: StepObserver | null = null;
 
   constructor(
     private readonly solve: (input: SimInput) => SimResult = solveCircuit,
@@ -337,6 +345,16 @@ export class MixedSignal {
       weights.set(key, w);
     }
     const mean = mixResults([...weights.values()].filter((w) => w.seconds > 0).map((w) => [this.solveFor(w.drives), w.seconds]), this.time);
+    const watcher = this.stepObserver;
+    if (watcher?.active) {
+      // Each pin segment as a flat piece (DC: the circuit follows the pins at once).
+      const start = this.time - dt;
+      for (const seg of segments) {
+        const r = this.solveFor(seg.drives);
+        watcher.sample(start + seg.from, r);
+        watcher.sample(start + seg.to, r);
+      }
+    }
     const alpha = 1 - Math.exp(-dt / AVERAGE_SECONDS);
     const prev = this.result;
     this.result = prev && prev.converged && mean.converged ? mixResults([[prev, 1 - alpha], [mean, alpha]], this.time) : mean;
@@ -378,11 +396,17 @@ export class MixedSignal {
     if (capped) this.capped++;
     this.transient = engine.stateAt(end);
     this.instant = averaged ? this.frozen(current) : this.interpolated(engine, end);
+    const pieces = engine.takePieces();
+    const watcher = this.stepObserver;
+    if (watcher?.active) {
+      for (const p of pieces) watcher.sample(p.to, p.result);
+      watcher.sample(end, this.instant);
+    }
     if (this.slots.some((s) => s.running && s.emulator)) {
       // The slice mean: the accepted steps inside it, then the shown instant for the rest.
       const parts: [SimResult, number][] = [];
       let covered = start;
-      for (const p of engine.takePieces()) {
+      for (const p of pieces) {
         const w = Math.min(p.to, end) - Math.max(p.from, start);
         if (w > 0) parts.push([p.result, w]);
         covered = Math.max(covered, p.to);
@@ -393,7 +417,6 @@ export class MixedSignal {
       const prev = this.result;
       this.result = prev && prev.converged && mean.converged ? mixResults([[prev, 1 - alpha], [mean, alpha]], this.time) : mean;
     } else {
-      engine.takePieces();
       this.result = this.instant;
     }
     this.feedInputs(this.instant);
