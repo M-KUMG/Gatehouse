@@ -160,7 +160,7 @@ ${header(UNO_BOTTOM.slice(5), false)}`;
 
 export const UNO_ART: PartArt = { cols: COLS, rows: ROWS, svg: unoSvg() };
 
-function glow(ctx: CanvasRenderingContext2D, x: number, y: number, rgb: string, b: number): void {
+export function glow(ctx: CanvasRenderingContext2D, x: number, y: number, rgb: string, b: number): void {
   if (b <= 0) return;
   ctx.globalCompositeOperation = 'lighter';
   const g = ctx.createRadialGradient(x, y, 0.5, x, y, 6 + 10 * b);

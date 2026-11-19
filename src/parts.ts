@@ -14,11 +14,12 @@ import { RESISTOR_ART, resistorArt } from './art/resistor';
 import { TOGGLE_ART, TOGGLE_ON_SVG } from './art/toggle';
 import { NMOS_ART, PMOS_ART } from './art/to220';
 import { PNP_ART, TRANSISTOR_ART } from './art/transistor';
+import { NANO_ART, NANO_LEFT, NANO_RESET, NANO_RIGHT, drawNanoLeds } from './art/nano';
 import { UNO_ART, UNO_BOTTOM, UNO_RESET, UNO_TOP, drawUnoLeds, type HeaderPin } from './art/uno';
 import { ART_CELL } from './art/common';
 import { diodeReadout, mosfetReadout, pnpReadout } from './devicereadouts';
 import type { BoardSpec } from './mcu/board';
-import { UNO_SPEC } from './mcu/avr/uno';
+import { NANO_SPEC, UNO_SPEC } from './mcu/avr/uno';
 import { parseBoardId } from './project/boardidparse';
 import {
   BC547, BC557, D1N4148, LOGIC_NMOS, POWER_PMOS, RED_LED, type ComponentModel, type PartResult,
@@ -116,6 +117,14 @@ const UNO_PINS = [
   ...UNO_TOP.map((p) => ({ id: p.id, name: unoPinName(p), x: p.x, y: 0 })),
   ...UNO_BOTTOM.map((p) => ({ id: p.id, name: unoPinName(p), x: p.x, y: UNO_ART.rows })),
 ];
+
+/** Nano header pads that are real pins (A6, A7 and RST are drawn only, see art/nano.ts). */
+const NANO_PINS = [...NANO_LEFT, ...NANO_RIGHT].flatMap((p) => {
+  if (p.id === undefined) return [];
+  const n = /^d\d+$/.test(p.id) ? Number(p.id.slice(1)) : -1;
+  const extra = n === 13 ? ' (LED L)' : n === 0 ? ' (RX)' : n === 1 ? ' (TX)' : [3, 5, 6, 9, 10, 11].includes(n) ? ' (PWM)' : '';
+  return [{ id: p.id, name: n >= 0 ? `D${n}${extra}` : p.label, x: p.x, y: p.y }];
+});
 
 /** TO-92 transistors (BC547, BC557): C B E, left to right, flat face to the front. */
 const TO92_PINS: readonly PinDef[] = [
@@ -235,6 +244,16 @@ export const PARTS: readonly PartType[] = [
     // io pins are filled in by the mixed-signal bridge (src/mcu/mixedsignal.ts).
     sim: () => ({ kind: 'board', rails: { ...UNO_SPEC.electrical.rails }, io: {} }),
     overlay: (ctx, _s, r) => drawUnoLeds(ctx, (r?.volts?.d13 ?? 0) / UNO_SPEC.electrical.vcc, r !== undefined),
+  },
+  {
+    id: 'nano', name: 'Arduino Nano', ...NANO_ART,
+    pins: NANO_PINS,
+    links: [['gnd', 'gnd2']],
+    board: NANO_SPEC,
+    resetButton: { x: NANO_RESET.x / ART_CELL, y: NANO_RESET.y / ART_CELL, w: NANO_RESET.w / ART_CELL, h: NANO_RESET.h / ART_CELL },
+    sourceExtensions: ['ino', 'cpp', 'c', 'h', 'hpp', 'txt', 'md', 'hex'],
+    sim: () => ({ kind: 'board', rails: { ...NANO_SPEC.electrical.rails }, io: {} }),
+    overlay: (ctx, _s, r) => drawNanoLeds(ctx, (r?.volts?.d13 ?? 0) / NANO_SPEC.electrical.vcc, r !== undefined),
   },
 ];
 

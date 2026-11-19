@@ -121,3 +121,12 @@ export const UNO_SPEC: BoardSpec = {
   serialPorts: UNO_SERIAL_PORTS,
   create: (flash) => new UnoEmulator(flash),
 };
+
+/**
+ * Arduino Nano: the same ATmega328P at 16 MHz, same serial port and the same
+ * pin ids as far as they exist (d0..d13, a0..a5), so it reuses the Uno's
+ * emulator, io list and electrical model unchanged. A6/A7 are left out: the
+ * compiler pack has no "eightanaloginputs" variant and the bridge only knows
+ * port pins.
+ */
+export const NANO_SPEC: BoardSpec = { ...UNO_SPEC };
