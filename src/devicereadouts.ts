@@ -25,3 +25,8 @@ export function mosfetReadout(r: PartResult, polarity: 1 | -1): string[] {
   const id = polarity > 0 ? `Id ${formatSI(r.current, 'A')}` : `Id ${formatSI(-r.current, 'A')} (S→D)`;
   return [`${id} · Vgs ${formatSI(vgs, 'V')}`, `Vds ${formatSI(r.voltage, 'V')} · ${formatSI(r.power, 'W')}`];
 }
+
+/** Capacitor / inductor: signed voltage across (a - b) and current a to b. */
+export function reactiveReadout(r: PartResult): string[] {
+  return [`V ${formatSI(r.voltage, 'V')} · I ${formatSI(r.current, 'A')} (a→b)`, formatSI(r.power, 'W')];
+}

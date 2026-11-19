@@ -265,7 +265,7 @@ export class GridView {
     }
 
     if (this.marquee) this.drawMarquee(this.marquee);
-    return needsAnimation({ maxWireAmps, boardRunning: this.sim?.boardsRunning ?? false });
+    return needsAnimation({ maxWireAmps, boardRunning: this.sim?.timeRunning ?? false });
   }
 
   /** Grid lines in device pixels so they stay 1px sharp at any DPR and zoom. */

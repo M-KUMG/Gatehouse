@@ -2,7 +2,14 @@
 // scene into a netlist, re-solves when the netlist changes, and keeps the
 // latest result for drawing and readouts. Boards (src/mcu) go through the
 // mixed-signal bridge, which also owns the simulated clock; without boards
-// a circuit is solved once, exactly as a plain DC circuit.
+// a circuit is solved once, exactly as a plain DC circuit. Circuits with
+// capacitors or inductors are stepped in time by the bridge (see
+// mixedsignal.ts) while the clock runs.
+//
+// The global transport (Start / Pause / Reset, see transportmodel.ts) lives
+// here too, as UI-only state (not saved, not undoable): the circuit clock
+// (`circuitRunning`) lets time advance without any running board, and the
+// buttons drive every board through the same calls as its own buttons.
 
 import type { BuildInput } from './build/compiler';
 import { endTerminal, findContacts } from './contacts';
@@ -11,6 +18,7 @@ import { MixedSignal } from './mcu/mixedsignal';
 import { BoardRuntimes, type BoardPartInfo } from './mcu/runtime';
 import { getPart } from './parts';
 import { linkCurrents, terminalKey, type PartResult, type SimInput, type SimResult } from './sim';
+import { transportState, type TransportState } from './transportmodel';
 
 const MAX_PASSES = 4; // a burned part changes the circuit, which is solved again
 
@@ -25,9 +33,12 @@ export interface SimView {
   wireCurrent(wireId: number): number;
   /** Largest voltage magnitude in the circuit. */
   readonly maxVoltage: number;
-  /** A board is running (the picture changes every frame). */
-  readonly boardsRunning: boolean;
+  /** Simulated time is moving (a board runs, or the circuit clock with capacitors or inductors): the picture changes every frame. */
+  readonly timeRunning: boolean;
 }
+
+/** Makes the netlist of a scene (replaceable in tests to feed raw circuits). */
+export type NetlistBuilder = (scene: Scene) => { input: SimInput; wireIds: number[] };
 
 /**
  * The scene's electrical content: parts, wires (links[i] is wireIds[i]),
@@ -81,14 +92,21 @@ export class Simulation implements SimView {
   private input: SimInput = { components: [], links: [] };
   private wireIds: number[] = [];
   private readonly wireAmps = new Map<number, number>();
+  /** The circuit clock runs (Start): time advances even when no board runs. UI-only state. */
+  private clockRunning = false;
+  /** Start was pressed since the last Reset (so a stopped clock reads as paused). */
+  private clockStarted = false;
 
-  constructor(private readonly scene: Scene) {}
+  constructor(
+    private readonly scene: Scene,
+    private readonly netlist: NetlistBuilder = buildNetlist,
+  ) {}
 
   get result(): SimResult | null {
     return this.bridge.result;
   }
 
-  /** Simulated seconds on the global timeline (advances only while a board runs). */
+  /** Simulated seconds on the global timeline (advances while a board or the circuit clock runs). */
   get time(): number {
     return this.bridge.time;
   }
@@ -96,7 +114,7 @@ export class Simulation implements SimView {
   update(): void {
     for (let pass = 0; pass < MAX_PASSES; pass++) {
       const slots = this.boards.sync(boardParts(this.scene));
-      const { input, wireIds } = buildNetlist(this.scene);
+      const { input, wireIds } = this.netlist(this.scene);
       const signature = `${this.boards.version}|${JSON.stringify(input)}`;
       if (signature === this.signature) break;
       this.signature = signature;
@@ -116,7 +134,7 @@ export class Simulation implements SimView {
    */
   advance(seconds: number): void {
     this.update();
-    if (!this.boards.anyRunning) return;
+    if (!this.timeRunning) return;
     const serial = this.bridge.advance(seconds);
     for (const [id, bytes] of serial) this.boards.addSerial(id, bytes);
     if (this.afterSolve()) this.update();
@@ -150,8 +168,71 @@ export class Simulation implements SimView {
     return this.result?.parts[partId];
   }
 
-  get boardsRunning(): boolean {
-    return this.boards.anyRunning;
+  /** The circuit has capacitors or inductors (it changes over simulated time). */
+  get hasReactiveParts(): boolean {
+    return this.bridge.reactive;
+  }
+
+  /** Board parts in the circuit. */
+  get boardCount(): number {
+    return boardParts(this.scene).length;
+  }
+
+  /** The circuit clock was started (Start) and not paused since. */
+  get circuitRunning(): boolean {
+    return this.clockRunning;
+  }
+
+  /** Simulated time moves: a board runs, or the circuit clock runs on a circuit with capacitors or inductors. */
+  get timeRunning(): boolean {
+    return this.boards.anyRunning || (this.clockRunning && this.bridge.reactive);
+  }
+
+  /** The global transport state, derived from the boards and the circuit clock. */
+  transport(): TransportState {
+    const ids = boardParts(this.scene).map((p) => p.id);
+    return transportState({
+      boards: ids.map((id) => this.boards.boardRunState(id).state),
+      circuitRunning: this.clockRunning,
+      circuitStarted: this.clockStarted,
+    });
+  }
+
+  /**
+   * Start: every board that can run runs (a paused one continues, a fresh one
+   * builds first, exactly like its own Run button; boards in the error state
+   * or still building are left as they are), and the circuit clock starts.
+   */
+  start(): void {
+    this.update();
+    this.clockRunning = true;
+    this.clockStarted = true;
+    for (const { id } of boardParts(this.scene)) {
+      const s = this.boards.boardRunState(id);
+      if (s.state === 'error' || s.building || s.state === 'running') continue;
+      void this.boards.runBoard(id);
+    }
+  }
+
+  /** Pause: every running board pauses and the circuit clock stops (everything is kept). */
+  pause(): void {
+    this.clockRunning = false;
+    for (const { id } of boardParts(this.scene)) this.boards.pauseBoard(id);
+  }
+
+  /**
+   * Reset: every board resets (rebuilds from its files, stopped, like its own
+   * Reset button), the circuit clock stops, time goes back to 0 and the
+   * capacitors and inductors lose their charge (the DC operating point is
+   * shown until the next Start, which starts them empty).
+   */
+  reset(): void {
+    this.clockRunning = false;
+    this.clockStarted = false;
+    for (const { id } of boardParts(this.scene)) void this.boards.resetBoard(id);
+    this.update();
+    this.bridge.reset();
+    this.afterSolve();
   }
 
   pinVoltage(end: WireEnd): number | undefined {
@@ -170,7 +251,7 @@ export class Simulation implements SimView {
     const r = this.result;
     if (!r || r.reference === 'empty') return 'Drag parts onto the grid, then drag from pin to pin to wire them';
     if (!r.converged) return 'Simulation failed: the solver found no stable operating point';
-    const clock = this.bridge.time > 0 ? `simulated ${this.bridge.time.toFixed(3)} s · ` : '';
+    const clock = this.bridge.time > 0 || this.timeRunning ? `simulated ${this.bridge.time.toFixed(3)} s · ` : '';
     const nets = `${clock}${r.connectedNets} ${r.connectedNets === 1 ? 'net' : 'nets'}`;
     const time = `solved in ${this.solveMs < 0.05 ? '<0.1' : this.solveMs.toFixed(1)} ms`;
     if (r.reference === 'battery') return `No ground part: using battery − as reference · ${nets}, ${time}`;

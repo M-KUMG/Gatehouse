@@ -1,0 +1,77 @@
+// Time-stepping (transient) solver for circuits with capacitors and inductors.
+//
+// How a caller advances time:
+//   let state = initialState(input);            // t = input.time ?? 0, caps charged to the DC point
+//   for each step:
+//     const { result, state: next } = solveStep(input, state, dt);
+//     // result is the circuit at t = state.time + dt (result.time), next.time === result.time
+//     state = next;
+// `input` is the circuit during the step (state.time, state.time + dt]: change
+// it between steps (a switch flips, a battery or a board pin changes) and the
+// new values hold for the whole next step. `SimInput.time` is ignored here;
+// time lives only in the TransientState, which is plain data (no hidden module
+// state), so the same input, state and dt always give the same output, and a
+// state can be saved, copied or sent to a Web Worker. Variable dt is allowed
+// (each step uses its own). The mixed-signal bridge can later step with
+// dt = its slice length (or with the times between pin changes).
+//
+// Method: companion models (reactive.ts) with backward Euler by default,
+// which is L-stable (no ringing or blow-up for any dt, a dt much larger than
+// RC just jumps to the steady state). 'trapezoidal' is more accurate for
+// smooth signals but needs consistent stored currents: after an abrupt change
+// (start from empty, a switch, a pin edge) it rings (+-error every step) unless
+// a short Euler step is taken first. Nonlinear parts reuse the DC
+// solver's Newton loop with its junction step limiting inside every step.
+//
+// If a step does not converge, result.converged is false and its numbers are
+// zeros (as in the DC solve); the returned state keeps every part's previous
+// charge and advances the time, so the caller can carry on.
+
+import type { Integration, ReactiveState } from './reactive';
+import { solveWith } from './solve';
+import type { SimInput, SimResult } from './types';
+
+export type { Integration, ReactiveState } from './reactive';
+
+export interface TransientState {
+  /** Simulated time in seconds the state belongs to. */
+  time: number;
+  /** Capacitor and inductor state per component id; missing = uncharged (0 V, 0 A). */
+  stored: Record<number, ReactiveState>;
+}
+
+export interface StepOptions {
+  /** Default 'euler' (backward Euler). */
+  method?: Integration;
+}
+
+/**
+ * The state to start from at `input.time ?? 0`. By default every capacitor
+ * is charged to its DC operating-point voltage and every inductor carries
+ * its DC current (the circuit has settled). With `charged: false` (or when
+ * the DC solve does not converge) every part starts empty.
+ */
+export function initialState(input: SimInput, options: { charged?: boolean } = {}): TransientState {
+  const time = input.time ?? 0;
+  if (options.charged === false) return { time, stored: {} };
+  return { time, stored: solveWith(input, undefined, time).stored ?? {} };
+}
+
+/** Solves one time step of `dt` seconds (> 0) after `state`. */
+export function solveStep(
+  input: SimInput, state: TransientState, dt: number, options: StepOptions = {},
+): { result: SimResult; state: TransientState } {
+  if (!(dt > 0) || !Number.isFinite(dt)) throw new RangeError(`solveStep: dt must be a positive number, got ${dt}`);
+  const time = state.time + dt;
+  const { result, stored } = solveWith(
+    input, { dt, method: options.method ?? 'euler', stored: state.stored }, time,
+  );
+  if (stored) return { result, state: { time, stored } };
+  // Not converged: hold the previous charge of the parts that still exist.
+  const held: Record<number, ReactiveState> = {};
+  for (const { id, model } of input.components) {
+    const prev = state.stored[id];
+    if (prev && (model.kind === 'capacitor' || model.kind === 'inductor')) held[id] = { ...prev };
+  }
+  return { result, state: { time, stored: held } };
+}

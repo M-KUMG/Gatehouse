@@ -2,6 +2,9 @@
 // Unknowns are the node voltages (all nets but the reference, plus internal
 // device nodes) followed by one branch current per voltage source.
 // Pure and deterministic: same input, same output; no clock, no randomness.
+// Capacitors are open and inductors near shorts here; with a `Companion`
+// (one time step, see transient.ts) they become their companion models and
+// the same Newton loop solves the step.
 
 import { bjtResult, makeBjt, stampBjt, updateBjt, type Bjt } from './bjt';
 import {
@@ -11,6 +14,7 @@ import {
 import { solveLinear } from './linear';
 import { makeMosfet, mosfetResult, stampMosfet, updateMosfet, type Mosfet } from './mosfet';
 import { buildNets } from './nets';
+import { companionOf, stampReactive, type Companion, type Reactive, type ReactiveState } from './reactive';
 import { stampInto } from './stamp';
 import type { PartResult, SimInput, SimResult } from './types';
 
@@ -42,13 +46,16 @@ interface Elements {
   diodes: Diode[];
   bjts: Bjt[];
   mosfets: Mosfet[];
+  reactives: (Reactive & { kind: 'capacitor' | 'inductor' })[];
   drives: Drive[];
   nodes: number; // including the reference and internal nodes
 }
 
-function buildElements(input: SimInput, netOf: (part: number, pin: string) => number, netCount: number): Elements {
+function buildElements(
+  input: SimInput, netOf: (part: number, pin: string) => number, netCount: number, step: Companion | undefined,
+): Elements {
   const el: Elements = {
-    resistors: [], sources: [], diodes: [], bjts: [], mosfets: [], drives: [], nodes: netCount,
+    resistors: [], sources: [], diodes: [], bjts: [], mosfets: [], reactives: [], drives: [], nodes: netCount,
   };
   const resistor = (part: number, pinA: string, pinB: string, ohms: number): void => {
     el.resistors.push({ part, a: netOf(part, pinA), b: netOf(part, pinB), g: 1 / ohms, pinA, pinB });
@@ -90,6 +97,17 @@ function buildElements(input: SimInput, netOf: (part: number, pin: string) => nu
       case 'mosfet': {
         const nodes = { d: netOf(id, 'd'), g: netOf(id, 'g'), s: netOf(id, 's') };
         el.mosfets.push(makeMosfet(id, nodes, m.polarity, m.vth, m.kp, m.lambda));
+        break;
+      }
+      case 'capacitor':
+      case 'inductor': {
+        const a = netOf(id, 'a');
+        const series = (m.kind === 'capacitor' ? m.esr : m.dcr) ?? 0;
+        const inner = series > 0 ? el.nodes++ : a;
+        if (series > 0) el.resistors.push({ part: -1, a, b: inner, g: 1 / series, pinA: '', pinB: '' });
+        el.reactives.push({
+          kind: m.kind, part: id, a, b: netOf(id, 'b'), inner, ...companionOf(m, step, step?.stored[id]),
+        });
         break;
       }
       case 'board': {
@@ -151,13 +169,25 @@ function assemble(el: Elements, size: number): { a: Float64Array[]; z: Float64Ar
 
   for (const q of el.bjts) stampBjt(q, stamp);
   for (const q of el.mosfets) stampMosfet(q, stamp);
+  for (const r of el.reactives) stampReactive(r, stamp);
   return { a, z };
 }
 
 export function solveCircuit(input: SimInput): SimResult {
+  return solveWith(input, undefined, input.time ?? 0).result;
+}
+
+/**
+ * One solve: the DC operating point without `step`, else one time step
+ * ending at `time`. `stored` is the state of every capacitor and inductor
+ * at the solution (null when Newton's method did not converge).
+ */
+export function solveWith(
+  input: SimInput, step: Companion | undefined, time: number,
+): { result: SimResult; stored: Record<number, ReactiveState> | null } {
   const nets = buildNets(input);
   const result: SimResult = {
-    time: input.time ?? 0,
+    time,
     converged: true,
     iterations: 0,
     reference: nets.reference,
@@ -167,7 +197,7 @@ export function solveCircuit(input: SimInput): SimResult {
     parts: {},
   };
   const netOf = (part: number, pin: string): number => nets.index.get(`${part}:${pin}`) ?? 0;
-  const el = buildElements(input, netOf, nets.count);
+  const el = buildElements(input, netOf, nets.count, step);
   const size = Math.max(0, el.nodes - 1) + el.sources.length;
 
   let x: Float64Array = new Float64Array(size);
@@ -208,7 +238,16 @@ export function solveCircuit(input: SimInput): SimResult {
   for (let n = 1; n < nets.count; n++) result.voltages[n] = volt(n);
   collectResults(input, el, volt, x, result);
   collectBoards(input, el, netOf, volt, x, result);
-  return result;
+  let stored: Record<number, ReactiveState> | null = null;
+  if (result.converged) {
+    stored = {};
+    for (const r of el.reactives) {
+      const v = volt(r.inner) - volt(r.b);
+      // In DC an ideal inductor has 0 V across it (the 1 mOhm is only there to keep the matrix regular).
+      stored[r.part] = { volts: !step && r.kind === 'inductor' ? 0 : v, amps: r.g * v + r.ieq };
+    }
+  }
+  return { result, stored };
 }
 
 function collectResults(
@@ -251,6 +290,11 @@ function collectResults(
   }
   for (const q of el.bjts) parts[q.part] = bjtResult(q, volt);
   for (const q of el.mosfets) parts[q.part] = mosfetResult(q, volt);
+  for (const r of el.reactives) {
+    const i = r.g * (volt(r.inner) - volt(r.b)) + r.ieq;
+    const v = volt(r.a) - volt(r.b);
+    parts[r.part] = { voltage: v, current: i, power: v * i, pins: { a: i, b: -i } };
+  }
 }
 
 /** Per board: volts and current at every pin, and what it delivers to the circuit. */

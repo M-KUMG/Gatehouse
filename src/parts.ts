@@ -3,6 +3,8 @@
 // grid points, which is where the pins are.
 // To add a part: draw its art in src/art and add one entry below.
 
+import { CAPACITOR_ART } from './art/capacitor';
+import { INDUCTOR_ART } from './art/inductor';
 import { BATTERY_ART } from './art/battery';
 import { BATTERY_9V_ART } from './art/battery9v';
 import { DIODE_ART } from './art/diode';
@@ -17,7 +19,7 @@ import { PNP_ART, TRANSISTOR_ART } from './art/transistor';
 import { NANO_ART, NANO_LEFT, NANO_RESET, NANO_RIGHT, drawNanoLeds } from './art/nano';
 import { UNO_ART, UNO_BOTTOM, UNO_RESET, UNO_TOP, drawUnoLeds, type HeaderPin } from './art/uno';
 import { ART_CELL } from './art/common';
-import { diodeReadout, mosfetReadout, pnpReadout } from './devicereadouts';
+import { diodeReadout, mosfetReadout, pnpReadout, reactiveReadout } from './devicereadouts';
 import type { BoardSpec } from './mcu/board';
 import { NANO_SPEC, UNO_SPEC } from './mcu/avr/uno';
 import { parseBoardId } from './project/boardidparse';
@@ -31,7 +33,7 @@ export interface PartState {
   closed?: boolean;
   /** Potentiometer wiper, 0..1. */
   position?: number;
-  /** Editable main value (ohms for resistors and potentiometers). */
+  /** Editable main value (ohms for resistors and potentiometers, farads for capacitors, henries for inductors). */
   value?: number;
   /** Destroyed by too much current. */
   burned?: boolean;
@@ -95,6 +97,10 @@ export interface PartType {
 
 const DEFAULT_OHMS = 220;
 const DEFAULT_POT_OHMS = 10_000;
+const DEFAULT_FARADS = 100e-9;
+const DEFAULT_HENRIES = 10e-3;
+/** Series resistance that keeps an ideal reactive part from making a singular matrix. */
+const REACTIVE_SERIES_OHMS = 0.01;
 export const LED_WARN_AMPS = 0.03;
 
 /** 0..1 for an LED current: just visible near 0.3 mA, dim at 1 mA, full at 15 mA. */
@@ -160,6 +166,22 @@ export const PARTS: readonly PartType[] = [
     value: { label: 'Resistance', unit: 'Ω', min: 1, max: 10e6 },
     variant: (s) => resistorArt(s.value ?? DEFAULT_OHMS),
     sim: (s) => ({ kind: 'resistor', ohms: s.value ?? DEFAULT_OHMS }),
+  },
+  {
+    id: 'capacitor', name: 'Capacitor', ...CAPACITOR_ART,
+    pins: [{ id: 'a', name: '1', x: 0, y: 1 }, { id: 'b', name: '2', x: 4, y: 1 }],
+    defaults: { value: DEFAULT_FARADS },
+    value: { label: 'Capacitance', unit: 'F', min: 1e-12, max: 1 },
+    readout: reactiveReadout,
+    sim: (s) => ({ kind: 'capacitor', farads: s.value ?? DEFAULT_FARADS, esr: REACTIVE_SERIES_OHMS }),
+  },
+  {
+    id: 'inductor', name: 'Inductor', ...INDUCTOR_ART,
+    pins: [{ id: 'a', name: '1', x: 0, y: 1 }, { id: 'b', name: '2', x: 4, y: 1 }],
+    defaults: { value: DEFAULT_HENRIES },
+    value: { label: 'Inductance', unit: 'H', min: 1e-9, max: 100 },
+    readout: reactiveReadout,
+    sim: (s) => ({ kind: 'inductor', henries: s.value ?? DEFAULT_HENRIES, dcr: REACTIVE_SERIES_OHMS }),
   },
   {
     id: 'led', name: 'LED', ...LED_ART,

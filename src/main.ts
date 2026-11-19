@@ -23,6 +23,7 @@ import { renameBoard } from './project/boardfiles';
 import { ProjectController } from './project/controller';
 import { Project } from './project/project';
 import { Simulation } from './simulation';
+import { TransportBar } from './transport';
 
 const app = document.getElementById('app');
 const dock = document.getElementById('dock');
@@ -113,8 +114,15 @@ function showBoardOnGrid(partId: number): void {
   const target = revealTarget(project.camera, { width: canvas.clientWidth, height: canvas.clientHeight }, rect);
   if (target) cameraPan.panTo(target.x, target.y);
 }
-// Boards run on animation frames while one is running.
+// Simulated time moves on animation frames while a board runs or the circuit
+// clock (global Start) runs a circuit with capacitors or inductors.
 const clock = new BoardClock(sim, view.requestRender);
+// Global Start / Pause, Reset, speed and simulated time (top-right of the grid; UI-only state).
+const transport = new TransportBar(editorArea, sim, clock, () => {
+  clock.wake();
+  view.requestRender();
+});
+editor.onToggleTransport = () => transport.toggle();
 // Run / Pause / Reset (toolbar, the board's reset button) and finished builds
 // (async) start the clock and redraw (which also refreshes the board chip).
 sim.boards.onChange(() => {
@@ -127,6 +135,7 @@ const controller = new ProjectController(
     beforeLoad: () => {
       editor.reset();
       sim.boards.clear(); // a loaded project starts with every board stopped
+      sim.reset(); // and the circuit clock stopped at 0
     },
     afterLoad: (file) => {
       const box = boundsOf(scene.parts);
@@ -178,6 +187,9 @@ sim.boards.buildLog.onChange((partId) => {
   }
 });
 view.renderListeners.push(() => activeBoard.update());
+view.renderListeners.push(() => transport.update());
+// An edit can make time move (a capacitor added while the circuit clock runs).
+view.renderListeners.push(() => clock.wake());
 view.renderListeners.push(() => serialConsole.update()); // after the active board: Auto follows it
 view.renderListeners.push(() => buildOutput.update());
 view.renderListeners.push(() => fileExplorer.update()); // the highlighted board follows it too

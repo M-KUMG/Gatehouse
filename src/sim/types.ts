@@ -32,6 +32,18 @@ export type ComponentModel =
    * P-channel (then vth is negative). kp in A/V^2. Pins: g, d, s.
    */
   | { kind: 'mosfet'; polarity: 1 | -1; vth: number; kp: number; lambda: number }
+  /**
+   * Capacitor of `farads` with an optional equivalent series resistance
+   * (ohms, default 0). The DC solve sees it as open; the transient solver
+   * (transient.ts) integrates it. Pins: a, b.
+   */
+  | { kind: 'capacitor'; farads: number; esr?: number }
+  /**
+   * Inductor of `henries` with an optional winding resistance (ohms,
+   * default 0). The DC solve sees it as a near short (1 mOhm); the
+   * transient solver integrates it. Pins: a, b.
+   */
+  | { kind: 'inductor'; henries: number; dcr?: number }
   /** Reference node (0 V). Pin: gnd. */
   | { kind: 'ground' }
   /** Conducts nothing (e.g. a burned-out part). No pins of its own. */
@@ -66,9 +78,9 @@ export interface SimInput {
   /** Pairs of terminals joined by an ideal conductor (wires, internal links). */
   links: [Terminal, Terminal][];
   /**
-   * Simulated time in seconds this solve belongs to (default 0). The solve
-   * is still a DC operating point; the field is here so a transient solver
-   * (capacitors) can use it later.
+   * Simulated time in seconds this solve belongs to (default 0), echoed in
+   * SimResult.time by the DC solve. `solveStep` (transient.ts) ignores it:
+   * there the time comes from the TransientState plus the step.
    */
   time?: number;
 }

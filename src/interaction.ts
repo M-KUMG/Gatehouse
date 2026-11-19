@@ -113,6 +113,8 @@ export class Editor {
   /** Ctrl+Z, and Ctrl+Y or Ctrl+Shift+Z, while the grid has the keyboard. */
   onUndo: (() => void) | null = null;
   onRedo: (() => void) | null = null;
+  /** Space while the grid has the keyboard: the global Start / Pause. */
+  onToggleTransport: (() => void) | null = null;
   /** Open (or bring forward) the Serial console showing this board (part id). */
   onOpenConsole: ((partId: number) => void) | null = null;
   /** Open (or bring forward) the Build output window showing this board (a click on the chip of a failed build). */
@@ -638,6 +640,9 @@ export class Editor {
       this.onRedo?.();
     } else if (mod && !e.altKey && key === 'z') {
       this.onUndo?.();
+    } else if (e.key === ' ' && !mod && !e.altKey && !e.shiftKey && this.onToggleTransport && !target?.closest?.('button, a, summary, [role="button"]')) {
+      // Space on a focused button keeps its own meaning (it clicks the button).
+      if (!e.repeat) this.onToggleTransport();
     } else {
       return;
     }

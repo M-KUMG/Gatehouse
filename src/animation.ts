@@ -14,7 +14,7 @@ const RATE_PER_DECADE = 1;
 export interface AnimationNeeds {
   /** Largest wire current (amps, any sign) in the latest result. */
   maxWireAmps: number;
-  /** A board is running: its pins, LEDs and readouts change every frame. */
+  /** Simulated time runs (a board, or the circuit clock with capacitors/inductors): pins, LEDs and readouts change every frame. */
   boardRunning: boolean;
 }
 

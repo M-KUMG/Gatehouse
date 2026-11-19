@@ -1,13 +1,37 @@
-// Moves simulated time forward on animation frames while a board runs.
-// The wall clock only decides how much simulated time to ask for per frame
-// (to approximate real time); inside the emulation time is CPU cycles only.
-// When the browser cannot keep up, less is run and the speed drops below 1x.
+// Moves simulated time forward on animation frames while simulated time
+// runs: a board runs, or the circuit clock (global Start) runs on a circuit
+// with capacitors or inductors. Idle otherwise (no frame loop).
+// The wall clock only decides how much simulated time to ask for per frame:
+// wall time since the last frame times the speed multiplier (0.01x .. 10x);
+// inside the emulation time is CPU cycles and fixed slices only, so the
+// speed changes the pacing, never the results. When the browser cannot keep
+// up, less is run and the measured speed drops below the asked one.
 
-import type { Simulation } from './simulation';
+/** What the clock drives (the Simulation). */
+export interface ClockTarget {
+  /** Simulated time should move now. */
+  readonly timeRunning: boolean;
+  /** Run `seconds` of simulated time. */
+  advance(seconds: number): void;
+  /** Where the measured speed is published (the board chips read it). */
+  readonly boards: { speed: number };
+}
 
-/** At most this much simulated time per frame (after a stall or a hidden tab). */
+/** Frame scheduling and time source (the browser's by default; tests pass their own). */
+export interface FrameSource {
+  request(cb: (now: number) => void): number;
+  /** Milliseconds, for the per-frame work budget. */
+  now(): number;
+}
+
+const browserFrames: FrameSource = {
+  request: (cb) => requestAnimationFrame(cb),
+  now: () => performance.now(),
+};
+
+/** At most this much wall time counts per frame (after a stall or a hidden tab). */
 const MAX_FRAME_SECONDS = 0.1;
-/** Wall time per frame the emulation may use, so the page stays responsive. */
+/** Wall time per frame the simulation may use, so the page stays responsive. */
 const BUDGET_MS = 12;
 /** Simulated time per advance() call inside a frame. */
 const CHUNK_SECONDS = 0.004;
@@ -15,25 +39,28 @@ const CHUNK_SECONDS = 0.004;
 export class BoardClock {
   /** Simulated seconds per wall second, smoothed (0 while nothing runs). */
   speed = 0;
+  /** Asked speed multiplier (simulated seconds per wall second). UI-only. */
+  multiplier = 1;
   private frame = 0;
   private last = 0;
 
   constructor(
-    private readonly sim: Simulation,
+    private readonly sim: ClockTarget,
     /** Called after every frame that ran (to redraw). */
     private readonly onTick: () => void,
+    private readonly frames: FrameSource = browserFrames,
   ) {}
 
-  /** Start the frame loop if a board runs (call after Run). */
+  /** Start the frame loop if simulated time runs (call after Run / Start and after edits). */
   wake(): void {
-    if (this.frame || !this.sim.boards.anyRunning) return;
-    this.last = performance.now();
-    this.frame = requestAnimationFrame(this.tick);
+    if (this.frame || !this.sim.timeRunning) return;
+    this.last = this.frames.now();
+    this.frame = this.frames.request(this.tick);
   }
 
   private tick = (now: number): void => {
     this.frame = 0;
-    if (!this.sim.boards.anyRunning) {
+    if (!this.sim.timeRunning) {
       this.speed = 0;
       this.sim.boards.speed = 0;
       this.onTick();
@@ -41,10 +68,11 @@ export class BoardClock {
     }
     const wall = Math.min(Math.max(0, (now - this.last) / 1000), MAX_FRAME_SECONDS);
     this.last = now;
-    const started = performance.now();
+    const wanted = wall * this.multiplier;
+    const started = this.frames.now();
     let done = 0;
-    while (done < wall - 1e-9 && performance.now() - started < BUDGET_MS && this.sim.boards.anyRunning) {
-      const step = Math.min(CHUNK_SECONDS, wall - done);
+    while (done < wanted - 1e-12 && this.frames.now() - started < BUDGET_MS && this.sim.timeRunning) {
+      const step = Math.min(CHUNK_SECONDS, wanted - done);
       this.sim.advance(step);
       done += step;
     }
@@ -54,6 +82,6 @@ export class BoardClock {
       this.sim.boards.speed = this.speed; // for boardRunState
     }
     this.onTick();
-    this.frame = requestAnimationFrame(this.tick);
+    this.frame = this.frames.request(this.tick);
   };
 }
