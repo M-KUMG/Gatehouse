@@ -38,7 +38,7 @@ editorArea.append(canvas);
 
 // Compile sketches in the browser (a Worker, toolchain packs from /toolchain-packs/)
 // for the boards with a compiler profile; where the packs are not served
-// (Electron, file://) boards keep running their .hex file. See browserCompilers().
+// (a host without them, Electron without toolchain/packs/) boards keep running their .hex file. See browserCompilers().
 registerBrowserCompilers(registerCompiler);
 
 // The project owns the circuit and camera; everything below works on them in place.

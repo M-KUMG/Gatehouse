@@ -2,8 +2,8 @@
 // board profile of the same id (uno, nano: a Nano part added later only
 // needs the type id 'nano'). `available` follows getCompilerStatus(): not
 // 'unavailable' (a needed download happens during the build, with progress).
-// Where the packs are not served (Electron from file://, a host without
-// them) the status is 'unavailable' and boards fall back to their .hex file.
+// Where the packs are not served (a host without them, Electron without
+// toolchain/packs/) the status is 'unavailable' and boards fall back to their .hex file.
 
 import type { Compiler } from '../../compiler';
 import { BOARD_PROFILES, getBoardProfile } from '../profiles';

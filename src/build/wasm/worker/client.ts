@@ -46,12 +46,16 @@ export interface WasmCompilerClientOptions {
 
 export const BUILD_TIMED_OUT = 'Build timed out: the compiler made no progress for a minute and was restarted. Try again.';
 
-/** Resolve the packs folder against the page; null where packs cannot be fetched (file:// in Electron, no fetch). */
+/**
+ * Resolve the packs folder against the page; null where packs cannot be fetched
+ * (file://, no fetch). http(s) is a web host; `gatehouse:` is the scheme the
+ * Electron shell serves the app and the packs from (main.js, electron/staticserve.cjs).
+ */
 export function resolvePacksUrl(base: string = DEFAULT_PACKS_URL): string | null {
   try {
     const href = (globalThis as { location?: { href: string } }).location?.href;
     const url = href ? new URL(base, href) : new URL(base);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (url.protocol !== 'http:' && url.protocol !== 'https:' && url.protocol !== 'gatehouse:') return null;
     if (typeof fetch !== 'function') return null;
     return url.href.endsWith('/') ? url.href : `${url.href}/`;
   } catch {

@@ -189,6 +189,7 @@ describe('WasmCompilerClient', () => {
     expect(await broken.compile(sketch(), 'uno')).toMatchObject({ ok: false, errors: ['error: The compiler could not start: no Worker here'] });
     expect(resolvePacksUrl('file:///C:/app/dist/toolchain-packs/')).toBeNull();
     expect(resolvePacksUrl(BASE)).toBe(BASE);
+    expect(resolvePacksUrl('gatehouse://app/toolchain-packs')).toBe('gatehouse://app/toolchain-packs/');
     const electron = new WasmCompilerClient({ baseUrl: 'file:///C:/app/dist/toolchain-packs/', createWorker: () => { throw new Error('never'); } });
     expect(electron.baseUrl).toBeNull();
     expect((await electron.getCompilerStatus('uno')).status).toBe('unavailable');

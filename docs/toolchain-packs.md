@@ -169,9 +169,14 @@ bytes.
    sources; `as` only its input; `ld` gets `crtatmega328p.o`, `libc.a`, `libm.a`, `libatmega328p.a`, `libgcc.a`,
    `core.a`, the library archives, the objects, and `/ldscripts/avr5.xn` from the compiler pack; `objcopy` the ELF. The
    include flags and link line are in `spikes/compiler-startabit/tc.mjs`.
-8. **Electron** reads the same files from the app resources (raw `.pack`, no gzip) and skips Cache Storage.
-   Not done yet: today Electron loads `dist/` from `file://`, where no packs are served, so `getCompilerStatus()`
-   returns `'unavailable'` (no Worker is started, nothing crashes) and boards run their `.hex` file as before.
+8. **Electron** serves the app and the packs through its own secure, standard protocol (`main.js`, logic in
+   `electron/staticserve.cjs`): the window loads `gatehouse://app/index.html`, the packs come from
+   `gatehouse://app/toolchain-packs/`, so the Worker, `fetch` and Cache Storage work as on a web page. In
+   development that folder is `toolchain/packs/` at the repo root (run `toolchain:fetch` and `toolchain:packs`
+   first); a packaged app will look in `<resources>/toolchain-packs/` if it exists. Only `manifest.json`, `*.pack`
+   and `*.pack.gz` are served from there, `.pack.gz` without `Content-Encoding`, like the Vite dev server. Putting
+   the packs into the installer is still a later task; without the folder the status is `'unavailable'` (no
+   Worker is started, nothing crashes) and boards run their `.hex` file as before.
 9. **Integrity of the manifest.** In a hosted build the manifest and the packs come from the same origin as the app, so
    the sha256 check protects against truncated or stale files, not against a hostile server. Pinning the manifest hash
    into the app bundle at build time would close that gap.
