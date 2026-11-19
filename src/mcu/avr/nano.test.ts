@@ -51,12 +51,13 @@ describe('Arduino Nano part', () => {
     expect(NANO_SPEC.serialPorts).toEqual([{ id: 'usart0', name: 'Serial (USART0)' }]);
     const board = NANO_SPEC.create(parseIntelHex(BLINK_HEX, NANO_SPEC.flashBytes).bytes);
     const d13 = NANO_SPEC.io.findIndex((p) => p.id === 'd13');
-    const levels: string[] = [];
+    // Starts as an input; other pins' events (Serial's TX on d1) come in between.
+    const levels: string[] = [board.drives()[d13]];
     for (let i = 0; i < 2100; i++) {
       for (const e of board.run(UNO_CLOCK_HZ / 1000).events) {
         if (levels[levels.length - 1] !== e.drives[d13]) levels.push(e.drives[d13]);
       }
     }
-    expect(levels.join('')).toBe('LHLH');
+    expect(levels.join('')).toBe('ZLHLH');
   });
 });

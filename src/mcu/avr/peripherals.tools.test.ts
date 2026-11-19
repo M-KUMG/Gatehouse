@@ -8,7 +8,7 @@ import { BOARD_PROFILES } from '../../build/wasm/profiles';
 import { findToolchain, sharedNodeRunner } from '../../build/wasm/node/toolchain';
 import { parseIntelHex } from '../hex';
 import type { I2cDevice } from './i2c';
-import { UNO_CLOCK_HZ, UnoEmulator } from './uno';
+import { UNO_CLOCK_HZ, UNO_IO, UnoEmulator } from './uno';
 
 const toolchain = findToolchain();
 const T = 120_000;
@@ -90,6 +90,13 @@ void setup() {
 void loop() {}
 `;
 
+const PRINT = `void setup() {
+  Serial.begin(115200);
+  Serial.println("Gatehouse UART");
+}
+void loop() {}
+`;
+
 describe.skipIf(!toolchain.dir)(`ATmega328P TWI / SPI / watchdog with compiled sketches (${toolchain.reason})`, () => {
   it('Wire talks to an attached I2C device: writes, a repeated-start read, and a NACK for an empty address', async () => {
     const uno = new UnoEmulator(parseIntelHex(await compile(WIRE), 32 * 1024).bytes);
@@ -114,6 +121,39 @@ describe.skipIf(!toolchain.dir)(`ATmega328P TWI / SPI / watchdog with compiled s
     expect(serialFor(uno, 0.01)).toBe('5A\r\n');
     expect(seen).toEqual([0xa5]);
     expect(serialFor(new UnoEmulator(bytes), 0.01)).toBe('FF\r\n');
+  }, T);
+
+  it('Serial.println at 115200 appears on d1 as 8N1 frames (136 cycles a bit)', async () => {
+    const uno = new UnoEmulator(parseIntelHex(await compile(PRINT), 32 * 1024).bytes);
+    const d1 = UNO_IO.findIndex((p) => p.id === 'd1');
+    const edges: { cycle: number; high: boolean }[] = [];
+    let serial: number[] = [];
+    while (uno.cycles < 0.01 * UNO_CLOCK_HZ) {
+      const r = uno.run(UNO_CLOCK_HZ / 1000);
+      serial = [...serial, ...(r.serial.usart0 ?? [])];
+      for (const e of r.events) {
+        const high = e.drives[d1] === 'H';
+        if (e.drives[d1] !== 'Z' && edges.at(-1)?.high !== high) edges.push({ cycle: e.cycle, high });
+      }
+    }
+    expect(String.fromCharCode(...serial)).toBe('Gatehouse UART\r\n');
+    const bit = 136;
+    const levelAt = (c: number): number => {
+      let high = true;
+      for (const e of edges) if (e.cycle <= c) high = e.high;
+      return high ? 1 : 0;
+    };
+    const decoded: number[] = [];
+    for (let i = 1; i < edges.length; i++) {
+      const start = edges[i].cycle;
+      if (edges[i].high) continue; // a start bit is the first fall after a frame
+      let byte = 0;
+      for (let k = 0; k < 8; k++) byte |= levelAt(start + (k + 1.5) * bit) << k;
+      expect(levelAt(start + 9.5 * bit)).toBe(1);
+      decoded.push(byte);
+      while (i + 1 < edges.length && edges[i + 1].cycle < start + 10 * bit) i++;
+    }
+    expect(decoded).toEqual(serial);
   }, T);
 
   it('the watchdog resets the chip after ~16 ms: the sketch boots again', async () => {

@@ -4,8 +4,12 @@
 //   d8..d13  = PB0..PB5   (d13 also drives the on-board "L" LED)
 //   a0..a5   = PC0..PC5   (ADC channels 0..5; also digital pins 14..19)
 //   5v, 3v3  supply rails;  gnd, gnd2, gnd3 ground;  vin, aref unconnected inside
+//
+// Serial TX on d1: while UCSR0B.TXEN is set the USART drives d1 (idle high),
+// and every byte written to UDR0 goes out as a cycle-exact UART frame. RX
+// from d0 is not modelled: d0 stays a plain port pin.
 
-import { PinState, type AVRIOPort } from 'avr8js';
+import { PinState, usart0Config, type AVRIOPort } from 'avr8js';
 import type {
   BoardElectrical, BoardEmulator, BoardInputs, BoardSpec, DriveCode, IoPinDef, PinEvent, SerialPortDef, SliceResult,
 } from '../board';
@@ -51,6 +55,18 @@ const CODES: Record<PinState, DriveCode> = {
   [PinState.InputPullUp]: 'P',
 };
 
+/** Index of d1 (PD1, TXD) in UNO_IO. */
+const TX_INDEX = UNO_IO.findIndex((p) => p.id === 'd1');
+const UCSRA_U2X = 0x02;
+const UCSRB_TXB8 = 0x01;
+
+/** A scheduled change of the TX line; `end` marks the end of a frame. */
+interface TxEdge {
+  cycle: number;
+  high: boolean;
+  end?: true;
+}
+
 export class UnoEmulator implements BoardEmulator {
   readonly clockHz = UNO_CLOCK_HZ;
   readonly io = UNO_IO;
@@ -62,11 +78,22 @@ export class UnoEmulator implements BoardEmulator {
   private serial: number[] = [];
   private inputs: boolean[] = [];
   private lastInputs: BoardInputs | null = null;
+  /** Drive codes from the ports alone (PORTx/DDRx), as of the last port change. */
+  private lastPortDrives: string;
+  /** UCSR0B.TXEN as of the last port/USART change. */
+  private txEnabled = false;
+  /** TX line level (idle high). */
+  private txHigh = true;
+  /** Line changes of frames already started, in cycle order; applied once the CPU reaches them. */
+  private txQueue: TxEdge[] = [];
+  /** Cycle at which the last scheduled frame ends (the line is free from then on). */
+  private txFreeAt = 0;
 
   /** `flash` is the program memory image (see parseIntelHex). Starts from reset. */
   constructor(flash: Uint8Array) {
     this.chip = new Atmega328p(flash, UNO_CLOCK_HZ);
     this.ports = this.wire();
+    this.lastPortDrives = this.portDrives();
     this.lastDrives = this.drives();
     this.chip.onReset = this.onReset;
   }
@@ -93,18 +120,20 @@ export class UnoEmulator implements BoardEmulator {
     return this.chip.cycles;
   }
 
+  /** Current drive codes (between run() calls every TX change up to now has been applied). */
   drives(): string {
-    let s = '';
-    for (const pin of UNO_IO) s += CODES[this.ports[pin.port].pinState(pin.bit)];
-    return s;
+    return this.compose(this.portDrives());
   }
 
   run(cycles: number): SliceResult {
     const start = this.chip.cycles;
     const drives = this.lastDrives;
     this.chip.run(cycles);
+    const end = this.chip.cycles;
+    // TX bits that began by the end of the slice; later ones carry over to the next slice.
+    this.flushTx(end);
     const serial = this.serial.length > 0 ? { [UNO_SERIAL.id]: this.serial } : {};
-    const result: SliceResult = { start, end: this.chip.cycles, drives, events: this.events, serial };
+    const result: SliceResult = { start, end, drives, events: this.events, serial };
     this.events = [];
     this.serial = [];
     return result;
@@ -126,16 +155,108 @@ export class UnoEmulator implements BoardEmulator {
     return usart.baudRate;
   }
 
+  private portDrives(): string {
+    let s = '';
+    for (const pin of UNO_IO) s += CODES[this.ports[pin.port].pinState(pin.bit)];
+    return s;
+  }
+
+  /**
+   * Port drive codes with d1 taken over by the transmitter: while TXEN is
+   * set, and after TXEN is cleared until the frames already started are out
+   * (datasheet: disabling waits for ongoing and pending transmissions).
+   */
+  private compose(portDrives: string): string {
+    if (!this.txEnabled && this.txQueue.length === 0) return portDrives;
+    return portDrives.slice(0, TX_INDEX) + (this.txHigh ? 'H' : 'L') + portDrives.slice(TX_INDEX + 1);
+  }
+
+  /** Record the pins as they are now, stamped `cycle`, if they changed. */
+  private emit(cycle: number): void {
+    const drives = this.compose(this.lastPortDrives);
+    if (drives === this.lastDrives) return;
+    this.lastDrives = drives;
+    this.events.push({ cycle, drives });
+  }
+
+  /** Apply the TX line changes up to and including `cycle`, each at its own cycle. */
+  private flushTx(cycle: number): void {
+    const queue = this.txQueue;
+    let n = 0;
+    while (n < queue.length && queue[n].cycle <= cycle) {
+      const edge = queue[n++];
+      this.txHigh = edge.high;
+      // Empty the queue before the last edge is emitted, so the end of the
+      // last frame hands d1 back to the port when TXEN is already off.
+      if (n === queue.length) {
+        queue.length = 0;
+        n = 0;
+      }
+      this.emit(edge.cycle);
+    }
+    if (n > 0) queue.splice(0, n);
+  }
+
+  /** One bit on the line, the figure avr8js uses for UDRE/TXC: (UBRR + 1) * (U2X ? 8 : 16) cycles. */
+  private txBitCycles(): number {
+    const data = this.chip.cpu.data;
+    const ubrr = (data[usart0Config.UBRRH] << 8) | data[usart0Config.UBRRL];
+    return (ubrr + 1) * (data[usart0Config.UCSRA] & UCSRA_U2X ? 8 : 16);
+  }
+
+  /**
+   * A byte was written to UDR0 (avr8js calls this at the cycle of the
+   * write): schedule its frame on the TX line, start bit low, data bits LSB
+   * first, optional parity, stop bit(s) high. It starts now or, while an
+   * earlier frame is still going out, straight after it.
+   */
+  private onTxByte = (byte: number): void => {
+    this.serial.push(byte);
+    const usart = this.chip.usart;
+    if (!usart.txEnable) return;
+    const now = this.chip.cycles;
+    this.flushTx(now);
+    const bits = usart.bitsPerChar;
+    const ninth = (this.chip.cpu.data[usart0Config.UCSRB] & UCSRB_TXB8) << 8;
+    const data = bits === 9 ? (byte & 0xff) | ninth : byte & ((1 << bits) - 1);
+    const levels = [false];
+    let ones = 0;
+    for (let i = 0; i < bits; i++) {
+      const bit = ((data >> i) & 1) === 1;
+      if (bit) ones++;
+      levels.push(bit);
+    }
+    if (usart.parityEnabled) levels.push((ones % 2 === 1) !== usart.parityOdd);
+    for (let i = 0; i < usart.stopBits; i++) levels.push(true);
+    const bitCycles = this.txBitCycles();
+    let t = Math.max(now, this.txFreeAt);
+    let high = true; // the line is high before a frame (idle, or the last stop bit)
+    for (const level of levels) {
+      if (level !== high) this.txQueue.push({ cycle: t, high: (high = level) });
+      t += bitCycles;
+    }
+    this.txQueue.push({ cycle: t, high: true, end: true });
+    this.txFreeAt = t;
+    this.flushTx(now); // a start bit at `now` shows at once
+  };
+
   /** Listen to the chip's current ports and USART. */
   private wire(): Record<UnoPin['port'], AVRIOPort> {
     const chip = this.chip;
     for (const port of [chip.portB, chip.portC, chip.portD]) port.addListener(this.onPortChange);
-    chip.usart.onByteTransmit = (byte) => this.serial.push(byte);
+    chip.usart.onByteTransmit = this.onTxByte;
+    // TXEN changes come through here (baud/frame changes too, harmless).
+    chip.usart.onConfigurationChange = this.onPortChange;
     return { B: chip.portB, C: chip.portC, D: chip.portD };
   }
 
   /** A watchdog reset rebuilt the chip: listen to the new parts, feed them the last inputs, report the pins. */
   private onReset = (): void => {
+    // The old transmitter ran until now; the new one starts idle and disabled.
+    this.flushTx(this.chip.cycles);
+    this.txQueue = [];
+    this.txHigh = true;
+    this.txFreeAt = this.chip.cycles;
     this.ports = this.wire();
     this.inputs = [];
     if (this.lastInputs) this.setInputs(this.lastInputs);
@@ -143,10 +264,12 @@ export class UnoEmulator implements BoardEmulator {
   };
 
   private onPortChange = (): void => {
-    const drives = this.drives();
-    if (drives === this.lastDrives) return;
-    this.lastDrives = drives;
-    this.events.push({ cycle: this.chip.cycles, drives });
+    const now = this.chip.cycles;
+    // TX changes before this moment happened with the old setup.
+    this.flushTx(now);
+    this.lastPortDrives = this.portDrives();
+    this.txEnabled = this.chip.usart.txEnable;
+    this.emit(now);
   };
 }
 
