@@ -1,7 +1,8 @@
-// IDE-style window layout (dockview): the grid editor fills the centre and
-// the windows from panels.ts dock around it (left / top / bottom, stacked or
-// tabbed) or float. The editor's group is locked and has no tab, so it can
-// not be moved, closed or tabbed with a window. The layout is saved per user
+// IDE-style window layout (dockview). The Circuit panel (the grid editor with
+// its parts menu) is an ordinary panel: it can be docked anywhere, tabbed with
+// other windows or floated, but it can not be closed (its tab has no close
+// button, its tab menu no "Close", Delete on its tab does nothing). The other
+// windows from panels.ts dock around it or float. The layout is saved per user
 // in localStorage (persist.ts) and restored at start-up.
 
 import 'dockview/dist/styles/dockview.css';
@@ -15,11 +16,23 @@ import {
   type IContentRenderer,
   type IDockviewPanel,
 } from 'dockview';
-import { EDITOR_ID, contentRenderer, editorRenderer, findWindow, placeholderRenderer } from './panels';
+import {
+  EDITOR_ID,
+  FIXED_TAB_ATTR,
+  contentRenderer,
+  editorRenderer,
+  findWindow,
+  fixedTabRenderer,
+  isClosable,
+  placeholderRenderer,
+  tabMenuItems,
+} from './panels';
 import { browserStorage, clearLayout, loadLayout, saveLayout, type LayoutStorage } from './persist';
 
 const THEME: DockviewTheme = { ...themeDark, name: 'gatehouse', className: `${themeDark.className} gh-dock` };
 const SAVE_DELAY_MS = 400;
+/** Tab component name of every panel; createTabComponent picks the tab by panel id. */
+const TAB_COMPONENT = 'gh-tab';
 
 export class DockLayout {
   readonly api: DockviewApi;
@@ -28,7 +41,8 @@ export class DockLayout {
 
   constructor(
     host: HTMLElement,
-    private readonly editorArea: HTMLElement,
+    /** Long-lived content of the Circuit panel (grid area and parts menu). */
+    private readonly circuitView: HTMLElement,
     /** Long-lived content of the windows that are built, by window id (others show their placeholder). */
     private readonly contents: Readonly<Record<string, HTMLElement>> = {},
     private readonly storage: LayoutStorage | null = browserStorage(),
@@ -36,13 +50,24 @@ export class DockLayout {
     this.api = createDockview(host, {
       theme: THEME,
       createComponent: ({ name }) => this.createComponent(name),
-      getTabContextMenuItems: () => ['float', 'separator', 'close'],
+      // Returning undefined gives dockview's default tab (with its close button).
+      defaultTabComponent: TAB_COMPONENT,
+      createTabComponent: ({ id }) => (isClosable(id) ? undefined : fixedTabRenderer()),
+      getTabContextMenuItems: ({ panel }) => tabMenuItems(panel.id),
       floatingGroupBounds: 'boundedWithinViewport',
     });
-    // Windows go left, above or below the grid: its right edge belongs to the parts menu.
-    this.api.onWillShowOverlay((e) => {
-      if (e.position === 'right' && (e.kind === 'edge' || e.group?.id === this.editorPanel()?.group.id)) e.preventDefault();
-    });
+    // dockview closes a focused tab on Delete / Backspace: not this one. Capture
+    // on the host runs before dockview's own listener on the tab strip.
+    host.addEventListener(
+      'keydown',
+      (e) => {
+        if ((e.key === 'Delete' || e.key === 'Backspace') && e.target instanceof Element && e.target.querySelector(`[${FIXED_TAB_ATTR}]`)) {
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      },
+      true,
+    );
     this.restore();
     this.api.onDidLayoutChange(this.scheduleSave);
     this.api.onDidAddPanel(this.changed);
@@ -69,22 +94,24 @@ export class DockLayout {
     if (before instanceof HTMLElement && before.isConnected && document.activeElement !== before) before.focus({ preventScroll: true });
   }
 
-  /** Show a window: bring it to the front, or dock it at its default place. */
+  /** Show a window (or the Circuit panel): bring it to the front, or dock it at its default place. */
   open(id: string): void {
     const existing = this.api.getPanel(id);
     if (existing) {
       existing.api.setActive();
       return;
     }
+    if (id === EDITOR_ID) return this.reset(); // can not happen (it is never closed), but never leave the app without its grid
     const spec = findWindow(id);
     if (spec) this.api.addPanel({ id, component: id, title: spec.title, ...this.defaultPlace(id) });
   }
 
+  /** Close a window; the Circuit panel stays. */
   close(id: string): void {
-    this.api.getPanel(id)?.api.close();
+    if (isClosable(id)) this.api.getPanel(id)?.api.close();
   }
 
-  /** Back to the first-start layout: only the grid, every window closed. */
+  /** Back to the first-start layout: only the Circuit panel, every window closed. */
   reset(): void {
     clearLayout(this.storage);
     this.buildDefault();
@@ -92,7 +119,7 @@ export class DockLayout {
   }
 
   private createComponent(name: string): IContentRenderer {
-    if (name === EDITOR_ID) return editorRenderer(this.editorArea);
+    if (name === EDITOR_ID) return editorRenderer(this.circuitView);
     const spec = findWindow(name);
     if (!spec) throw new Error(`Unknown window "${name}"`);
     const content = this.contents[name];
@@ -104,12 +131,9 @@ export class DockLayout {
     if (saved) {
       try {
         this.api.fromJSON(saved);
-        if (this.editorPanel()?.group.api.location.type === 'grid') {
-          this.lockEditor();
-          return;
-        }
+        if (this.editorPanel()) return;
       } catch {
-        // an old or damaged layout: start fresh below
+        // a damaged layout: start fresh below
       }
       clearLayout(this.storage);
     }
@@ -119,40 +143,36 @@ export class DockLayout {
   private buildDefault(): void {
     this.api.clear();
     this.api.addPanel({ id: EDITOR_ID, component: EDITOR_ID, title: 'Circuit' });
-    this.lockEditor();
-  }
-
-  /** No tab, nothing can be dropped into it (only beside it). */
-  private lockEditor(): void {
-    const group = this.editorPanel()?.group;
-    if (!group) return;
-    group.locked = true;
-    group.header.hidden = true;
   }
 
   private editorPanel(): IDockviewPanel | undefined {
     return this.api.getPanel(EDITOR_ID);
   }
 
-  /** Where a window opens when it is not open yet. */
+  /**
+   * Where a window opens when it is not open yet: beside the Circuit panel when
+   * it is docked in the grid, else (it floats) at the dock's own edges.
+   */
   private defaultPlace(id: string): Partial<AddPanelOptions> {
     const docked = (panelId: string): boolean => this.api.getPanel(panelId)?.group.api.location.type === 'grid';
+    const beside = (direction: 'left' | 'below'): Partial<AddPanelOptions> =>
+      docked(EDITOR_ID) ? { position: { referencePanel: EDITOR_ID, direction } } : { position: { direction } };
     switch (id) {
       case 'serial-console':
-        return { position: { referencePanel: EDITOR_ID, direction: 'below' }, initialHeight: 180 };
+        return { ...beside('below'), initialHeight: 180 };
       case 'build-output':
         // Next to the console as a tab when it is docked, else under the grid.
         return docked('serial-console')
           ? { position: { referencePanel: 'serial-console', direction: 'within' } }
-          : { position: { referencePanel: EDITOR_ID, direction: 'below' }, initialHeight: 180 };
+          : { ...beside('below'), initialHeight: 180 };
       case 'code-editor':
         return docked('file-explorer')
           ? { position: { referencePanel: 'file-explorer', direction: 'below' } }
-          : { position: { referencePanel: EDITOR_ID, direction: 'left' }, initialWidth: 360 };
+          : { ...beside('left'), initialWidth: 360 };
       default:
         return docked('code-editor')
           ? { position: { referencePanel: 'code-editor', direction: 'above' } }
-          : { position: { referencePanel: EDITOR_ID, direction: 'left' }, initialWidth: 240 };
+          : { ...beside('left'), initialWidth: 240 };
     }
   }
 
@@ -172,10 +192,12 @@ export class DockLayout {
 }
 
 /**
- * True when a key press is aimed at a window other than the grid (a tab,
+ * True when a key press is aimed at a window other than the grid (a tab strip,
  * a floating window, a window's content), so grid shortcuts leave it alone.
+ * Tab strips (the Circuit tab too) belong to dockview's own keys.
  */
 export function isForOtherWindow(target: EventTarget | null, editorArea: HTMLElement): boolean {
   if (!(target instanceof Element) || !target.closest('.dv-shell, .dv-dockview')) return false;
+  if (target.closest('.dv-tabs-and-actions-container')) return true;
   return !target.closest('.dv-groupview')?.contains(editorArea);
 }

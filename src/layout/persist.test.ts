@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SerializedDockview } from 'dockview';
-import { LAYOUT_KEY, clearLayout, loadLayout, saveLayout, type LayoutStorage } from './persist';
+import { LAYOUT_KEY, LAYOUT_VERSION, clearLayout, loadLayout, saveLayout, type LayoutStorage } from './persist';
 
 class MemoryStorage implements LayoutStorage {
   readonly items = new Map<string, string>();
@@ -53,6 +53,14 @@ describe('layout persistence', () => {
     }
     saveLayout(storage, { ...LAYOUT, panels: {} });
     expect(loadLayout(storage, 'editor')).toBeNull();
+  });
+
+  it('drops layouts of an older version (the locked, tab-less grid of version 1)', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(LAYOUT_KEY, JSON.stringify({ version: 1, dock: LAYOUT }));
+    expect(loadLayout(storage, 'editor')).toBeNull();
+    storage.setItem(LAYOUT_KEY, JSON.stringify({ version: LAYOUT_VERSION, dock: LAYOUT }));
+    expect(loadLayout(storage, 'editor')).toEqual(LAYOUT);
   });
 
   it('survives storage that throws', () => {

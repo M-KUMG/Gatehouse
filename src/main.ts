@@ -29,12 +29,16 @@ const dock = document.getElementById('dock');
 if (!app || !dock) throw new Error('Missing #app or #dock');
 
 // The grid's area: the canvas plus the overlays anchored to it (file bar,
-// zoom, status; the toolbar and board chip float over it). It lives in the dock's centre panel.
+// zoom, status; the toolbar and board chip float over it). It lives in the
+// Circuit panel's view, a row with the parts menu on its right (added at the end).
+const circuitView = document.createElement('div');
+circuitView.className = 'circuit-view';
 const editorArea = document.createElement('div');
 editorArea.className = 'editor-area';
 const canvas = document.createElement('canvas');
 canvas.id = 'grid';
 editorArea.append(canvas);
+circuitView.append(editorArea);
 
 // Compile sketches in the browser (a Worker, toolchain packs from /toolchain-packs/)
 // for the boards with a compiler profile; where the packs are not served
@@ -83,7 +87,7 @@ const codeEditor = new CodeEditor({
   },
 });
 onOpenFile((boardId, path, options) => codeEditor.open(boardId, path, options));
-const layout = new DockLayout(dock, editorArea, {
+const layout = new DockLayout(dock, circuitView, {
   [SERIAL_CONSOLE_ID]: serialConsole.element,
   [BUILD_OUTPUT_ID]: buildOutput.element,
   [CODE_EDITOR_ID]: codeEditor.element,
@@ -92,6 +96,8 @@ const layout = new DockLayout(dock, editorArea, {
 const view = new GridView(canvas, scene, project.camera);
 // Overlays beside the selection follow the canvas when windows move around it.
 layout.api.onDidLayoutChange(view.requestRender);
+// The Circuit tab moved to the back (or front) of its group: hide or show those overlays.
+layout.api.onDidActivePanelChange(view.requestRender);
 view.sim = sim;
 const editor = new Editor(view, scene, sim, editorArea);
 editor.ignoreKey = (e) => isForOtherWindow(e.target, editorArea);
@@ -184,9 +190,9 @@ view.renderListeners.push(() => project.checkForChanges());
 view.renderListeners.push(() => controller.history.settle());
 editor.onUndo = () => controller.history.undo();
 editor.onRedo = () => controller.history.redo();
-// Fixed column right of the dock; the dock reflows when it folds.
+// Foldable column on the right of the grid, inside the Circuit panel.
 createPalette(
-  app,
+  circuitView,
   (typeId, e) => editor.startPlacing(typeId, e),
   EXAMPLES.map((ex) => ({ name: ex.name, hint: ex.hint, run: () => editor.loadExample(ex.state) })),
 );

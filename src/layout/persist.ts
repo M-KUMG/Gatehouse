@@ -5,7 +5,11 @@
 import type { SerializedDockview } from 'dockview';
 
 export const LAYOUT_KEY = 'gatehouse.layout';
-const LAYOUT_VERSION = 1;
+/**
+ * 2: the Circuit panel became a movable panel with a tab (in 1 it was a locked,
+ * tab-less centre group); layouts of 1 are dropped and the app starts fresh.
+ */
+export const LAYOUT_VERSION = 2;
 
 /** The part of `Storage` used here, so tests can pass a fake. */
 export type LayoutStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;

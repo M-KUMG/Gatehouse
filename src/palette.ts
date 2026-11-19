@@ -13,8 +13,9 @@ export interface PaletteAction {
 const NARROW_SCREEN = 600; // CSS px: start with the menu folded away, so the grid keeps some room
 
 /**
- * Retractable parts menu, a fixed column on the right of `parent` (the dock
- * area beside it takes the rest of the width and reflows when it folds).
+ * Retractable parts menu, a column on the right of `parent` (the Circuit
+ * panel's row: the grid area beside it takes the rest of the width and its
+ * canvas resizes when the menu folds).
  * Pressing on an item calls `onGrab`, which starts dragging that part onto
  * the grid. `examples` become buttons under the list.
  */

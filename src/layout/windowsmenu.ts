@@ -1,8 +1,9 @@
 // "Windows" button for the file bar: a small menu to open or close each
-// dockable window, and to reset the layout.
+// dockable window, and to reset the layout. The Circuit panel is listed too,
+// always open: choosing it brings it to the front (it can not be closed).
 
 import type { DockLayout } from './dock';
-import { WINDOWS } from './panels';
+import { EDITOR_ID, WINDOWS, isClosable } from './panels';
 
 const ICON =
   '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" ' +
@@ -17,7 +18,7 @@ export function createWindowsMenu(layout: DockLayout): HTMLElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'file-button';
-  button.title = 'Windows (serial console, build output, code editor, file explorer)';
+  button.title = 'Windows (circuit, serial console, build output, code editor, file explorer)';
   button.setAttribute('aria-label', button.title);
   button.setAttribute('aria-haspopup', 'menu');
   button.innerHTML = ICON;
@@ -27,18 +28,20 @@ export function createWindowsMenu(layout: DockLayout): HTMLElement {
   menu.setAttribute('role', 'menu');
   menu.hidden = true;
 
-  const items = WINDOWS.map((spec) => {
+  const entries = [{ id: EDITOR_ID, title: 'Circuit' }, ...WINDOWS];
+  const items = entries.map((spec) => {
     const item = menuItem(spec.title, () => {
-      if (layout.isOpen(spec.id)) layout.close(spec.id);
+      if (isClosable(spec.id) && layout.isOpen(spec.id)) layout.close(spec.id);
       else layout.open(spec.id);
     });
+    if (!isClosable(spec.id)) item.title = 'Always open: brings it to the front';
     item.setAttribute('role', 'menuitemcheckbox');
     return { spec, item };
   });
   const separator = document.createElement('div');
   separator.className = 'windows-menu-separator';
   const reset = menuItem('Reset layout', () => layout.reset());
-  reset.title = 'Close all windows and forget their positions';
+  reset.title = 'Close all windows, put the Circuit panel back and forget their positions';
   menu.append(...items.map((i) => i.item), separator, reset);
 
   const refresh = (): void => {
@@ -68,8 +71,14 @@ export function createWindowsMenu(layout: DockLayout): HTMLElement {
     setOpen(false);
   };
   button.addEventListener('click', () => setOpen(menu.hidden));
-  menu.addEventListener('click', (e) => {
-    if (e.target instanceof Element && e.target.closest('.windows-menu-item')) setOpen(false);
+  // Choosing an entry keeps the menu open (to toggle several windows in a
+  // row); it closes when the mouse leaves it (after a short grace period so a
+  // small gap between button and list does not close it), or on Escape / an outside press.
+  let leaveTimer = 0;
+  wrap.addEventListener('pointerenter', () => window.clearTimeout(leaveTimer));
+  wrap.addEventListener('pointerleave', () => {
+    window.clearTimeout(leaveTimer);
+    if (!menu.hidden) leaveTimer = window.setTimeout(() => setOpen(false), 250);
   });
 
   wrap.append(button, menu);

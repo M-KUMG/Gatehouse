@@ -48,7 +48,7 @@
   position: relative;
 }
 
-/* Centre panel: the grid editor and the overlays anchored to it. */
+/* Circuit panel: the grid editor (with its overlays) and the parts menu. */
 .gh-editor-host {
   position: absolute;
   inset: 0;
