@@ -1,34 +1,36 @@
-// How long the time steps of the transient (time-stepping) solve are, chosen
-// from the circuit alone so the same circuit always steps the same way.
+// First guess for the length of the transient solver's time steps, chosen
+// from the circuit alone so the same circuit always starts the same way.
+// The steps themselves are error-controlled (src/sim/adaptive.ts): this guess
+// only sets the very first step (before the first probe has measured how
+// fast the circuit moves), so a poor guess costs a few rejected steps, not
+// accuracy.
 //
-// Rule (documented in the mixed-signal bridge too):
+// Rule:
 //   R_lo = smallest resistance in the netlist, R_hi = largest, taken from
 //          the resistors and the pots' full track, plus the board pins'
 //          pull-up for R_hi (floored at 1 ohm, R_hi capped at 1 Mohm; 1 kohm
 //          when the circuit has none). Small series resistances (battery
-//          internal resistance, a board pin's ~25 ohm output, ESR, DCR, a pot
-//          turned to an end) are left out on purpose: they are nearly always
-//          in series with a real resistor and would force the shortest steps
-//          on most circuits; where they alone set the time constant the step
-//          is too long and the edge is smoothed (stable, less accurate).
+//          internal resistance, a board pin's ~25 ohm output, ESR, DCR) are
+//          left out.
 //   tau  = min( C * R_lo over the capacitors, L / R_hi over the inductors )
 //   dt   = clamp(tau / STEPS_PER_TAU, MIN_STEP_SECONDS, slice length)
-// Using R_lo for capacitors and R_hi for inductors errs on the short side
-// (more steps than the real time constant needs): it costs time, not accuracy.
-// The bridge then cuts every slice into at most MAX_STEPS_PER_SLICE steps;
-// when that cap bites the steps are longer than the rule wants, so curves
-// are less accurate (backward Euler stays stable: a step much longer than the
-// time constant jumps to the settled value), but the result stays deterministic.
+// R_hi for inductors errs on the short side (a 10 mH coil anywhere near a
+// 1 Mohm pull-down guesses 0.2 us); the error control grows such a step by
+// up to x2 per step as soon as the probe shows nothing is moving that fast.
+// The bridge spends at most MAX_STEPS_PER_SLICE solves per 1 ms slice and
+// averages the pins of slices with more than AVERAGE_ABOVE pin segments.
 
 import type { SimInput } from '../sim';
 import type { BoardElectrical } from './board';
 
-/** Steps per smallest time constant: backward Euler then stays within ~1% of e^(-t/tau). */
+/** Steps per smallest time constant estimate (first guess only). */
 export const STEPS_PER_TAU = 50;
-/** Shortest step the rule picks. */
+/** Shortest first guess. */
 export const MIN_STEP_SECONDS = 1e-6;
-/** At most this many solves per slice (the cost cap; also ends the step rule at slice / 200 = 5 us). */
+/** At most this many solves per 1 ms slice (the cost cap; when it bites the slice is counted as capped). */
 export const MAX_STEPS_PER_SLICE = 200;
+/** A slice with more pin segments than this (fast PWM) is stepped with time-averaged pins. */
+export const AVERAGE_ABOVE = 50;
 
 const R_FLOOR = 1;
 const R_CEIL = 1e6;
@@ -58,7 +60,7 @@ export function smallestTimeConstant(input: SimInput, boards: readonly BoardElec
   return tau;
 }
 
-/** The step length the rule above asks for, within one slice of `sliceSeconds`. */
+/** The first step length the rule above guesses, within one slice of `sliceSeconds`. */
 export function stepSeconds(input: SimInput, boards: readonly BoardElectrical[], sliceSeconds: number): number {
   const tau = smallestTimeConstant(input, boards);
   if (!Number.isFinite(tau)) return sliceSeconds;

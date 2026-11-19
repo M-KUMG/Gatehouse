@@ -15,7 +15,7 @@ import { solveLinear } from './linear';
 import { makeMosfet, mosfetResult, stampMosfet, updateMosfet, type Mosfet } from './mosfet';
 import { buildNets } from './nets';
 import { companionOf, stampReactive, type Companion, type Reactive, type ReactiveState } from './reactive';
-import { stampInto } from './stamp';
+import { stampInto, type Stamp } from './stamp';
 import type { PartResult, SimInput, SimResult } from './types';
 
 const MAX_ITERATIONS = 200;
@@ -42,6 +42,9 @@ const REL_TOL = 1e-6;
 // rounding, not a real lack of convergence.
 // Worst case per solve: MAX_ITERATIONS plain + GMIN_BUDGET + SOURCE_BUDGET
 // Newton iterations (200 + 250 + 250 = 700 linear solves); deterministic.
+// A warm-started time step (see WarmStart / solveWith) tries at most
+// WARM_ITERATIONS before the aids (50 + 250 + 250), and when the last step
+// needed an aid it skips the plain attempt that failed then.
 const STAGE_ITERATIONS = 50;
 const GMIN_STEP_START = 1e-3;
 /** Below this the extra conductance is dropped altogether (it is then at most 1000 x GMIN). */
@@ -163,13 +166,77 @@ function buildElements(
   return el;
 }
 
-/** One linearized system at the devices' current operating points. */
-function assemble(el: Elements, size: number, ease: Easing): { a: Float64Array[]; z: Float64Array } {
-  const a: Float64Array[] = [];
-  for (let i = 0; i < size; i++) a.push(new Float64Array(size));
-  const z = new Float64Array(size);
+/**
+ * The buffers of one solve's linear systems, allocated once per solve and
+ * reused by every Newton iteration (no allocation per iteration).
+ * The matrix is a flat row-major array with one view per row (`rows`;
+ * solveLinear swaps the views, every assembly puts them back in order).
+ * The part of the system that does not depend on the devices' operating
+ * points (GMIN, the aids' shunts, resistors, pin drives, sources) is stamped
+ * once per easing into `base` and copied in; only the junctions and the
+ * reactive companions (in the original order, so every sum is the same as
+ * when everything was stamped afresh) are restamped each iteration.
+ */
+class Workspace {
+  private readonly base: Float64Array;
+  private readonly baseZ: Float64Array;
+  private readonly flat: Float64Array;
+  readonly z: Float64Array;
+  private readonly views: Float64Array[] = [];
+  readonly rows: Float64Array[] = [];
+  /** The assembled matrix before elimination (only the relaxed test needs it: made on first use). */
+  private saved: Float64Array | null = null;
+  savedRows: Float64Array[] = [];
+  /** Newton's iterates alternate between these two. */
+  readonly xs: [Float64Array, Float64Array];
+  private readonly stamp: Stamp;
+  private baseEase: Easing | null = null;
 
-  const stamp = stampInto(a, z);
+  constructor(readonly el: Elements, readonly size: number) {
+    this.base = new Float64Array(size * size);
+    this.baseZ = new Float64Array(size);
+    this.flat = new Float64Array(size * size);
+    this.z = new Float64Array(size);
+    for (let i = 0; i < size; i++) this.views.push(this.flat.subarray(i * size, (i + 1) * size));
+    this.rows = this.views.slice();
+    this.xs = [new Float64Array(size), new Float64Array(size)];
+    this.stamp = stampInto(this.rows, this.z);
+  }
+
+  /** The linearized system at the devices' current operating points, in `rows` and `z`. */
+  assemble(ease: Easing): void {
+    this.restoreRows();
+    if (!this.baseEase || this.baseEase.gshunt !== ease.gshunt || this.baseEase.scale !== ease.scale) {
+      this.flat.fill(0);
+      this.z.fill(0);
+      stampLinear(this.el, this.rows, this.z, this.stamp, ease);
+      this.base.set(this.flat);
+      this.baseZ.set(this.z);
+      this.baseEase = { ...ease };
+    } else {
+      this.flat.set(this.base);
+      this.z.set(this.baseZ);
+    }
+    stampDevices(this.el, this.stamp, ease.scale);
+  }
+
+  /** Keeps the assembled matrix in `savedRows` (solveLinear overwrites it). */
+  save(): void {
+    if (!this.saved) {
+      const saved = new Float64Array(this.size * this.size);
+      for (let i = 0; i < this.size; i++) this.savedRows.push(saved.subarray(i * this.size, (i + 1) * this.size));
+      this.saved = saved;
+    }
+    this.saved.set(this.flat);
+  }
+
+  private restoreRows(): void {
+    for (let i = 0; i < this.size; i++) this.rows[i] = this.views[i];
+  }
+}
+
+/** The part of the system that stays the same for one easing. */
+function stampLinear(el: Elements, a: Float64Array[], z: Float64Array, stamp: Stamp, ease: Easing): void {
   const { addG, addI } = stamp;
   const { gshunt, scale } = ease;
 
@@ -206,17 +273,19 @@ function assemble(el: Elements, size: number, ease: Easing): { a: Float64Array[]
     a[k][k] -= s.r;
     z[k] = s.volts * scale;
   }
+}
 
+/** The junctions at their operating points, then the reactive companions (their sources scaled by `scale`). */
+function stampDevices(el: Elements, stamp: Stamp, scale: number): void {
+  const { addG, addI } = stamp;
   for (const d of el.diodes) {
     const { i, g } = junction(d.v, d.is, d.nvt);
     addG(d.inner, d.cathode, g + GMIN);
     addI(d.inner, d.cathode, i - g * d.v);
   }
-
   for (const q of el.bjts) stampBjt(q, stamp);
   for (const q of el.mosfets) stampMosfet(q, stamp);
   for (const r of el.reactives) stampReactive(scale === 1 ? r : { ...r, ieq: r.ieq * scale }, stamp);
-  return { a, z };
 }
 
 /** The devices' linearization points (all the state Newton's method carries besides the node voltages). */
@@ -243,7 +312,13 @@ function setDeviceState(el: Elements, s: readonly number[] | null): void {
   }
 }
 
-interface NewtonRun { x: Float64Array; converged: boolean; iterations: number }
+interface NewtonRun {
+  x: Float64Array;
+  converged: boolean;
+  iterations: number;
+  /** Converged by the plain test alone (no unknown needed the relaxed residual check). */
+  strict?: boolean;
+}
 
 /**
  * Newton-Raphson with junction limiting from `x` and the devices' current
@@ -259,29 +334,42 @@ interface NewtonRun { x: Float64Array; converged: boolean; iterations: number }
  * plain test can never pass, yet nothing in the circuit depends on it.
  */
 function newton(
-  el: Elements, size: number, start: Float64Array, ease: Easing, maxIterations: number, relaxed = false,
+  ws: Workspace, start: Float64Array, ease: Easing, maxIterations: number, relaxed = false,
 ): NewtonRun {
+  const { el, size } = ws;
   let x = start;
   const volt = (n: number): number => (n > 0 ? x[n - 1] : 0);
   const nonlinear = el.diodes.length + el.bjts.length + el.mosfets.length > 0;
   const nodeRows = Math.max(0, el.nodes - 1);
   let iterations = 0;
+  let settled = true;
+  // Move each junction to its new voltage, but never too far up the exponential.
+  const step = (raw: number, old: number, nvt: number, vCrit: number): number => {
+    const limited = limitJunction(raw, old, nvt, vCrit);
+    if (Math.abs(limited - raw) > ABS_TOL) settled = false;
+    return limited;
+  };
+  const bjtStep = (raw: number, old: number, vCrit: number): number => step(raw, old, VT, vCrit);
+  // The answer must outlive the workspace's buffers.
+  const own = (v: Float64Array): Float64Array => (v === ws.xs[0] || v === ws.xs[1] ? v.slice() : v);
   for (let iter = 1; iter <= maxIterations; iter++) {
-    const { a, z } = assemble(el, size, ease);
-    const rows = relaxed ? a.map((row) => row.slice()) : null; // solveLinear overwrites `a`
-    const next = solveLinear(a, z);
+    ws.assemble(ease);
+    if (relaxed) ws.save(); // solveLinear overwrites the matrix
+    const next = solveLinear(ws.rows, ws.z, x === ws.xs[0] ? ws.xs[1] : ws.xs[0]);
     if (!next) break;
-    let settled = true;
+    settled = true;
+    let strict = true;
     if (nonlinear) {
       for (let i = 0; i < size && settled; i++) {
         if (Math.abs(next[i] - x[i]) <= ABS_TOL + REL_TOL * Math.abs(next[i])) continue;
-        if (!rows) {
+        strict = false;
+        if (!relaxed) {
           settled = false;
           break;
         }
         let residual = 0;
         let scale = 0;
-        const row = rows[i];
+        const row = ws.savedRows[i];
         for (let j = 0; j < size; j++) {
           residual += row[j] * (next[j] - x[j]);
           scale += Math.abs(row[j] * next[j]);
@@ -291,18 +379,12 @@ function newton(
     }
     x = next;
     iterations = iter;
-    // Move each junction to its new voltage, but never too far up the exponential.
-    const step = (raw: number, old: number, nvt: number, vCrit: number): number => {
-      const limited = limitJunction(raw, old, nvt, vCrit);
-      if (Math.abs(limited - raw) > ABS_TOL) settled = false;
-      return limited;
-    };
     for (const d of el.diodes) d.v = step(volt(d.inner) - volt(d.cathode), d.v, d.nvt, d.vCrit);
-    for (const q of el.bjts) updateBjt(q, volt, (raw, old, vCrit) => step(raw, old, VT, vCrit));
+    for (const q of el.bjts) updateBjt(q, volt, bjtStep);
     for (const q of el.mosfets) if (updateMosfet(q, volt, ABS_TOL)) settled = false;
-    if (settled) return { x, converged: true, iterations };
+    if (settled) return { x: own(x), converged: true, iterations, strict };
   }
-  return { x, converged: false, iterations };
+  return { x: own(x), converged: false, iterations };
 }
 
 /**
@@ -314,17 +396,19 @@ function newton(
  * circuit (no shunt, full sources) did, within `budget` Newton iterations.
  */
 function continuation(
-  el: Elements, size: number, budget: number, first: Easing,
+  ws: Workspace, budget: number, first: Easing,
   next: (good: Easing | null, ok: boolean) => Easing | null,
 ): NewtonRun {
+  const { el, size } = ws;
   setDeviceState(el, null);
   let good: { ease: Easing; x: Float64Array; devices: number[] } | null = null;
   let iterations = 0;
   let ease: Easing | null = first;
   while (ease && iterations < budget) {
-    const run = newton(el, size, good?.x ?? new Float64Array(size), ease, Math.min(STAGE_ITERATIONS, budget - iterations), true);
+    const run = newton(ws, good?.x ?? new Float64Array(size), ease, Math.min(STAGE_ITERATIONS, budget - iterations), true);
     // A singular matrix makes no Newton step at all: count it anyway so the budget bounds the loop.
-    iterations += Math.max(1, run.iterations);    if (run.converged) {
+    iterations += Math.max(1, run.iterations);
+    if (run.converged) {
       if (ease.gshunt === 0 && ease.scale === 1) return { x: run.x, converged: true, iterations };
       good = { ease, x: run.x, devices: deviceState(el) };
     } else {
@@ -336,9 +420,9 @@ function continuation(
 }
 
 /** Gmin stepping: the extra shunt starts at GMIN_STEP_START and goes down by up to a decade per stage, then to 0. */
-function gminStepping(el: Elements, size: number): NewtonRun {
+function gminStepping(ws: Workspace): NewtonRun {
   let factor = 10;
-  return continuation(el, size, GMIN_BUDGET, { gshunt: GMIN_STEP_START, scale: 1 }, (good, ok) => {
+  return continuation(ws, GMIN_BUDGET, { gshunt: GMIN_STEP_START, scale: 1 }, (good, ok) => {
     if (!good) return null; // not even the most eased circuit converges
     if (!ok) {
       factor = Math.sqrt(factor);
@@ -350,9 +434,9 @@ function gminStepping(el: Elements, size: number): NewtonRun {
 }
 
 /** Source stepping: every source ramps from 0 to 100 % in adaptive increments. */
-function sourceStepping(el: Elements, size: number): NewtonRun {
+function sourceStepping(ws: Workspace): NewtonRun {
   let increment = SOURCE_FIRST_STEP;
-  return continuation(el, size, SOURCE_BUDGET, { gshunt: 0, scale: 0 }, (good, ok) => {
+  return continuation(ws, SOURCE_BUDGET, { gshunt: 0, scale: 0 }, (good, ok) => {
     if (!good) return null;
     if (ok) {
       increment = Math.min(increment * 2, 0.5);
@@ -368,14 +452,66 @@ export function solveCircuit(input: SimInput): SimResult {
   return solveWith(input, undefined, input.time ?? 0).result;
 }
 
+/** Which convergence aid a solve needed (and the next warm-started one should go to). */
+export type AidHint = 'gmin' | 'source';
+
+/**
+ * Where the previous solve of the same netlist ended (plain data): the
+ * starting point of the next one (a warm start).
+ * - `shape` identifies the layout of the unknowns: the nets by component id
+ *   and pin, the internal nodes and the parts in order. A warm start whose
+ *   shape differs from the circuit being solved (a wire or part was added,
+ *   removed or changed kind) is ignored: that solve starts from zero.
+ * - `x`: every unknown (node voltages, then source branch currents).
+ * - `devices`: the junction voltages the diodes, BJTs and MOSFETs were
+ *   linearized at (deviceState()).
+ * - `aid`: set when that solve needed gmin or source stepping. See solveWith().
+ */
+export interface WarmStart {
+  shape: string;
+  x: number[];
+  devices: number[];
+  aid?: AidHint;
+}
+
+/**
+ * Newton budget of a warm-started solve before it escalates to the aids.
+ * The previous step is close, so a good start converges in a few iterations;
+ * one that needs more is better served by the aids than by 200 plain ones.
+ */
+const WARM_ITERATIONS = 50;
+
+/** The layout signature a WarmStart must match (see WarmStart.shape). */
+function shapeOf(input: SimInput, nets: ReturnType<typeof buildNets>, el: Elements, size: number): string {
+  let s = `${nets.count}/${el.nodes}/${size}`;
+  for (const c of input.components) s += `|${c.id}${c.model.kind}`;
+  for (const [key, n] of nets.index) s += `|${key}=${n}`;
+  return s;
+}
+
 /**
  * One solve: the DC operating point without `step`, else one time step
  * ending at `time`. `stored` is the state of every capacitor and inductor
- * at the solution (null when Newton's method did not converge).
+ * at the solution (null when Newton's method did not converge), `warm` where
+ * it ended (null when not converged), to pass to the next solve.
+ *
+ * Without a usable `warm` (none, or another shape): plain Newton from zero
+ * (MAX_ITERATIONS), then gmin stepping, then source stepping (as always).
+ * With one, Newton starts from its unknowns and device voltages:
+ * - no `aid` hint: plain Newton, at most WARM_ITERATIONS, then the aids
+ *   (each from zero, as above) if it fails;
+ * - `aid` hint (the last solve needed an aid): the 200 plain iterations that
+ *   failed then are skipped. Newton runs from the warm start with the aids'
+ *   relaxed test (the warm start plays the part of the continuation's last
+ *   eased stage), at most WARM_ITERATIONS, reported as that aid; if it fails,
+ *   the hinted aid runs from zero, then the other one.
+ * The hint is set whenever an aid gave the answer and cleared as soon as a
+ * solve converges by the plain test (a hinted run checks this every time,
+ * so no separate re-probe is needed). No convergence: no warm start at all.
  */
 export function solveWith(
-  input: SimInput, step: Companion | undefined, time: number,
-): { result: SimResult; stored: Record<number, ReactiveState> | null } {
+  input: SimInput, step: Companion | undefined, time: number, warm?: WarmStart,
+): { result: SimResult; stored: Record<number, ReactiveState> | null; warm: WarmStart | null } {
   const nets = buildNets(input);
   const result: SimResult = {
     time,
@@ -395,16 +531,40 @@ export function solveWith(
   const volt = (n: number): number => (n > 0 ? x[n - 1] : 0);
   const nonlinear = el.diodes.length + el.bjts.length + el.mosfets.length > 0;
 
+  const shape = shapeOf(input, nets, el, size);
+  const devices = el.diodes.length + 2 * (el.bjts.length + el.mosfets.length);
+  const start = warm && warm.shape === shape && warm.x.length === size && warm.devices.length === devices ? warm : null;
+  let aidUsed: AidHint | undefined;
   if (size > 0) {
-    // Plain Newton first, exactly as without the aids; they run only when it fails.
-    let run = newton(el, size, x, PLAIN, MAX_ITERATIONS);
+    const ws = new Workspace(el, size);
+    let run: NewtonRun;
+    let order: readonly AidHint[] = ['gmin', 'source'];
+    if (start) {
+      x = Float64Array.from(start.x);
+      setDeviceState(el, start.devices);
+      const hint = nonlinear ? start.aid : undefined;
+      run = newton(ws, x, PLAIN, WARM_ITERATIONS, hint !== undefined);
+      result.method = 'newton';
+      if (hint) {
+        // Settled by the plain test: the aid is no longer needed (the hint is cleared).
+        if (!(run.converged && run.strict)) {
+          aidUsed = hint;
+          result.method = hint;
+        }
+        order = hint === 'gmin' ? ['gmin', 'source'] : ['source', 'gmin'];
+      }
+    } else {
+      // Plain Newton first, exactly as without the aids; they run only when it fails.
+      run = newton(ws, x, PLAIN, MAX_ITERATIONS);
+      result.method = 'newton';
+    }
     let iterations = run.iterations;
-    result.method = 'newton';
     if (!run.converged && nonlinear) {
-      for (const [method, aid] of [['gmin', gminStepping], ['source', sourceStepping]] as const) {
-        run = aid(el, size);
+      for (const method of order) {
+        run = method === 'gmin' ? gminStepping(ws) : sourceStepping(ws);
         iterations += run.iterations;
         result.method = method;
+        aidUsed = method;
         if (run.converged) break;
       }
     }
@@ -413,6 +573,9 @@ export function solveWith(
     // No trustworthy answer: report zeros.
     x = run.converged ? run.x : new Float64Array(size);
   }
+  const next: WarmStart | null = result.converged
+    ? { shape, x: Array.from(x), devices: deviceState(el), ...(aidUsed ? { aid: aidUsed } : {}) }
+    : null;
 
   for (let n = 1; n < nets.count; n++) result.voltages[n] = volt(n);
   collectResults(input, el, volt, x, result);
@@ -426,7 +589,7 @@ export function solveWith(
       stored[r.part] = { volts: !step && r.kind === 'inductor' ? 0 : v, amps: r.g * v + r.ieq };
     }
   }
-  return { result, stored };
+  return { result, stored, warm: next };
 }
 
 function collectResults(

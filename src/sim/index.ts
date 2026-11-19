@@ -5,7 +5,7 @@ export { linkCurrents } from './flow';
 export { NODE_PIN, modelPins, terminalKey } from './nets';
 export { solveCircuit } from './solve';
 export { initialState, solveStep } from './transient';
-export type { Integration, ReactiveState, StepOptions, TransientState } from './transient';
+export type { AidHint, Integration, ReactiveState, StepOptions, TransientState, WarmStart } from './transient';
 export type {
   ComponentModel, PartResult, PinDrive, Reference, SimComponent, SimInput, SimResult, Terminal,
 } from './types';

@@ -12,8 +12,8 @@
 // time lives only in the TransientState, which is plain data (no hidden module
 // state), so the same input, state and dt always give the same output, and a
 // state can be saved, copied or sent to a Web Worker. Variable dt is allowed
-// (each step uses its own). The mixed-signal bridge can later step with
-// dt = its slice length (or with the times between pin changes).
+// (each step uses its own). adaptive.ts picks error-controlled step lengths
+// (the mixed-signal bridge steps with it).
 //
 // Method: companion models (reactive.ts) with backward Euler by default,
 // which is L-stable (no ringing or blow-up for any dt, a dt much larger than
@@ -22,22 +22,34 @@
 // (start from empty, a switch, a pin edge) it rings (+-error every step) unless
 // a short Euler step is taken first. Nonlinear parts reuse the DC
 // solver's Newton loop with its junction step limiting inside every step.
+// Each step starts Newton where the previous one ended (`TransientState.warm`:
+// node voltages, junction voltages and which convergence aid it needed), so a
+// step usually takes a few iterations instead of starting from zero.
 //
 // If a step does not converge, result.converged is false and its numbers are
 // zeros (as in the DC solve); the returned state keeps every part's previous
 // charge and advances the time, so the caller can carry on.
 
 import type { Integration, ReactiveState } from './reactive';
-import { solveWith } from './solve';
+import { solveWith, type WarmStart } from './solve';
 import type { SimInput, SimResult } from './types';
 
 export type { Integration, ReactiveState } from './reactive';
+export type { AidHint, WarmStart } from './solve';
 
 export interface TransientState {
   /** Simulated time in seconds the state belongs to. */
   time: number;
   /** Capacitor and inductor state per component id; missing = uncharged (0 V, 0 A). */
   stored: Record<number, ReactiveState>;
+  /**
+   * Where the last solve ended (node voltages, device junction voltages and
+   * whether it needed a convergence aid), so the next step starts there
+   * instead of from zero; absent: start from zero. It only speeds Newton up
+   * (the answer is the same within the solver's tolerance) and is ignored
+   * when the netlist changed shape (see WarmStart in solve.ts).
+   */
+  warm?: WarmStart;
 }
 
 export interface StepOptions {
@@ -54,7 +66,8 @@ export interface StepOptions {
 export function initialState(input: SimInput, options: { charged?: boolean } = {}): TransientState {
   const time = input.time ?? 0;
   if (options.charged === false) return { time, stored: {} };
-  return { time, stored: solveWith(input, undefined, time).stored ?? {} };
+  const { stored, warm } = solveWith(input, undefined, time);
+  return warm ? { time, stored: stored ?? {}, warm } : { time, stored: stored ?? {} };
 }
 
 /** Solves one time step of `dt` seconds (> 0) after `state`. */
@@ -63,10 +76,10 @@ export function solveStep(
 ): { result: SimResult; state: TransientState } {
   if (!(dt > 0) || !Number.isFinite(dt)) throw new RangeError(`solveStep: dt must be a positive number, got ${dt}`);
   const time = state.time + dt;
-  const { result, stored } = solveWith(
-    input, { dt, method: options.method ?? 'euler', stored: state.stored }, time,
+  const { result, stored, warm } = solveWith(
+    input, { dt, method: options.method ?? 'euler', stored: state.stored }, time, state.warm,
   );
-  if (stored) return { result, state: { time, stored } };
+  if (stored) return { result, state: warm ? { time, stored, warm } : { time, stored } };
   // Not converged: hold the previous charge of the parts that still exist.
   const held: Record<number, ReactiveState> = {};
   for (const { id, model } of input.components) {

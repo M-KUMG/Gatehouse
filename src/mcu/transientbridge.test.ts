@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ComponentModel, SimInput } from '../sim';
 import { UNO_ELECTRICAL, UNO_IO } from './avr/uno';
 import type { BoardEmulator, BoardInputs, SliceResult } from './board';
+import { solveStep } from '../sim';
 import { MixedSignal, SLICE_SECONDS, meanDrive, type BoardSlot } from './mixedsignal';
 import { MAX_STEPS_PER_SLICE, MIN_STEP_SECONDS, isReactive, smallestTimeConstant, stepSeconds } from './timestep';
 
@@ -25,6 +26,13 @@ function rc(volts: number, ohms: number, farads: number): SimInput {
 }
 
 const capVolts = (ms: MixedSignal): number => ms.result!.parts[CAP].voltage;
+
+/** A bridge whose time steps are recorded (dt of every solve, probes and shown-instant solves included). */
+function recording(): { ms: MixedSignal; dts: number[] } {
+  const dts: number[] = [];
+  const ms = new MixedSignal(undefined, (input, state, dt, options) => (dts.push(dt), solveStep(input, state, dt, options)));
+  return { ms, dts };
+}
 
 describe('time-step rule', () => {
   it('a fiftieth of the smallest R*C, clamped to 1 us .. one slice', () => {
@@ -71,7 +79,7 @@ describe('mixed-signal bridge with capacitors (time steps)', () => {
   });
 
   it('charges from empty along V(1 - e^(-t/RC)) within 2%', () => {
-    const ms = new MixedSignal();
+    const { ms, dts } = recording();
     ms.setCircuit(rc(V, R, C), []);
     for (const ms_ of [1, 2, 3, 5]) {
       ms.advance(SLICE_SECONDS * (ms_ - Math.round(ms.time / SLICE_SECONDS)));
@@ -80,7 +88,34 @@ describe('mixed-signal bridge with capacitors (time steps)', () => {
       const want = V * (1 - Math.exp(-t / tau));
       expect(Math.abs(capVolts(ms) - want) / want).toBeLessThan(0.02);
     }
-    expect(ms.lastSlice).toEqual({ steps: 50, averaged: false });
+    // Error-controlled steps: a few dozen solves for 5 time constants (the fixed tau/50 rule took 250).
+    expect(dts.length).toBeLessThan(100);
+    expect(ms.lastSlice.steps).toBeLessThan(10);
+    expect(ms.lastSlice.capped).toBe(false);
+  });
+
+  it('a slow circuit (RC = 1 s) takes about 20 steps per simulated second, within 1% of the curve', () => {
+    const { ms, dts } = recording();
+    ms.setCircuit(rc(V, 1e6, 1e-6), []);
+    for (let s = 1; s <= 5; s++) {
+      ms.advance(1);
+      expect(Math.abs(capVolts(ms) - V * (1 - Math.exp(-s))) / V).toBeLessThan(0.01);
+    }
+    expect(dts.length / 5).toBeLessThan(40);
+    expect(ms.capped).toBe(0);
+  });
+
+  it('an edit restarts the error control: a probe, then a short first step', () => {
+    const { ms, dts } = recording();
+    ms.setCircuit(rc(V, R, C), []);
+    ms.advance(0.02); // settled, the steps have grown long
+    expect(ms.stepLength).toBeGreaterThan(1e-3);
+    ms.setCircuit(rc(0, R, C), []); // battery to 0 V: discharges from 5 V
+    const n = dts.length;
+    ms.advance(0.001);
+    expect(dts[n]).toBeLessThan(1e-8); // the probe
+    expect(dts[n + 1]).toBeLessThanOrEqual(tau / 25);
+    expect(Math.abs(capVolts(ms) - V * Math.exp(-0.001 / tau)) / V).toBeLessThan(0.01);
   });
 
   it('is deterministic: the same steps give identical numbers, however time is asked for', () => {
@@ -234,6 +269,63 @@ describe('a board pin driving an RC low-pass', () => {
     const tau = 1025e-6;
     const want = 5 * (1 - Math.exp(-0.0005 / tau));
     expect(Math.abs(ms.instant!.parts[CAP].voltage - want) / want).toBeLessThan(0.02);
+  });
+
+  it('a pin edge is a step boundary: the probe and the next step start exactly at the edge', () => {
+    const probes: number[] = [];
+    const starts: number[] = [];
+    const ms = new MixedSignal(undefined, (input, state, dt, options) => {
+      (dt < 1e-8 ? probes : starts).push(state.time);
+      return solveStep(input, state, dt, options);
+    });
+    const board = new ScriptedBoard((c) => withPin(c >= 2300 && c < 7700 ? 'H' : 'L')); // 2.3 ms .. 7.7 ms
+    ms.setCircuit(lowPass(1000, 10e-6), [slot(board)]);
+    ms.advance(0.012);
+    for (const edge of [2.3e-3, 7.7e-3]) {
+      expect(probes.some((t) => Math.abs(t - edge) < 1e-12)).toBe(true);
+      expect(starts.some((t) => Math.abs(t - edge) < 1e-12)).toBe(true);
+    }
+  });
+
+  it('PWM at 490 Hz: every edge acts at its time, deterministically, far fewer steps than a fixed grid', () => {
+    const period = Math.round(1e6 / 490);
+    const pwm = (c: number): string => withPin(c % period < period / 2 ? 'H' : 'L');
+    const run = (): { ms: MixedSignal; dts: number[] } => {
+      const r = recording();
+      r.ms.setCircuit(lowPass(1000, 10e-6), [slot(new ScriptedBoard(pwm))]);
+      r.ms.advance(0.1);
+      return r;
+    };
+    const a = run();
+    const b = run();
+    expect(b.dts).toEqual(a.dts);
+    expect(b.ms.transient).toEqual(a.ms.transient);
+    expect(a.ms.lastSlice.averaged).toBe(false);
+    expect(a.ms.capped).toBe(0);
+    // 98 edges in 0.1 s; a probe and a few steps each (the fixed rule took 200 per ms here).
+    expect(a.dts.length).toBeLessThan(600);
+    // Ripple around the mean (2.5 V) after 10 time constants.
+    const v = a.ms.transient!.stored[CAP].volts;
+    expect(Math.abs(v - 2.5)).toBeLessThan(0.3);
+  });
+
+  it('the step cap bounds a slice and is reported', () => {
+    // 20 kHz (40 segments per slice, below the averaging limit) into RC = 1 us: each segment wants many short steps.
+    const fast = (c: number): string => withPin(c % 50 < 25 ? 'H' : 'L');
+    const run = (): MixedSignal => {
+      const ms = new MixedSignal();
+      ms.setCircuit(lowPass(975, 1e-9), [slot(new ScriptedBoard(fast))]);
+      ms.advance(0.003);
+      return ms;
+    };
+    const ms = run();
+    expect(ms.lastSlice.averaged).toBe(false);
+    expect(ms.lastSlice.capped).toBe(true);
+    expect(ms.lastSlice.steps).toBeLessThanOrEqual(MAX_STEPS_PER_SLICE);
+    expect(ms.capped).toBe(3);
+    expect(run().transient).toEqual(ms.transient);
+    ms.reset();
+    expect(ms.capped).toBe(0);
   });
 
   it('fast PWM beyond the step cap is averaged: the capacitor ramps towards the mean, deterministically', () => {

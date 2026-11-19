@@ -22,16 +22,27 @@
 //   Inputs therefore lag outputs by at most one slice (1 ms).
 //
 // Circuits with capacitors or inductors (`reactive`) are stepped in time
-// instead (transient solve, src/sim/transient.ts, backward Euler):
-// - Each slice is cut into steps of the length timestep.ts picks from the
-//   circuit (a fiftieth of the smallest R*C or L/R estimate, 1 us .. 1 ms).
-//   When the slice's pin segments fit into MAX_STEPS_PER_SLICE steps, every
-//   segment is stepped on its own, so a pin change acts at its exact time.
-//   Otherwise (fast PWM, many edges) the slice gets a uniform grid of at most
-//   MAX_STEPS_PER_SLICE steps and each pin is the time-weighted Norton mean
-//   of its setups during that step (exact for a linear RC smoothing PWM,
-//   an approximation for nonlinear loads). Either way the cost per slice is
-//   bounded and the outcome deterministic; the cap only costs accuracy.
+// instead (transient solve, src/sim/transient.ts, backward Euler), with
+// error-controlled step lengths (src/sim/adaptive.ts: the steps grow while
+// the circuit settles and shrink on fast changes, 0.1 us .. 50 ms):
+// - Every pin segment of the slice is stepped on its own: a pin change is a
+//   discontinuity at its exact time (steps end there, the error control
+//   restarts with a short probe). The last step of a slice may run past the
+//   slice end (up to 50 ms, `ahead`); slice ends inside it are linearly
+//   interpolated (shown values, pin voltages fed back, the stored charge),
+//   and a pin change or edit before its end takes the state at that moment
+//   from the interpolation and steps on from there. So a circuit that
+//   settles slowly costs a few steps per simulated second, not one per slice.
+// - With more than AVERAGE_ABOVE segments in a slice (fast PWM, many
+//   edges) the slice is stepped as one piece in which each pin is the
+//   time-weighted Norton mean of its setups during each step (exact for a
+//   linear RC smoothing PWM, an approximation for nonlinear loads); these
+//   steps end at the slice end.
+// - Cost cap: at most MAX_STEPS_PER_SLICE solves per slice (+1 to show an
+//   averaged slice). When the error control would need more, the rest of the
+//   slice is stepped without it (one step per remaining segment): less
+//   accurate, still stable and deterministic, and counted in `capped` /
+//   `lastSlice.capped`.
 // - The stored charge (`transient`, per component id) carries from slice to
 //   slice and survives circuit edits for the parts that still exist (new
 //   parts start empty). Before the first step (and after reset()) it is
@@ -43,8 +54,9 @@
 //   charge held (one tiny step that is not kept).
 
 import { solveCircuit, solveStep, type PartResult, type PinDrive, type SimInput, type SimResult, type TransientState } from '../sim';
+import { ADAPTIVE_DEFAULTS, AdaptiveStepper } from '../sim/adaptive';
 import type { BoardElectrical, BoardEmulator, DriveCode, IoPinDef, SerialBytes, SliceResult } from './board';
-import { MAX_STEPS_PER_SLICE, isReactive, stepSeconds } from './timestep';
+import { AVERAGE_ABOVE, MAX_STEPS_PER_SLICE, isReactive, stepSeconds } from './timestep';
 
 /** Simulated time between pin feedback steps. */
 export const SLICE_SECONDS = 0.001;
@@ -54,6 +66,8 @@ export const AVERAGE_SECONDS = 0.01;
 const CACHE_LIMIT = 512;
 /** Step used to show a stepped circuit between slices (charge held, the step is not kept). */
 const FREEZE_SECONDS = 1e-9;
+/** Input key of an averaged slice (never a drive string). */
+const AVERAGED_KEY = '~averaged';
 
 type Stepper = typeof solveStep;
 
@@ -187,10 +201,18 @@ export class MixedSignal {
   reactive = false;
   /** Charge of the reactive parts while stepping; null before the first step (the DC point is shown). */
   transient: TransientState | null = null;
-  /** Steps the last stepped slice took, and whether it used averaged pins (for tests and diagnostics). */
-  lastSlice = { steps: 0, averaged: false };
-  /** Step length the time-step rule picked for this circuit (seconds). */
+  /**
+   * The last stepped slice: solves it took (steps, rejected steps and probes;
+   * 0 when an earlier step already covered it), whether it used averaged pins
+   * and whether the cost cap cut its error control short (diagnostics).
+   */
+  lastSlice = { steps: 0, averaged: false, capped: false };
+  /** Stepped slices whose cost cap bit since the last reset() (the curves there are less accurate). */
+  capped = 0;
+  /** First step length guess for this circuit (seconds; timestep.ts). */
   private step = SLICE_SECONDS;
+  /** The error-controlled stepping while the circuit is reactive and has started; null before. */
+  private engine: AdaptiveStepper | null = null;
   /** Circuits per pin setup for the time steps. */
   private readonly inputs = new Map<string, SimInput>();
   /** Told about every slice of every running board (the Scope's recorder); null: nobody watches. */
@@ -211,14 +233,22 @@ export class MixedSignal {
     this.levels = slots.map((s) => s.io.map(() => false));
     this.reactive = isReactive(circuit);
     this.step = stepSeconds(circuit, slots.map((s) => s.electrical), SLICE_SECONDS);
-    if (!this.reactive) this.transient = null;
-    else if (this.transient) this.transient = { time: this.transient.time, stored: keepStored(circuit, this.transient.stored) };
+    if (!this.reactive) {
+      this.transient = null;
+      this.engine = null;
+    } else if (this.engine) {
+      // An edit is a discontinuity: the charge now (interpolated if a step ran
+      // ahead) is kept for the parts that still exist, the error control restarts.
+      // The warm start stays: the solver ignores it if the netlist changed shape.
+      this.engine.restart(this.time, ({ time, stored, warm }) => ({ time, stored: keepStored(circuit, stored), ...(warm ? { warm } : {}) }));
+      this.transient = this.engine.base.state;
+    }
     this.refresh();
   }
 
-  /** Step length the time-step rule picked for the current circuit (seconds; one slice without reactive parts). */
+  /** Next step length the error control will try (seconds; before the first step, the first guess from timestep.ts). */
   get stepLength(): number {
-    return this.step;
+    return this.engine?.h ?? this.step;
   }
 
   /** Pins changed outside a slice (a reset, a new program): solve again, restart the average. */
@@ -234,6 +264,8 @@ export class MixedSignal {
     this.time = 0;
     this.pending = 0;
     this.transient = null;
+    this.engine = null;
+    this.capped = 0;
     this.refresh();
   }
 
@@ -314,55 +346,82 @@ export class MixedSignal {
 
   /** One slice of a circuit with capacitors or inductors, in time steps (see the top of the file). */
   private steppedSlice(segments: readonly Segment[], current: readonly string[], dt: number): void {
-    let state: TransientState = this.transient ?? { time: this.time - dt, stored: {} };
-    const steps: [SimResult, number][] = [];
-    const run = (input: SimInput, seconds: number): void => {
-      const out = this.stepper(input, state, seconds);
-      state = out.state;
-      steps.push([out.result, seconds]);
-    };
-    const h = this.step;
-    const count = (seconds: number): number => Math.max(1, Math.ceil(seconds / h - 1e-9));
-    const exact = segments.reduce((n, s) => n + count(s.to - s.from), 0);
-    // One segment needs no averaging: it just gets fewer, longer steps when the cap bites.
-    const averaged = exact > MAX_STEPS_PER_SLICE && segments.length > 1;
+    const end = this.time;
+    const start = end - dt;
+    const engine = (this.engine ??= new AdaptiveStepper(
+      this.stepper, { ...ADAPTIVE_DEFAULTS }, this.transient ?? { time: start, stored: {} }, this.step,
+    ));
+    const before = engine.stats.solves;
+    const at = (offset: number): number => (offset >= dt ? end : start + offset);
+    const averaged = segments.length > AVERAGE_ABOVE;
+    let capped = false;
     if (!averaged) {
-      for (const seg of segments) {
-        const n = Math.min(MAX_STEPS_PER_SLICE, count(seg.to - seg.from));
-        const input = this.inputFor(seg.drives);
-        for (let k = 0; k < n; k++) run(input, (seg.to - seg.from) / n);
-      }
+      segments.forEach((seg, k) => {
+        engine.setInput(seg.drives.join('|'), this.inputFor(seg.drives), at(seg.from));
+        // Keep a probe and a step for each later segment, and the one step a capped advance adds.
+        const later = segments.length - 1 - k;
+        const budget = MAX_STEPS_PER_SLICE - (engine.stats.solves - before) - 2 * later - 1;
+        const run = engine.advance(at(seg.to), { overshoot: k === segments.length - 1, budget: Math.max(0, budget) });
+        capped ||= run.capped;
+      });
     } else {
-      const n = Math.min(MAX_STEPS_PER_SLICE, count(dt));
-      let first = 0;
-      for (let k = 0; k < n; k++) {
-        const a = (k * dt) / n;
-        const b = ((k + 1) * dt) / n;
-        const parts: { drives: string[]; weight: number }[] = [];
-        let j = first;
-        while (j < segments.length && segments[j].from < b) {
-          const weight = Math.min(b, segments[j].to) - Math.max(a, segments[j].from);
-          if (weight > 0) parts.push({ drives: segments[j].drives, weight });
-          if (segments[j].to <= b) j++;
-          else break;
-        }
-        first = j;
-        run(parts.length === 1 ? this.inputFor(parts[0].drives) : this.meanInput(parts), b - a);
-      }
+      engine.setInput(AVERAGED_KEY, null, start);
+      const offsetOf = (t: number): number => Math.min(dt, Math.max(0, t - start));
+      const run = engine.advance(end, {
+        overshoot: false,
+        budget: MAX_STEPS_PER_SLICE - 1,
+        inputOver: (t0, t1) => this.meanOver(segments, offsetOf(t0), offsetOf(t1)),
+      });
+      capped = run.capped;
     }
-    this.lastSlice = { steps: steps.length, averaged };
-    this.transient = { time: this.time, stored: state.stored };
-    const last = steps[steps.length - 1][0];
-    this.instant = averaged ? this.frozen(current) : { ...last, time: this.time };
+    this.lastSlice = { steps: engine.stats.solves - before, averaged, capped };
+    if (capped) this.capped++;
+    this.transient = engine.stateAt(end);
+    this.instant = averaged ? this.frozen(current) : this.interpolated(engine, end);
     if (this.slots.some((s) => s.running && s.emulator)) {
-      const mean = mixResults(steps, this.time);
+      // The slice mean: the accepted steps inside it, then the shown instant for the rest.
+      const parts: [SimResult, number][] = [];
+      let covered = start;
+      for (const p of engine.takePieces()) {
+        const w = Math.min(p.to, end) - Math.max(p.from, start);
+        if (w > 0) parts.push([p.result, w]);
+        covered = Math.max(covered, p.to);
+      }
+      if (end - covered > 1e-12) parts.push([this.instant, end - covered]);
+      const mean = parts.length ? mixResults(parts, this.time) : this.instant;
       const alpha = 1 - Math.exp(-dt / AVERAGE_SECONDS);
       const prev = this.result;
       this.result = prev && prev.converged && mean.converged ? mixResults([[prev, 1 - alpha], [mean, alpha]], this.time) : mean;
     } else {
+      engine.takePieces();
       this.result = this.instant;
     }
     this.feedInputs(this.instant);
+  }
+
+  /** The circuit at time t from the engine: its last result, or interpolated towards the step ahead. */
+  private interpolated(engine: AdaptiveStepper, t: number): SimResult {
+    const base = engine.base.result;
+    const ahead = engine.ahead?.result;
+    const w = engine.weightAt(t);
+    if (!base) return ahead && w >= 1 ? { ...ahead, time: t } : this.frozen(this.currentDrives());
+    if (!ahead || w === 0) return { ...base, time: t };
+    return mixResults([[base, 1 - w], [ahead, w]], t);
+  }
+
+  /** The circuit with every pin at its time-weighted Norton mean over slice offsets [a, b]. */
+  private meanOver(segments: readonly Segment[], a: number, b: number): SimInput {
+    const parts: { drives: string[]; weight: number }[] = [];
+    for (const seg of segments) {
+      const weight = Math.min(b, seg.to) - Math.max(a, seg.from);
+      if (weight > 0) parts.push({ drives: seg.drives, weight });
+    }
+    if (parts.length === 0) {
+      // A zero-length span: the pins at that moment.
+      const seg = segments.find((x) => x.to > a) ?? segments[segments.length - 1];
+      return this.inputFor(seg.drives);
+    }
+    return parts.length === 1 ? this.inputFor(parts[0].drives) : this.meanInput(parts);
   }
 
   /** The stepped circuit for `drives` with the stored charge held (nothing is kept). */
