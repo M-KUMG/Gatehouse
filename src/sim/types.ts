@@ -104,9 +104,16 @@ export interface PartResult {
 export interface SimResult {
   /** Simulated time of the solve in seconds (SimInput.time). */
   time: number;
-  /** False when Newton's method ran out of iterations or the matrix was singular. */
+  /** False when Newton's method (and the convergence aids) ran out of iterations or the matrix was singular. */
   converged: boolean;
+  /** Newton iterations (linear solves) spent in total, convergence aids included. */
   iterations: number;
+  /**
+   * How the solve got there (diagnostics): plain Newton, or after it failed
+   * gmin stepping or source stepping (the last one tried when none worked).
+   * Absent for an empty circuit.
+   */
+  method?: 'newton' | 'gmin' | 'source';
   reference: Reference;
   /** Nets that join two or more pins. */
   connectedNets: number;

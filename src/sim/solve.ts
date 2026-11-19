@@ -4,7 +4,7 @@
 // Pure and deterministic: same input, same output; no clock, no randomness.
 // Capacitors are open and inductors near shorts here; with a `Companion`
 // (one time step, see transient.ts) they become their companion models and
-// the same Newton loop solves the step.
+// the same Newton loop (convergence aids included) solves the step.
 
 import { bjtResult, makeBjt, stampBjt, updateBjt, type Bjt } from './bjt';
 import {
@@ -23,6 +23,39 @@ const MAX_ITERATIONS = 200;
 const RAIL_OHMS = 0.05;
 const ABS_TOL = 1e-7;
 const REL_TOL = 1e-6;
+
+// Convergence aids (SPICE style), tried only after plain Newton has failed,
+// so circuits that converge today get bit-for-bit the same answer and cost.
+// Each is a continuation: a sequence of easier problems, every one started
+// from the previous one's solution (node voltages and the devices' limited
+// junction voltages, which is all the Newton loop carries).
+//  1. gmin stepping: an extra conductance from every node to ground and
+//     across every junction, GMIN_STEP_START at first, divided by up to 10
+//     per stage (the divisor shrinks after a failed stage), finally 0.
+//  2. source stepping: every independent source (batteries, board rails and
+//     pin drives, and the stored charge of capacitors / inductors in a time
+//     step) scaled from 0 to 100 %, the increment growing after a success and
+//     shrinking after a failure.
+// Every stage, the last one (the real circuit) included, uses Newton's
+// relaxed test (see newton()): what usually defeats plain Newton here is a
+// node held only by GMIN-sized conductances whose voltage jitters from
+// rounding, not a real lack of convergence.
+// Worst case per solve: MAX_ITERATIONS plain + GMIN_BUDGET + SOURCE_BUDGET
+// Newton iterations (200 + 250 + 250 = 700 linear solves); deterministic.
+const STAGE_ITERATIONS = 50;
+const GMIN_STEP_START = 1e-3;
+/** Below this the extra conductance is dropped altogether (it is then at most 1000 x GMIN). */
+const GMIN_STEP_END = 1e-9;
+const GMIN_BUDGET = 250;
+const SOURCE_BUDGET = 250;
+const SOURCE_FIRST_STEP = 0.1;
+const SOURCE_MIN_STEP = 1e-3;
+/** Residual current a node may keep in the aids' relaxed convergence test (SPICE's ABSTOL). */
+const CURRENT_TOL = 1e-12;
+
+/** How a Newton run eases the circuit: extra shunt conductance and the scale of every source. */
+interface Easing { gshunt: number; scale: number }
+const PLAIN: Easing = { gshunt: 0, scale: 1 };
 
 // Primitive elements. Node numbers: 0 is the reference, k > 0 is unknown k - 1.
 interface Resistor { part: number; a: number; b: number; g: number; pinA: string; pinB: string }
@@ -131,19 +164,32 @@ function buildElements(
 }
 
 /** One linearized system at the devices' current operating points. */
-function assemble(el: Elements, size: number): { a: Float64Array[]; z: Float64Array } {
+function assemble(el: Elements, size: number, ease: Easing): { a: Float64Array[]; z: Float64Array } {
   const a: Float64Array[] = [];
   for (let i = 0; i < size; i++) a.push(new Float64Array(size));
   const z = new Float64Array(size);
 
   const stamp = stampInto(a, z);
   const { addG, addI } = stamp;
+  const { gshunt, scale } = ease;
 
   for (let n = 1; n < el.nodes; n++) a[n - 1][n - 1] += GMIN;
+  if (gshunt > 0) {
+    for (let n = 1; n < el.nodes; n++) a[n - 1][n - 1] += gshunt;
+    for (const d of el.diodes) addG(d.inner, d.cathode, gshunt);
+    for (const q of el.bjts) {
+      addG(q.b, q.e, gshunt);
+      addG(q.b, q.c, gshunt);
+    }
+    for (const q of el.mosfets) {
+      addG(q.d, q.s, gshunt);
+      addG(q.g, q.s, gshunt);
+    }
+  }
   for (const r of el.resistors) addG(r.a, r.b, r.g);
   for (const d of el.drives) {
     addG(d.node, d.ref, d.g);
-    addI(d.ref, d.node, d.g * d.volts);
+    addI(d.ref, d.node, d.g * d.volts * scale);
   }
 
   for (const s of el.sources) {
@@ -158,7 +204,7 @@ function assemble(el: Elements, size: number): { a: Float64Array[]; z: Float64Ar
       a[k][s.neg - 1] -= 1;
     }
     a[k][k] -= s.r;
-    z[k] = s.volts;
+    z[k] = s.volts * scale;
   }
 
   for (const d of el.diodes) {
@@ -169,8 +215,153 @@ function assemble(el: Elements, size: number): { a: Float64Array[]; z: Float64Ar
 
   for (const q of el.bjts) stampBjt(q, stamp);
   for (const q of el.mosfets) stampMosfet(q, stamp);
-  for (const r of el.reactives) stampReactive(r, stamp);
+  for (const r of el.reactives) stampReactive(scale === 1 ? r : { ...r, ieq: r.ieq * scale }, stamp);
   return { a, z };
+}
+
+/** The devices' linearization points (all the state Newton's method carries besides the node voltages). */
+function deviceState(el: Elements): number[] {
+  const s: number[] = [];
+  for (const d of el.diodes) s.push(d.v);
+  for (const q of el.bjts) s.push(q.vbe, q.vbc);
+  for (const q of el.mosfets) s.push(q.vgs, q.vds);
+  return s;
+}
+
+/** Puts back a deviceState() snapshot; without one every device goes back to 0 V (the cold start). */
+function setDeviceState(el: Elements, s: readonly number[] | null): void {
+  let k = 0;
+  const next = (): number => (s ? s[k++] : 0);
+  for (const d of el.diodes) d.v = next();
+  for (const q of el.bjts) {
+    q.vbe = next();
+    q.vbc = next();
+  }
+  for (const q of el.mosfets) {
+    q.vgs = next();
+    q.vds = next();
+  }
+}
+
+interface NewtonRun { x: Float64Array; converged: boolean; iterations: number }
+
+/**
+ * Newton-Raphson with junction limiting from `x` and the devices' current
+ * linearization points (which it moves along), at most `maxIterations` steps.
+ *
+ * Settled when no unknown moves by more than ABS_TOL + REL_TOL of itself.
+ * With `relaxed` (the convergence aids only) an unknown that still moves is
+ * accepted too when the step leaves its equation balanced: the residual of
+ * its row, (A dx)_i, is within CURRENT_TOL (a node) or ABS_TOL (a source
+ * branch) plus REL_TOL of the row's terms. That is a node held only by GMIN
+ * and reverse-biased junctions (a floating base): its voltage is pinned by
+ * currents of ~1e-14 A and wanders by microvolts from rounding alone, so the
+ * plain test can never pass, yet nothing in the circuit depends on it.
+ */
+function newton(
+  el: Elements, size: number, start: Float64Array, ease: Easing, maxIterations: number, relaxed = false,
+): NewtonRun {
+  let x = start;
+  const volt = (n: number): number => (n > 0 ? x[n - 1] : 0);
+  const nonlinear = el.diodes.length + el.bjts.length + el.mosfets.length > 0;
+  const nodeRows = Math.max(0, el.nodes - 1);
+  let iterations = 0;
+  for (let iter = 1; iter <= maxIterations; iter++) {
+    const { a, z } = assemble(el, size, ease);
+    const rows = relaxed ? a.map((row) => row.slice()) : null; // solveLinear overwrites `a`
+    const next = solveLinear(a, z);
+    if (!next) break;
+    let settled = true;
+    if (nonlinear) {
+      for (let i = 0; i < size && settled; i++) {
+        if (Math.abs(next[i] - x[i]) <= ABS_TOL + REL_TOL * Math.abs(next[i])) continue;
+        if (!rows) {
+          settled = false;
+          break;
+        }
+        let residual = 0;
+        let scale = 0;
+        const row = rows[i];
+        for (let j = 0; j < size; j++) {
+          residual += row[j] * (next[j] - x[j]);
+          scale += Math.abs(row[j] * next[j]);
+        }
+        if (Math.abs(residual) > (i < nodeRows ? CURRENT_TOL : ABS_TOL) + REL_TOL * scale) settled = false;
+      }
+    }
+    x = next;
+    iterations = iter;
+    // Move each junction to its new voltage, but never too far up the exponential.
+    const step = (raw: number, old: number, nvt: number, vCrit: number): number => {
+      const limited = limitJunction(raw, old, nvt, vCrit);
+      if (Math.abs(limited - raw) > ABS_TOL) settled = false;
+      return limited;
+    };
+    for (const d of el.diodes) d.v = step(volt(d.inner) - volt(d.cathode), d.v, d.nvt, d.vCrit);
+    for (const q of el.bjts) updateBjt(q, volt, (raw, old, vCrit) => step(raw, old, VT, vCrit));
+    for (const q of el.mosfets) if (updateMosfet(q, volt, ABS_TOL)) settled = false;
+    if (settled) return { x, converged: true, iterations };
+  }
+  return { x, converged: false, iterations };
+}
+
+/**
+ * A continuation from the cold start through easier circuits to the real
+ * one. `next(good, ok)` gives the easing of the following stage, knowing the
+ * last converged easing (`good`, null before the first) and whether the
+ * stage just run converged; null stops. A failed stage puts the devices back
+ * where the last converged stage left them. Converged only when the real
+ * circuit (no shunt, full sources) did, within `budget` Newton iterations.
+ */
+function continuation(
+  el: Elements, size: number, budget: number, first: Easing,
+  next: (good: Easing | null, ok: boolean) => Easing | null,
+): NewtonRun {
+  setDeviceState(el, null);
+  let good: { ease: Easing; x: Float64Array; devices: number[] } | null = null;
+  let iterations = 0;
+  let ease: Easing | null = first;
+  while (ease && iterations < budget) {
+    const run = newton(el, size, good?.x ?? new Float64Array(size), ease, Math.min(STAGE_ITERATIONS, budget - iterations), true);
+    // A singular matrix makes no Newton step at all: count it anyway so the budget bounds the loop.
+    iterations += Math.max(1, run.iterations);    if (run.converged) {
+      if (ease.gshunt === 0 && ease.scale === 1) return { x: run.x, converged: true, iterations };
+      good = { ease, x: run.x, devices: deviceState(el) };
+    } else {
+      setDeviceState(el, good?.devices ?? null);
+    }
+    ease = next(good?.ease ?? null, run.converged);
+  }
+  return { x: new Float64Array(size), converged: false, iterations };
+}
+
+/** Gmin stepping: the extra shunt starts at GMIN_STEP_START and goes down by up to a decade per stage, then to 0. */
+function gminStepping(el: Elements, size: number): NewtonRun {
+  let factor = 10;
+  return continuation(el, size, GMIN_BUDGET, { gshunt: GMIN_STEP_START, scale: 1 }, (good, ok) => {
+    if (!good) return null; // not even the most eased circuit converges
+    if (!ok) {
+      factor = Math.sqrt(factor);
+      if (factor < 1.01) return null;
+    }
+    const lower = good.gshunt / factor;
+    return { gshunt: lower < GMIN_STEP_END ? 0 : lower, scale: 1 };
+  });
+}
+
+/** Source stepping: every source ramps from 0 to 100 % in adaptive increments. */
+function sourceStepping(el: Elements, size: number): NewtonRun {
+  let increment = SOURCE_FIRST_STEP;
+  return continuation(el, size, SOURCE_BUDGET, { gshunt: 0, scale: 0 }, (good, ok) => {
+    if (!good) return null;
+    if (ok) {
+      increment = Math.min(increment * 2, 0.5);
+    } else {
+      increment /= 4;
+      if (increment < SOURCE_MIN_STEP) return null;
+    }
+    return { gshunt: 0, scale: Math.min(1, good.scale + increment) };
+  });
 }
 
 export function solveCircuit(input: SimInput): SimResult {
@@ -205,34 +396,22 @@ export function solveWith(
   const nonlinear = el.diodes.length + el.bjts.length + el.mosfets.length > 0;
 
   if (size > 0) {
-    result.converged = false;
-    for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
-      const { a, z } = assemble(el, size);
-      const next = solveLinear(a, z);
-      if (!next) break;
-      let settled = true;
-      if (nonlinear) {
-        for (let i = 0; i < size; i++) {
-          if (Math.abs(next[i] - x[i]) > ABS_TOL + REL_TOL * Math.abs(next[i])) settled = false;
-        }
-      }
-      x = next;
-      result.iterations = iter;
-      // Move each junction to its new voltage, but never too far up the exponential.
-      const step = (raw: number, old: number, nvt: number, vCrit: number): number => {
-        const limited = limitJunction(raw, old, nvt, vCrit);
-        if (Math.abs(limited - raw) > ABS_TOL) settled = false;
-        return limited;
-      };
-      for (const d of el.diodes) d.v = step(volt(d.inner) - volt(d.cathode), d.v, d.nvt, d.vCrit);
-      for (const q of el.bjts) updateBjt(q, volt, (raw, old, vCrit) => step(raw, old, VT, vCrit));
-      for (const q of el.mosfets) if (updateMosfet(q, volt, ABS_TOL)) settled = false;
-      if (settled) {
-        result.converged = true;
-        break;
+    // Plain Newton first, exactly as without the aids; they run only when it fails.
+    let run = newton(el, size, x, PLAIN, MAX_ITERATIONS);
+    let iterations = run.iterations;
+    result.method = 'newton';
+    if (!run.converged && nonlinear) {
+      for (const [method, aid] of [['gmin', gminStepping], ['source', sourceStepping]] as const) {
+        run = aid(el, size);
+        iterations += run.iterations;
+        result.method = method;
+        if (run.converged) break;
       }
     }
-    if (!result.converged) x = new Float64Array(size); // no trustworthy answer: report zeros
+    result.converged = run.converged;
+    result.iterations = iterations;
+    // No trustworthy answer: report zeros.
+    x = run.converged ? run.x : new Float64Array(size);
   }
 
   for (let n = 1; n < nets.count; n++) result.voltages[n] = volt(n);
