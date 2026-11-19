@@ -122,6 +122,40 @@
   display: none;
 }
 
+.serial-send {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-top: 1px solid #3a3d44;
+  background: #25272c;
+}
+
+.serial-input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid #3a3d44;
+  border-radius: 4px;
+  background: #1e1f22;
+  color: #d8dbe0;
+  font: 12px ui-monospace, Consolas, monospace;
+}
+
+.serial-input::placeholder {
+  color: #7d828c;
+  font-family: system-ui, sans-serif;
+}
+
+.serial-input:focus-visible {
+  border-color: #4ea1ff;
+  outline: none;
+}
+
+.serial-input:disabled {
+  opacity: 0.55;
+}
+
 .serial-follow {
   position: absolute;
   right: 18px;

@@ -115,4 +115,13 @@ export interface BoardEmulator {
    * registers), or null when the port is not enabled or the rate is unknown.
    */
   serialBaud(port: string): number | null;
+  /**
+   * Bytes arriving at a serial port from outside (the serial console), in
+   * order. They are queued and reach the program one per frame time of the
+   * port's current setup (CPU cycles, never the wall clock), as if sent by a
+   * host on the line. A byte whose turn comes while the program's receiver
+   * is off is lost, like on real hardware. Unknown ports are ignored. The
+   * queue is dropped by a reset of the chip.
+   */
+  sendSerial(port: string, bytes: readonly number[]): void;
 }

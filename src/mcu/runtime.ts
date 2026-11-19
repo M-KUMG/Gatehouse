@@ -203,6 +203,27 @@ export class BoardRuntimes {
   }
 
   /**
+   * Send bytes to a board's serial port (from the serial console). Accepted
+   * only while the board has a program that was started: running, or paused
+   * (the bytes then wait in the emulator's queue and arrive once it runs
+   * again, at the line's pace in simulated time). Returns false, and drops
+   * the bytes, when the board does not exist, is stopped, failed to build or
+   * has no such port.
+   */
+  sendSerial(id: number, port: string, bytes: readonly number[]): boolean {
+    if (!this.canSendSerial(id, port)) return false;
+    this.byId.get(id)!.emulator!.sendSerial(port, bytes);
+    return true;
+  }
+
+  /** Whether sendSerial(id, port, ...) would be accepted now. */
+  canSendSerial(id: number, port: string): boolean {
+    const rt = this.byId.get(id);
+    if (!rt?.emulator || !rt.started || rt.error !== null) return false;
+    return rt.spec.serialPorts.some((p) => p.id === port);
+  }
+
+  /**
    * Compile only (Build button): the same build and build log as Run, but the
    * board keeps its state and emulator. Ignored while Run / Reset builds;
    * a Run or Reset meanwhile overtakes it. Never throws.

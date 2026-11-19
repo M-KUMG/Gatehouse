@@ -6,8 +6,14 @@
 //   5v, 3v3  supply rails;  gnd, gnd2, gnd3 ground;  vin, aref unconnected inside
 //
 // Serial TX on d1: while UCSR0B.TXEN is set the USART drives d1 (idle high),
-// and every byte written to UDR0 goes out as a cycle-exact UART frame. RX
-// from d0 is not modelled: d0 stays a plain port pin.
+// and every byte written to UDR0 goes out as a cycle-exact UART frame.
+//
+// Serial RX: bytes from the console (sendSerial) wait in a queue and arrive
+// one per frame time of the USART's current setup ((UBRR+1) * (U2X ? 8 : 16)
+// * symbols per frame, CPU cycles), as if a host sent them back to back. At
+// the end of each frame the receiver takes the byte when RXEN is set and the
+// last byte was read (else it is lost, like on real hardware). d0's pin level
+// is not decoded: d0 stays a plain port pin.
 
 import { PinState, usart0Config, type AVRIOPort } from 'avr8js';
 import type {
@@ -58,6 +64,7 @@ const CODES: Record<PinState, DriveCode> = {
 /** Index of d1 (PD1, TXD) in UNO_IO. */
 const TX_INDEX = UNO_IO.findIndex((p) => p.id === 'd1');
 const UCSRA_U2X = 0x02;
+const UCSRA_RXC = 0x80;
 const UCSRB_TXB8 = 0x01;
 
 /** A scheduled change of the TX line; `end` marks the end of a frame. */
@@ -88,6 +95,10 @@ export class UnoEmulator implements BoardEmulator {
   private txQueue: TxEdge[] = [];
   /** Cycle at which the last scheduled frame ends (the line is free from then on). */
   private txFreeAt = 0;
+  /** Bytes from sendSerial not on the line yet. */
+  private rxQueue: number[] = [];
+  /** A received frame is on the line (its end is a clock event of the CPU). */
+  private rxOnLine = false;
 
   /** `flash` is the program memory image (see parseIntelHex). Starts from reset. */
   constructor(flash: Uint8Array) {
@@ -155,6 +166,39 @@ export class UnoEmulator implements BoardEmulator {
     return usart.baudRate;
   }
 
+  sendSerial(port: string, bytes: readonly number[]): void {
+    if (port !== UNO_SERIAL.id) return;
+    for (const b of bytes) this.rxQueue.push(b & 0xff);
+    if (!this.rxOnLine) this.nextRxFrame();
+  }
+
+  /** Bytes from sendSerial still waiting (the one on the line not counted). */
+  get serialRxPending(): number {
+    return this.rxQueue.length;
+  }
+
+  /**
+   * Put the next queued byte on the RX line: it takes one frame at the
+   * USART's setup as of now. At the stop bit the receiver latches it, if it
+   * is enabled and its data register is free (avr8js has one receive
+   * register, not the chip's 2-byte FIFO; an unread byte is not
+   * overwritten, the new one is lost as on a data overrun).
+   */
+  private nextRxFrame = (): void => {
+    const byte = this.rxQueue.shift();
+    if (byte === undefined) {
+      this.rxOnLine = false;
+      return;
+    }
+    this.rxOnLine = true;
+    const { cpu, usart } = this.chip;
+    cpu.addClockEvent(() => {
+      const unread = (cpu.data[usart0Config.UCSRA] & UCSRA_RXC) !== 0;
+      if (usart.rxEnable && !usart.rxBusy && !unread) usart.writeByte(byte, true);
+      this.nextRxFrame();
+    }, this.frameCycles());
+  };
+
   private portDrives(): string {
     let s = '';
     for (const pin of UNO_IO) s += CODES[this.ports[pin.port].pinState(pin.bit)];
@@ -202,6 +246,12 @@ export class UnoEmulator implements BoardEmulator {
     const data = this.chip.cpu.data;
     const ubrr = (data[usart0Config.UBRRH] << 8) | data[usart0Config.UBRRL];
     return (ubrr + 1) * (data[usart0Config.UCSRA] & UCSRA_U2X ? 8 : 16);
+  }
+
+  /** One whole frame at the current setup: start bit, data bits, parity, stop bit(s). */
+  private frameCycles(): number {
+    const usart = this.chip.usart;
+    return this.txBitCycles() * (1 + usart.bitsPerChar + (usart.parityEnabled ? 1 : 0) + usart.stopBits);
   }
 
   /**
@@ -257,6 +307,9 @@ export class UnoEmulator implements BoardEmulator {
     this.txQueue = [];
     this.txHigh = true;
     this.txFreeAt = this.chip.cycles;
+    // The received frame's clock event went with the old CPU; queued bytes are dropped.
+    this.rxQueue = [];
+    this.rxOnLine = false;
     this.ports = this.wire();
     this.inputs = [];
     if (this.lastInputs) this.setInputs(this.lastInputs);

@@ -58,6 +58,7 @@ class ScriptedBoard implements BoardEmulator {
   serialBaud(): number | null {
     return null;
   }
+  sendSerial(): void {}
 }
 
 const D13 = UNO_IO.findIndex((p) => p.id === 'd13');

@@ -119,3 +119,40 @@ describe('board runtime: program from the board files', () => {
     expect(boards.get(id)).toBeUndefined();
   });
 });
+
+describe('board runtime: serial input', () => {
+  it('sendSerial reaches the emulator only while the board runs or is paused', async () => {
+    const { boards, id } = setup();
+    const bytes = [0x68, 0x69, 0x0a];
+    expect(boards.sendSerial(id, 'usart0', bytes)).toBe(false); // stopped: no emulator yet
+    expect(boards.sendSerial(id + 999, 'usart0', bytes)).toBe(false); // no such board
+    await boards.runBoard(id);
+    const emu = boards.get(id)!.emulator!;
+    const sent: [string, number[]][] = [];
+    emu.sendSerial = (port, b) => void sent.push([port, [...b]]);
+    expect(boards.canSendSerial(id, 'usart0')).toBe(true);
+    expect(boards.sendSerial(id, 'usart0', bytes)).toBe(true);
+    expect(boards.sendSerial(id, 'usart9', bytes)).toBe(false); // the Uno has no such port
+    boards.pauseBoard(id);
+    expect(boards.sendSerial(id, 'usart0', [0x21])).toBe(true); // queued, arrives when it runs again
+    expect(sent).toEqual([['usart0', bytes], ['usart0', [0x21]]]);
+    await boards.resetBoard(id);
+    expect(boards.boardRunState(id).state).toBe('stopped');
+    expect(boards.sendSerial(id, 'usart0', bytes)).toBe(false);
+    expect(sent).toHaveLength(2);
+  });
+
+  it('bytes sent to a paused board are delivered once it runs again (simulated time only)', async () => {
+    const { boards, id } = setup();
+    await boards.runBoard(id);
+    const emu = boards.get(id)!.emulator!;
+    emu.run(UNO_CLOCK_HZ / 100); // Blink's Serial.begin(9600) has run
+    boards.pauseBoard(id);
+    expect(boards.sendSerial(id, 'usart0', [0x41, 0x42])).toBe(true);
+    const uno = emu as unknown as { serialRxPending: number };
+    expect(uno.serialRxPending).toBe(1); // the first byte is on the line, the second waits
+    await boards.runBoard(id);
+    emu.run(2 * 16_640 + 100); // two frames at 9600
+    expect(uno.serialRxPending).toBe(0);
+  });
+});

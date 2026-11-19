@@ -10,8 +10,12 @@
 // Rendering appends only the new text (and trims the front when the store
 // dropped old text), so a long run never rebuilds the whole output.
 //
-// Later: an input line to send text to the board goes below the output
-// (the store and BoardEmulator have no receive path yet).
+// The input line below the output sends text to the shown board and port
+// (sim.boards.sendSerial): UTF-8 plus the chosen line ending (serialinput.ts),
+// on Enter or Send. Nothing is echoed: what appears is what the sketch sends
+// back. It is enabled while the board runs or is paused (paused: the bytes
+// wait and arrive when it runs again). Keys typed in it stay in it (no grid
+// or project shortcuts), like the File explorer's rename field.
 
 import './serialconsole.css';
 import { boardsInOrder } from '../boardcontrols';
@@ -20,6 +24,9 @@ import { nominalBaud, type SerialBuffer } from '../mcu/serialstore';
 import type { PlacedPart, Scene } from '../model';
 import { boardLabelWithId, getPart } from '../parts';
 import type { Simulation } from '../simulation';
+import {
+  DEFAULT_LINE_ENDING, LINE_ENDINGS, encodeSerialLine, isLineEnding, serialInputState, type LineEnding,
+} from './serialinput';
 
 export const SERIAL_CONSOLE_ID = 'serial-console';
 
@@ -49,6 +56,11 @@ export class SerialConsole {
   private readonly output = document.createElement('pre');
   private readonly hint = document.createElement('div');
   private readonly followButton = document.createElement('button');
+  private readonly input = document.createElement('input');
+  private readonly endingSelect = document.createElement('select');
+  private readonly sendButton = document.createElement('button');
+  /** Line ending for sent text (session UI state, like the board choice). */
+  private ending: LineEnding = DEFAULT_LINE_ENDING;
 
   /** AUTO or a board part id (as text, the select's value). */
   private boardChoice = AUTO;
@@ -99,7 +111,40 @@ export class SerialConsole {
     this.followButton.title = 'Jump to the newest output and keep following it';
     this.followButton.hidden = true;
     body.append(this.output, this.hint, this.followButton);
-    el.append(bar, body);
+
+    const send = document.createElement('div');
+    send.className = 'serial-send';
+    this.input.type = 'text';
+    this.input.className = 'serial-input';
+    this.input.spellcheck = false;
+    this.input.autocomplete = 'off';
+    this.input.setAttribute('aria-label', 'Text to send');
+    this.endingSelect.className = 'serial-select';
+    this.endingSelect.title = 'Added after the text when it is sent';
+    this.endingSelect.setAttribute('aria-label', 'Line ending');
+    this.endingSelect.append(...LINE_ENDINGS.map((l) => option(l.id, l.name)));
+    this.endingSelect.value = this.ending;
+    this.sendButton.type = 'button';
+    this.sendButton.className = 'serial-button';
+    this.sendButton.textContent = 'Send';
+    send.append(this.input, this.endingSelect, this.sendButton);
+    el.append(bar, body, send);
+
+    this.input.addEventListener('keydown', (e) => {
+      e.stopPropagation(); // typing belongs to the field, not to the grid or the project shortcuts
+      if (e.isComposing) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.send();
+      }
+    });
+    this.endingSelect.addEventListener('change', () => {
+      if (isLineEnding(this.endingSelect.value)) this.ending = this.endingSelect.value;
+    });
+    this.sendButton.addEventListener('click', () => {
+      this.send();
+      this.input.focus();
+    });
 
     this.boardSelect.addEventListener('change', () => {
       this.boardChoice = this.boardSelect.value;
@@ -171,6 +216,28 @@ export class SerialConsole {
     this.hint.hidden = hint === '';
     this.clearButton.disabled = empty;
     this.followButton.hidden = this.follow || empty;
+    this.updateInput(board, portId);
+  }
+
+  /** Enable the input line for a board that runs or is paused; else disable it with the reason as its placeholder. */
+  private updateInput(board: number | null, port: string | null): void {
+    const status = board !== null ? this.sim.boards.boardRunState(board).state : 'stopped';
+    const { enabled, hint } = serialInputState({ board: board !== null, port: port !== null, status });
+    if (this.input.disabled === enabled) this.input.disabled = !enabled;
+    if (this.sendButton.disabled === enabled) this.sendButton.disabled = !enabled;
+    if (this.input.placeholder !== hint) this.input.placeholder = hint;
+    if (this.sendButton.title !== hint) this.sendButton.title = hint;
+  }
+
+  /** Send the typed line to the shown board and port; the field is emptied once the board took it. */
+  private send(): void {
+    const { board, port } = this.current;
+    if (board === null || port === null) return;
+    const bytes = encodeSerialLine(this.input.value, this.ending);
+    if (bytes.length === 0) return;
+    if (this.sim.boards.sendSerial(board, port, bytes)) this.input.value = '';
+    // Refused (the board stopped meanwhile): the text stays, the field shows why.
+    this.updateInput(board, port);
   }
 
   /** The board to show: the fixed choice, else Auto's board, else the first board. */
