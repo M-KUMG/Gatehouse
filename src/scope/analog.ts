@@ -297,9 +297,14 @@ export function autoRange(cols: readonly Column[]): { min: number; max: number }
     if (cols.length === 0) return null;
     min = max = cols[0].last;
   }
-  const span = max - min;
-  const pad = span > 0 ? span * 0.08 : Math.max(Math.abs(max) * 0.1, 1e-12);
-  return { min: min - pad, max: max + pad };
+  // The scale always includes zero: 0 up to the largest value, down to the
+  // most negative one when there are negative values, or both when the data
+  // crosses zero. A small margin is added only on the sides that are not 0.
+  const lo = Math.min(min, 0);
+  const hi = Math.max(max, 0);
+  if (lo === 0 && hi === 0) return { min: -1e-12, max: 1e-12 };
+  const margin = (hi - lo) * 0.05;
+  return { min: lo < 0 ? lo - margin : 0, max: hi > 0 ? hi + margin : 0 };
 }
 
 /** Value of a series at time t: the last sample at or before t (NaN when none). */

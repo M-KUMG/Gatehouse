@@ -237,12 +237,12 @@ const TO220_PINS: readonly PinDef[] = [
 export const PARTS: readonly PartType[] = [
   {
     id: 'battery', name: 'Battery (AA)', ...BATTERY_ART,
-    pins: [{ id: 'neg', name: 'â’', x: 0, y: 1 }, { id: 'pos', name: '+', x: 6, y: 1 }],
+    pins: [{ id: 'neg', name: '−', x: 0, y: 1 }, { id: 'pos', name: '+', x: 6, y: 1 }],
     sim: () => ({ kind: 'battery', volts: 1.5, rInternal: 0.2 }),
   },
   {
     id: 'battery9v', name: 'Battery (9 V)', ...BATTERY_9V_ART, mirrorable: true,
-    pins: [{ id: 'pos', name: '+', x: 5, y: 1 }, { id: 'neg', name: 'â’', x: 5, y: 2 }],
+    pins: [{ id: 'pos', name: '+', x: 5, y: 1 }, { id: 'neg', name: '−', x: 5, y: 2 }],
     sim: () => ({ kind: 'battery', volts: 9, rInternal: 1.5 }),
   },
   {
@@ -293,7 +293,7 @@ export const PARTS: readonly PartType[] = [
   },
   {
     id: 'led', name: 'LED', ...LED_ART, mirrorable: true,
-    pins: [{ id: 'cathode', name: 'Cathode (â’)', x: 1, y: 4 }, { id: 'anode', name: 'Anode (+)', x: 2, y: 4 }],
+    pins: [{ id: 'cathode', name: 'Cathode (−)', x: 1, y: 4 }, { id: 'anode', name: 'Anode (+)', x: 2, y: 4 }],
     warnAbove: LED_WARN_AMPS,
     burnAbove: 0.1,
     variant: (s) => (s.burned ? { key: 'burned', svg: LED_BURNED_SVG } : null),
@@ -335,7 +335,7 @@ export const PARTS: readonly PartType[] = [
   {
     // Pin ids are the diode model's, like the LED's; the band marks the cathode.
     id: 'diode', name: 'Diode (1N4148)', ...DIODE_ART,
-    pins: [{ id: 'anode', name: 'Anode (+)', x: 0, y: 1 }, { id: 'cathode', name: 'Cathode (â’, band)', x: 4, y: 1 }],
+    pins: [{ id: 'anode', name: 'Anode (+)', x: 0, y: 1 }, { id: 'cathode', name: 'Cathode (−, band)', x: 4, y: 1 }],
     readout: diodeReadout,
     sim: () => D1N4148,
   },

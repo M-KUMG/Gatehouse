@@ -197,3 +197,28 @@ describe('feeding from the bridge', () => {
     expect(b.rec.trace(PART, 'v')).toBeUndefined();
   });
 });
+
+describe('autoRange includes zero', () => {
+  const col = (min: number, max: number) => ({ x: 0, first: min, last: max, min, max });
+  it('goes from 0 to the largest value for positive data', () => {
+    const r = autoRange([col(4.8, 5)]);
+    expect(r?.min).toBe(0);
+    expect(r!.max).toBeGreaterThanOrEqual(5);
+    expect(r!.max).toBeLessThan(5.5);
+  });
+  it('goes down to the most negative value for negative data', () => {
+    const r = autoRange([col(-3, -2)]);
+    expect(r?.max).toBe(0);
+    expect(r!.min).toBeLessThanOrEqual(-3);
+  });
+  it('covers both sides when the data crosses zero', () => {
+    const r = autoRange([col(-1, 2)]);
+    expect(r!.min).toBeLessThanOrEqual(-1);
+    expect(r!.max).toBeGreaterThanOrEqual(2);
+  });
+  it('gives a tiny symmetric range for all zeros', () => {
+    const r = autoRange([col(0, 0)]);
+    expect(r!.min).toBeLessThan(0);
+    expect(r!.max).toBeGreaterThan(0);
+  });
+});
