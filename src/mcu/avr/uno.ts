@@ -10,6 +10,8 @@ import type {
   BoardElectrical, BoardEmulator, BoardInputs, BoardSpec, DriveCode, IoPinDef, PinEvent, SerialPortDef, SliceResult,
 } from '../board';
 import { ATMEGA328P_FLASH_BYTES, Atmega328p } from './atmega328p';
+import type { I2cBus } from './i2c';
+import type { SpiPort } from './spi';
 
 export const UNO_CLOCK_HZ = 16_000_000;
 
@@ -54,20 +56,37 @@ export class UnoEmulator implements BoardEmulator {
   readonly io = UNO_IO;
   readonly electrical = UNO_ELECTRICAL;
   private readonly chip: Atmega328p;
-  private readonly ports: Record<UnoPin['port'], AVRIOPort>;
+  private ports: Record<UnoPin['port'], AVRIOPort>;
   private lastDrives: string;
   private events: PinEvent[] = [];
   private serial: number[] = [];
   private inputs: boolean[] = [];
+  private lastInputs: BoardInputs | null = null;
 
   /** `flash` is the program memory image (see parseIntelHex). Starts from reset. */
   constructor(flash: Uint8Array) {
     this.chip = new Atmega328p(flash, UNO_CLOCK_HZ);
-    const chip = this.chip;
-    this.ports = { B: chip.portB, C: chip.portC, D: chip.portD };
+    this.ports = this.wire();
     this.lastDrives = this.drives();
-    for (const port of [chip.portB, chip.portC, chip.portD]) port.addListener(this.onPortChange);
-    chip.usart.onByteTransmit = (byte) => this.serial.push(byte);
+    this.chip.onReset = this.onReset;
+  }
+
+  /**
+   * I2C devices (a4 SDA / a5 SCL), byte level: attach/detach models by
+   * 7-bit address. Pin levels are not modelled (see i2c.ts).
+   */
+  get i2c(): I2cBus {
+    return this.chip.i2c;
+  }
+
+  /** SPI (d11 MOSI / d12 MISO / d13 SCK), byte level: set a handler. Pins are not modelled (see spi.ts). */
+  get spi(): SpiPort {
+    return this.chip.spi;
+  }
+
+  /** Watchdog resets since the emulator was created. */
+  get watchdogResets(): number {
+    return this.chip.resets;
   }
 
   get cycles(): number {
@@ -98,6 +117,7 @@ export class UnoEmulator implements BoardEmulator {
       if (pin.analog) this.chip.adc.channelValues[pin.bit] = Math.min(5, Math.max(0, inputs.analog[i] ?? 0));
     });
     this.inputs = [...inputs.digital];
+    this.lastInputs = { digital: [...inputs.digital], analog: [...inputs.analog] };
   }
 
   serialBaud(port: string): number | null {
@@ -105,6 +125,22 @@ export class UnoEmulator implements BoardEmulator {
     if (port !== UNO_SERIAL.id || !(usart.txEnable || usart.rxEnable)) return null;
     return usart.baudRate;
   }
+
+  /** Listen to the chip's current ports and USART. */
+  private wire(): Record<UnoPin['port'], AVRIOPort> {
+    const chip = this.chip;
+    for (const port of [chip.portB, chip.portC, chip.portD]) port.addListener(this.onPortChange);
+    chip.usart.onByteTransmit = (byte) => this.serial.push(byte);
+    return { B: chip.portB, C: chip.portC, D: chip.portD };
+  }
+
+  /** A watchdog reset rebuilt the chip: listen to the new parts, feed them the last inputs, report the pins. */
+  private onReset = (): void => {
+    this.ports = this.wire();
+    this.inputs = [];
+    if (this.lastInputs) this.setInputs(this.lastInputs);
+    this.onPortChange();
+  };
 
   private onPortChange = (): void => {
     const drives = this.drives();
