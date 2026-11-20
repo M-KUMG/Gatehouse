@@ -229,6 +229,11 @@ interface BoardChannels {
 export class SignalRecorder implements SliceObserver {
   /** Bumped by every change of any channel (redraw when it moved). */
   version = 0;
+  /**
+   * Told when the set of armed channels changed (the Simulation forwards it
+   * to the simulation Worker, which then sends the slices of those boards).
+   */
+  onArm: (() => void) | null = null;
   private readonly byBoard = new Map<number, BoardChannels>();
 
   constructor(readonly capacity: number = DEFAULT_CAPACITY) {}
@@ -241,6 +246,7 @@ export class SignalRecorder implements SliceObserver {
     if (!ch) {
       b.pins.set(pin, (ch = new DigitalChannel(board, pin, this.capacity)));
       this.version++;
+      this.onArm?.();
     }
     return ch;
   }
@@ -251,6 +257,14 @@ export class SignalRecorder implements SliceObserver {
     if (!b?.pins.delete(pin)) return;
     if (b.pins.size === 0 && b.emulator === null) this.byBoard.delete(board);
     this.version++;
+    this.onArm?.();
+  }
+
+  /** The armed channels as (board, pin) pairs. */
+  armedChannels(): [number, string][] {
+    const out: [number, string][] = [];
+    for (const [board, b] of this.byBoard) for (const pin of b.pins.keys()) out.push([board, pin]);
+    return out;
   }
 
   isArmed(board: number, pin: string): boolean {

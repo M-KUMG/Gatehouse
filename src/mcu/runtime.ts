@@ -23,7 +23,7 @@ import { BuildLog, idleBuildState, type BoardBuildState } from '../build/buildlo
 import type { BuildEvent, BuildInput, BuildResult } from '../build/compiler';
 import { buildFirmware } from '../build/registry';
 import { formatMessage, type BuildMessage } from '../build/wasm/diagnostics';
-import type { BoardSpec, SerialBytes } from './board';
+import type { BoardEmulator, BoardSpec, SerialBytes } from './board';
 import { HexError, parseIntelHex } from './hex';
 import type { BoardSlot } from './mixedsignal';
 import { SerialStore } from './serialstore';
@@ -84,6 +84,12 @@ export class BoardRuntimes {
   readonly serial = new SerialStore();
   /** Build output per board (status, progress, downloads, messages, sizes). */
   readonly buildLog = new BuildLog();
+  /**
+   * Makes a board's emulator from a successful build. The real one by
+   * default; with the simulation in a Worker the Simulation sets a stand-in
+   * (RemoteEmulator, src/sim/worker/client.ts) and the real one runs there.
+   */
+  createEmulator: (spec: BoardSpec, flash: Uint8Array, partId: number) => BoardEmulator = (spec, flash) => spec.create(flash);
   private readonly byId = new Map<number, BoardRuntime>();
   private readonly listeners: (() => void)[] = [];
 
@@ -141,6 +147,11 @@ export class BoardRuntimes {
 
   get(id: number): BoardRuntime | undefined {
     return this.byId.get(id);
+  }
+
+  /** Every board runtime (in no particular order). */
+  runtimes(): BoardRuntime[] {
+    return [...this.byId.values()];
   }
 
   get anyRunning(): boolean {
@@ -293,7 +304,7 @@ export class BoardRuntimes {
       rt.messages = [...result.messages];
       rt.firmwareName = result.name;
       try {
-        rt.emulator = rt.spec.create(parseIntelHex(result.hex, rt.spec.flashBytes).bytes);
+        rt.emulator = this.createEmulator(rt.spec, parseIntelHex(result.hex, rt.spec.flashBytes).bytes, rt.partId);
         rt.error = null;
       } catch (e) {
         rt.error = `${result.name} is not a valid program. ${e instanceof HexError ? e.message : String(e)}`;

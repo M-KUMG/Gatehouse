@@ -21,6 +21,7 @@ import type {
 } from '../board';
 import { ATMEGA328P_FLASH_BYTES, Atmega328p } from './atmega328p';
 import type { I2cBus } from './i2c';
+import type { IdleSkipMode, IdleSkipStats } from './idleskip';
 import type { SpiPort } from './spi';
 
 export const UNO_CLOCK_HZ = 16_000_000;
@@ -100,9 +101,13 @@ export class UnoEmulator implements BoardEmulator {
   /** A received frame is on the line (its end is a clock event of the CPU). */
   private rxOnLine = false;
 
-  /** `flash` is the program memory image (see parseIntelHex). Starts from reset. */
-  constructor(flash: Uint8Array) {
-    this.chip = new Atmega328p(flash, UNO_CLOCK_HZ);
+  /**
+   * `flash` is the program memory image (see parseIntelHex). Starts from
+   * reset. `idleSkip` (default 'spin'): skip idle loops, see idleskip.ts;
+   * 'off' executes every instruction.
+   */
+  constructor(flash: Uint8Array, options: { idleSkip?: IdleSkipMode } = {}) {
+    this.chip = new Atmega328p(flash, UNO_CLOCK_HZ, options.idleSkip ?? 'spin');
     this.ports = this.wire();
     this.lastPortDrives = this.portDrives();
     this.lastDrives = this.drives();
@@ -129,6 +134,19 @@ export class UnoEmulator implements BoardEmulator {
 
   get cycles(): number {
     return this.chip.cycles;
+  }
+
+  get idleSkip(): IdleSkipMode {
+    return this.chip.idleSkip;
+  }
+
+  setIdleSkip(mode: IdleSkipMode): void {
+    this.chip.idleSkip = mode;
+  }
+
+  /** Idle-skip counters since the emulator was created. */
+  get idleSkipStats(): IdleSkipStats {
+    return this.chip.idleSkipStats;
   }
 
   /** Current drive codes (between run() calls every TX change up to now has been applied). */

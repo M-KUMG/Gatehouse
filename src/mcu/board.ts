@@ -124,4 +124,15 @@ export interface BoardEmulator {
    * queue is dropped by a reset of the chip.
    */
   sendSerial(port: string, bytes: readonly number[]): void;
+  /**
+   * Idle skipping, for boards that have it: 'spin' (their default) jumps
+   * over iterations of loops that only wait (delay(), millis() polls, sleep
+   * loops), 'sleep' only over loops that execute SLEEP, 'off' executes every
+   * instruction. Outputs (pin events, serial bytes and their cycles) are the
+   * same in every mode; only host time differs.
+   */
+  setIdleSkip?(mode: IdleSkipMode): void;
 }
+
+/** See BoardEmulator.setIdleSkip. */
+export type IdleSkipMode = 'off' | 'sleep' | 'spin';

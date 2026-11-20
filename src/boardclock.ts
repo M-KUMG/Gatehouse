@@ -7,6 +7,20 @@
 // speed changes the pacing, never the results. When the browser cannot keep
 // up, less is run and the measured speed drops below the asked one.
 
+// With the simulation in a Worker (src/sim/worker/host.ts) the same rule runs
+// there; this clock is then idle and Simulation.clock() only redraws when a
+// snapshot arrived (see Simulation.clock).
+
+/** What the transport bar needs of a clock (this one, or the Worker's through Simulation.clock()). */
+export interface SimClock {
+  /** Asked speed multiplier (simulated seconds per wall second). UI-only. */
+  multiplier: number;
+  /** Measured simulated seconds per wall second, smoothed (0 while nothing runs). */
+  readonly speed: number;
+  /** Start the frame loop if simulated time runs (call after Run / Start and after edits). */
+  wake(): void;
+}
+
 /** What the clock drives (the Simulation). */
 export interface ClockTarget {
   /** Simulated time should move now. */
@@ -36,7 +50,7 @@ const BUDGET_MS = 12;
 /** Simulated time per advance() call inside a frame. */
 const CHUNK_SECONDS = 0.004;
 
-export class BoardClock {
+export class BoardClock implements SimClock {
   /** Simulated seconds per wall second, smoothed (0 while nothing runs). */
   speed = 0;
   /** Asked speed multiplier (simulated seconds per wall second). UI-only. */

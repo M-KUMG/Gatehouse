@@ -199,7 +199,7 @@ export class ScopeWindow {
     this.updateHeader(part);
 
     // While time stands still, the shown instant is the newest sample.
-    const instant = this.sim.bridge.instant;
+    const instant = this.sim.instant;
     if (!this.sim.timeRunning && instant) this.sim.analog.sample(this.sim.time, instant);
     if (this.sim.analog.version !== this.seenVersion) {
       this.seenVersion = this.sim.analog.version;

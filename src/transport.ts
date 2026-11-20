@@ -6,7 +6,7 @@
 // here is saved or recorded in the undo history.
 
 import './transport.css';
-import type { BoardClock } from './boardclock';
+import type { SimClock } from './boardclock';
 import type { Simulation } from './simulation';
 import { DEFAULT_SPEED, SPEEDS, speedLabel, transportView } from './transportmodel';
 
@@ -32,7 +32,7 @@ export class TransportBar {
   constructor(
     parent: HTMLElement,
     private readonly sim: Simulation,
-    private readonly clock: BoardClock,
+    private readonly clock: SimClock,
     /** After a button changed something: redraw (the next frame calls update()). */
     private readonly changed: () => void,
   ) {

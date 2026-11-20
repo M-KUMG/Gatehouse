@@ -1,5 +1,4 @@
 import './style.css';
-import { BoardClock } from './boardclock';
 import { ActiveBoard } from './boardcontrols';
 import { BuildCard } from './buildcard';
 import { EXAMPLES } from './examples';
@@ -24,7 +23,8 @@ import { createPalette } from './palette';
 import { renameBoard } from './project/boardfiles';
 import { ProjectController } from './project/controller';
 import { Project } from './project/project';
-import { Simulation } from './simulation';
+import { openSimWorker } from './sim/worker/client';
+import { Simulation, buildNetlist } from './simulation';
 import { TransportBar } from './transport';
 
 const app = document.getElementById('app');
@@ -53,7 +53,9 @@ const project = new Project();
 const scene = project.scene;
 // The view asks the simulation to catch up before every frame, so any edit
 // (a new wire, a flipped switch, a turned knob) is re-solved automatically.
-const sim = new Simulation(scene);
+// The engine runs in a Web Worker (src/sim/worker); `?sim=main` (or
+// localStorage 'gatehouse.sim' = 'main') or a missing Worker keeps it on this thread.
+const sim = new Simulation(scene, buildNetlist, { link: openSimWorker() });
 // The board the other windows follow: the one selected on the grid, else the
 // last one. Updated after every frame (the view comes later in this file).
 const activeBoard = new ActiveBoard(() => scene.parts, () => view.selected);
@@ -122,9 +124,10 @@ function showBoardOnGrid(partId: number): void {
   const target = revealTarget(project.camera, { width: canvas.clientWidth, height: canvas.clientHeight }, rect);
   if (target) cameraPan.panTo(target.x, target.y);
 }
-// Simulated time moves on animation frames while a board runs or the circuit
-// clock (global Start) runs a circuit with capacitors or inductors.
-const clock = new BoardClock(sim, view.requestRender);
+// Simulated time moves while a board runs or the circuit clock (global Start)
+// runs a circuit with capacitors or inductors: in the Worker (each frame it
+// posts redraws), or on animation frames when the engine is on this thread.
+const clock = sim.clock(view.requestRender);
 // Global Start / Pause, Reset, speed and simulated time (top-right of the grid; UI-only state).
 const transport = new TransportBar(editorArea, sim, clock, () => {
   clock.wake();

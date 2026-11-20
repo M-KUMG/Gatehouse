@@ -169,6 +169,12 @@ export class AnalogRecorder implements StepObserver {
   version = 0;
   /** Simulated time of the newest sample (0 after clear). */
   latest = 0;
+  /**
+   * Told when what is armed changed (the Simulation forwards it to the
+   * simulation Worker, which reads the same quantities there and sends them
+   * back for ingest()).
+   */
+  onArm: (() => void) | null = null;
 
   constructor(
     readonly capacity = DEFAULT_SAMPLES,
@@ -180,8 +186,18 @@ export class AnalogRecorder implements StepObserver {
     return this.armed.size > 0;
   }
 
+  /** The armed parts and their quantity ids. */
+  armedParts(): [number, string[]][] {
+    return [...this.armed].map(([part, a]) => [part, [...a.ids]]);
+  }
+
   /** Record quantities `ids` of part `part` from now on (replaces what was armed for that part). */
   arm(part: number, ids: readonly string[], read: ValueReader): void {
+    this.armPart(part, ids, read);
+    this.onArm?.();
+  }
+
+  private armPart(part: number, ids: readonly string[], read: ValueReader): void {
     this.armed.set(part, { ids: [...ids], read });
     for (const id of ids) {
       const key = seriesKey(part, id);
@@ -196,11 +212,13 @@ export class AnalogRecorder implements StepObserver {
   }
 
   disarm(part: number): void {
-    this.armed.delete(part);
+    if (this.armed.delete(part)) this.onArm?.();
   }
 
   disarmAll(): void {
+    if (this.armed.size === 0) return;
     this.armed.clear();
+    this.onArm?.();
   }
 
   isArmed(part: number, id: string): boolean {
@@ -219,18 +237,39 @@ export class AnalogRecorder implements StepObserver {
     for (const [part, armed] of this.armed) {
       if (!result.parts[part]) continue;
       const values = armed.read(result);
-      for (const id of armed.ids) {
-        const v = values.get(id);
-        if (v === undefined) continue;
-        let s = this.series.get(seriesKey(part, id));
-        if (!s) this.series.set(seriesKey(part, id), (s = new Series(this.capacity)));
-        changed = s.add(time, v, this.minInterval) || changed;
-      }
+      changed = this.add(time, part, armed.ids, (j) => values.get(armed.ids[j])) || changed;
     }
     if (changed) {
       this.latest = time;
       this.version++;
     }
+  }
+
+  /**
+   * Values of part `part` at one instant, read elsewhere (by the simulation
+   * Worker with the same reader rules): `value(j)` is the value of ids[j], or
+   * undefined. Same rules as sample(); only quantities armed here are kept.
+   */
+  ingest(time: number, part: number, ids: readonly string[], value: (j: number) => number | undefined): void {
+    const armed = this.armed.get(part);
+    if (!armed) return;
+    const changed = this.add(time, part, ids, (j) => (armed.ids.includes(ids[j]) ? value(j) : undefined));
+    if (changed) {
+      this.latest = time;
+      this.version++;
+    }
+  }
+
+  private add(time: number, part: number, ids: readonly string[], value: (j: number) => number | undefined): boolean {
+    let changed = false;
+    ids.forEach((id, j) => {
+      const v = value(j);
+      if (v === undefined) return;
+      let s = this.series.get(seriesKey(part, id));
+      if (!s) this.series.set(seriesKey(part, id), (s = new Series(this.capacity)));
+      changed = s.add(time, v, this.minInterval) || changed;
+    });
+    return changed;
   }
 
   /** Drop every sample (Reset, a new run, a project load); arming stays. */
