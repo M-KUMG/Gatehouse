@@ -7,6 +7,8 @@ export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readon
   battery: ['pos', 'neg'],
   relay: ['coil1', 'coil2', 'com', 'no', 'nc'],
   motor: ['pos', 'neg'],
+  supply: ['pos', 'neg'],
+  limiter: ['a', 'b'],
   signal: ['pos', 'neg'],
   resistor: ['a', 'b'],
   switch: ['a', 'b'],

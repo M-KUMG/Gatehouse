@@ -38,8 +38,28 @@ ${hLead(100, 120, 60, 3)}
   <text x="86" y="40" font-size="11">+</text>
   <text x="86" y="52" font-size="11">−</text>
   <text x="46" y="68" font-size="6" fill-opacity=".7">DC POWER SUPPLY</text>
+  <text x="72" y="50.5" font-size="5.5" text-anchor="start" fill-opacity=".8">CC</text>
 </g>`;
   return svgDoc(PSU_COLS, PSU_ROWS, defs, body);
+}
+
+/** The CC lamp: lit while the supply is in current limit (canvas in art units, unrotated). */
+export function drawPsuLamp(ctx: CanvasRenderingContext2D, limiting: boolean): void {
+  ctx.save();
+  ctx.fillStyle = limiting ? '#ff3b30' : '#3a1512';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.arc(62, 48, 3.2, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
+  if (limiting) {
+    ctx.fillStyle = 'rgba(255, 59, 48, 0.35)';
+    ctx.beginPath();
+    ctx.arc(62, 48, 6.5, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 export const PSU_ART: PartArt = { cols: PSU_COLS, rows: PSU_ROWS, svg: psuSvg(5) };

@@ -20,6 +20,10 @@ export type ComponentModel =
   /** SPDT relay (src/sim/relay.ts): a coil that pulls in at `pullAmps` and drops out at `dropAmps`. Pins: coil1, coil2, com, no, nc. */
   /** Brushed DC motor (src/sim/motor.ts): armature R and L, back-EMF constant ke (V s/rad, also the torque constant), friction b, rotor inertia, constant load torque. Pins: pos, neg. */
   | { kind: 'motor'; ohms: number; henries: number; ke: number; friction: number; inertia: number; load: number }
+  /** Bench power supply with a current limit (src/sim/supply.ts): the set voltage up to `limit` amps, then constant current. Pins: pos, neg. */
+  | { kind: 'supply'; volts: number; limit: number }
+  /** Two-terminal current limiter, i = amps * tanh(v / (0.05 ohm * amps)) from a to b; part of a supply's expansion. Pins: a, b. */
+  | { kind: 'limiter'; amps: number }
   | { kind: 'relay'; coilVolts: number; coilOhms: number; coilHenries: number; pullAmps: number; dropAmps: number }
   /** Function generator: a voltage source whose value follows `wave` over time (src/sim/signal.ts). Pins: pos, neg. */
   | { kind: 'signal'; wave: 'sine' | 'square' | 'triangle' | 'sawtooth'; freq: number; amp: number; offset: number; duty: number; rOut: number }

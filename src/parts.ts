@@ -3,7 +3,7 @@
 // grid points, which is where the pins are.
 // To add a part: draw its art in src/art and add one entry below.
 
-import { PSU_ART, psuLabel, psuSvg } from './art/psu';
+import { PSU_ART, drawPsuLamp, psuLabel, psuSvg } from './art/psu';
 import { SIGGEN_ART, siggenSvg } from './art/siggen';
 import { RELAY_ART, drawRelayContacts, relaySvg } from './art/relay';
 import { MOTOR_ART, drawMotorFan, motorSvg } from './art/motor';
@@ -66,6 +66,8 @@ export interface PartState {
   lux?: number;
   /** Function generator only: waveform, amplitude (peak, V), offset (V) and square duty (0..1); `value` is its frequency in Hz. */
   wave?: SignalWave;
+  /** Power supply only: the current limit in amps (`value` is its voltage). */
+  limit?: number;
   amp?: number;
   offset?: number;
   duty?: number;
@@ -73,7 +75,7 @@ export interface PartState {
 
 /** One more editable field in a part's popup beside its main `value` (a function generator's waveform, amplitude, ...). */
 export interface ExtraField {
-  key: 'wave' | 'amp' | 'offset' | 'duty';
+  key: 'wave' | 'amp' | 'offset' | 'duty' | 'limit';
   label: string;
   unit: string;
   min: number;
@@ -163,7 +165,9 @@ const DEFAULT_OHMS = 220;
 /** Programmable power supply: default and largest set voltage, output resistance. */
 export const DEFAULT_PSU_VOLTS = 5;
 export const PSU_MAX_VOLTS = 1000;
-const PSU_OHMS = 0.05;
+export const DEFAULT_PSU_LIMIT = 1;
+export const PSU_MAX_AMPS = 20;
+export const PSU_MIN_AMPS = 0.001;
 /** A relay against its ratings: the coil's voltage and the contacts' current (null while fine). */
 function relayWarning(r: PartResult, nominal: number): string | null {
   const v = Math.abs(r.voltage);
@@ -326,13 +330,15 @@ export const PARTS: readonly PartType[] = [
   {
     id: 'psu', name: 'Power supply (programmable)', ...PSU_ART, mirrorable: true,
     pins: [{ id: 'pos', name: '+', x: 6, y: 1 }, { id: 'neg', name: '−', x: 6, y: 3 }],
-    defaults: { value: DEFAULT_PSU_VOLTS },
+    defaults: { value: DEFAULT_PSU_VOLTS, limit: DEFAULT_PSU_LIMIT },
     value: { label: 'Voltage', unit: 'V', min: 0, max: PSU_MAX_VOLTS },
-    // An ideal-ish bench supply: the set voltage behind 50 mohm. It has no current limit yet,
-    // so a short circuit draws volts / 0.05 A (the warning below fires first).
-    warnAbove: 5,
+    // A bench supply with a current limit (sim/supply.ts): the set voltage behind 50 mohm up to the limit, then constant current.
+    fields: [{ key: 'limit', label: 'Current limit', unit: 'A', min: PSU_MIN_AMPS, max: PSU_MAX_AMPS }],
+    overlay: (ctx, _s, r) => {
+      if (r) drawPsuLamp(ctx, (r.volts?.cc ?? 0) >= 0.5);
+    },
     variant: (s) => ((s.value ?? DEFAULT_PSU_VOLTS) === DEFAULT_PSU_VOLTS ? null : { key: psuLabel(s.value ?? DEFAULT_PSU_VOLTS), svg: psuSvg(s.value ?? DEFAULT_PSU_VOLTS) }),
-    sim: (s) => ({ kind: 'battery', volts: s.value ?? DEFAULT_PSU_VOLTS, rInternal: PSU_OHMS }),
+    sim: (s) => ({ kind: 'supply', volts: s.value ?? DEFAULT_PSU_VOLTS, limit: s.limit ?? DEFAULT_PSU_LIMIT }),
   },
   {
     id: 'siggen', name: 'Function generator', ...SIGGEN_ART, mirrorable: true,

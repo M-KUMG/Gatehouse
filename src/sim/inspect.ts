@@ -200,6 +200,14 @@ function mainQuantities(
       return capacitor(model, r);
     case 'inductor':
       return inductor(model, r);
+    case 'limiter':
+      return [volts('v', 'V', r.voltage), amps('i', 'I', r.current)];
+    case 'supply':
+      return [
+        volts('v', 'V', r.voltage), amps('i', 'I', r.current), watts('p', 'P', r.power),
+        volts('set', 'Set voltage', model.volts), amps('limit', 'Current limit', model.limit),
+        text('mode', 'Mode', (r.volts?.cc ?? 0) >= 0.5 ? 'constant current (limiting)' : 'constant voltage'),
+      ];
     case 'motor': {
       const w = r.volts?.['mech.omega'] ?? 0;
       return [
@@ -406,6 +414,8 @@ export function defaultPlot(model: ComponentModel): string[] {
       return ['v', 'i'];
     case 'relay':
       return ['vcoil', 'icoil'];
+    case 'supply':
+      return ['v', 'i'];
     case 'motor':
       return ['rpm', 'i'];
     default:

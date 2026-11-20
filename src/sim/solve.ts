@@ -28,6 +28,7 @@ import type { PartResult, SimInput, SimResult } from './types';
 import { buzzerCurve } from './buzzer';
 import { SEVENSEG_SEGMENTS } from './sevenseg';
 import { resolveSignals } from './signal';
+import { expandSupplies, limiterCurve, supplyResults } from './supply';
 import { DEFAULT_MOTOR_LOGIC, decideMotor, expandMotors, isMotorLogic, motorResults, sameMotor, type MotorLogic } from './motor';
 import { DEFAULT_RELAY_LOGIC, decideRelay, expandRelays, isRelayLogic, relayResults, type RelayLogic } from './relay';
 import { breakdownOf, diodeCurrent, diodeStep, type DiodeCurve } from './zener';
@@ -182,6 +183,13 @@ function buildElements(
         }
         break;
       }
+      case 'limiter':
+        // A diode element with the limiter's own curve (supply.ts); no junction step limiting (tanh saturates by itself).
+        el.diodes.push({
+          part: id, anode: netOf(id, 'a'), cathode: netOf(id, 'b'), inner: netOf(id, 'a'),
+          is: 0, nvt: VT, vCrit: Infinity, v: 0, curve: (v) => limiterCurve(m, v), pins: ['a', 'b'],
+        });
+        break;
       case 'buzzer':
         // A diode element with the buzzer's own curve (buzzer.ts).
         el.diodes.push({
@@ -643,11 +651,13 @@ export function solveWith(
 ): { result: SimResult; stored: Record<number, ReactiveState> | null; warm: WarmStart | null } {
   // Function generators are time-dependent sources: fix their value for this solve.
   // A relay becomes its coil (an inductor) and two contact switches set by the logic state (relay.ts).
-  const expanded = expandRelays(resolveSignals(rawInput, time), logic);
+  const supplied = expandSupplies(resolveSignals(rawInput, time));
+  const expanded = expandRelays(supplied.input, logic);
   const motored = expandMotors(expanded.input, logic);
   const out = solveCore(motored.input, step, time, warm, logic);
   if (motored.motors.length > 0) motorResults(out.result, motored.motors);
   if (expanded.relays.length > 0) relayResults(out.result, expanded.relays);
+  if (supplied.supplies.length > 0) supplyResults(out.result, supplied.supplies);
   return out;
 }
 
