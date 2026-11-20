@@ -94,14 +94,17 @@ describe('PNP transistor (BC557) as a high-side switch', () => {
   });
 
   it('amplifies by about beta in the active region', () => {
-    // Ib = (9 - ~0.55) / 4.7 M = 1.8 uA, Ic = 250 Ib = 0.45 mA, Vec = 9 - 0.45 V.
+    // Ib = (9 - ~0.55) / 4.7 M = 1.8 uA. Early effect (step 7c): beta is 250 at Vec 5 V and
+    // bf (1 + (Vec - Veb) / VAF) = 230 (1 + 8 / 50) = 267 at Vec = 8.5 V: Ic = 0.48 mA.
     const r = solved(stage(4_700_000, true));
     const q = r.parts[2];
+    const m = BC557 as Extract<ComponentModel, { kind: 'pnp' }>;
     expect(-q.voltage).toBeGreaterThan(1); // not saturated
     const beta = q.pins.c / q.pins.b;
-    expect(beta).toBeGreaterThan(240);
-    expect(beta).toBeLessThan(251);
-    expect(relErr(-q.pins.c, 0.00045)).toBeLessThan(0.03);
+    expect(relErr(beta, m.bf * (1 + (-q.voltage + q.volts!.b) / m.vaf!))).toBeLessThan(1e-3);
+    expect(beta).toBeGreaterThan(260);
+    expect(beta).toBeLessThan(272);
+    expect(relErr(-q.pins.c, 0.00048)).toBeLessThan(0.03);
   });
 
   it('is off with the base at the emitter potential', () => {
@@ -148,7 +151,10 @@ describe('N-MOSFET (logic level) as a low-side switch', () => {
     const r = solved(stage(2.5, 2));
     const q = r.parts[3];
     expect(q.voltage).toBeGreaterThan(0.5);
-    const squareLaw = 0.5 * m.kp * (2.5 - m.vth) ** 2 * (1 + m.lambda * q.voltage);
+    // The channel sees the pins' voltages less the lead resistances' drops (step 7c: rd, rs).
+    const vgs = 2.5 - q.current * m.rs!;
+    const vds = q.voltage - q.current * (m.rd! + m.rs!);
+    const squareLaw = 0.5 * m.kp * (vgs - m.vth) ** 2 * (1 + m.lambda * vds);
     expect(relErr(q.current, squareLaw)).toBeLessThan(1e-6);
     expect(relErr(q.current, 1.892)).toBeLessThan(0.01);
     expect(relErr(q.voltage, 8.216)).toBeLessThan(0.01);

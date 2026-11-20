@@ -31,11 +31,11 @@
 // charge and advances the time, so the caller can carry on.
 
 import type { Integration, ReactiveState } from './reactive';
-import { solveWith, type WarmStart } from './solve';
+import { solveSettled, type LogicState, type WarmStart } from './solve';
 import type { SimInput, SimResult } from './types';
 
 export type { Integration, ReactiveState } from './reactive';
-export type { AidHint, WarmStart } from './solve';
+export type { AidHint, LogicState, WarmStart } from './solve';
 
 export interface TransientState {
   /** Simulated time in seconds the state belongs to. */
@@ -50,6 +50,12 @@ export interface TransientState {
    * when the netlist changed shape (see WarmStart in solve.ts).
    */
   warm?: WarmStart;
+  /**
+   * Accepted logic state of each half-bridge driver by component id (see
+   * driver.ts): the next step decides its input levels and lockouts with
+   * hysteresis against it. Missing: everything low/off (DEFAULT_LOGIC).
+   */
+  logic?: LogicState;
 }
 
 export interface StepOptions {
@@ -66,8 +72,13 @@ export interface StepOptions {
 export function initialState(input: SimInput, options: { charged?: boolean } = {}): TransientState {
   const time = input.time ?? 0;
   if (options.charged === false) return { time, stored: {} };
-  const { stored, warm } = solveWith(input, undefined, time);
-  return warm ? { time, stored: stored ?? {}, warm } : { time, stored: stored ?? {} };
+  const { stored, warm, logic } = solveSettled(input, undefined, time);
+  return withLogic(warm ? { time, stored: stored ?? {}, warm } : { time, stored: stored ?? {} }, logic);
+}
+
+/** `state` with the drivers' logic (left out when there are no drivers, so other states stay as they were). */
+function withLogic(state: TransientState, logic: LogicState | undefined): TransientState {
+  return logic && Object.keys(logic).length > 0 ? { ...state, logic } : state;
 }
 
 /** Solves one time step of `dt` seconds (> 0) after `state`. */
@@ -76,15 +87,15 @@ export function solveStep(
 ): { result: SimResult; state: TransientState } {
   if (!(dt > 0) || !Number.isFinite(dt)) throw new RangeError(`solveStep: dt must be a positive number, got ${dt}`);
   const time = state.time + dt;
-  const { result, stored, warm } = solveWith(
-    input, { dt, method: options.method ?? 'euler', stored: state.stored }, time, state.warm,
+  const { result, stored, warm, logic } = solveSettled(
+    input, { dt, method: options.method ?? 'euler', stored: state.stored }, time, state.warm, state.logic,
   );
-  if (stored) return { result, state: warm ? { time, stored, warm } : { time, stored } };
+  if (stored) return { result, state: withLogic(warm ? { time, stored, warm } : { time, stored }, logic) };
   // Not converged: hold the previous charge of the parts that still exist.
   const held: Record<number, ReactiveState> = {};
   for (const { id, model } of input.components) {
     const prev = state.stored[id];
     if (prev && (model.kind === 'capacitor' || model.kind === 'inductor')) held[id] = { ...prev };
   }
-  return { result, state: { time, stored: held } };
+  return { result, state: withLogic({ time, stored: held }, state.logic) };
 }

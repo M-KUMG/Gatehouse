@@ -23,15 +23,24 @@ export type ComponentModel =
   | { kind: 'pot'; ohms: number; position: number }
   /** Shockley diode with series resistance. Pins: anode, cathode. */
   | { kind: 'diode'; is: number; n: number; rs: number }
-  /** Ebers-Moll NPN transistor. Pins: c, b, e. */
-  | { kind: 'npn'; is: number; bf: number; br: number }
+  /**
+   * Ebers-Moll NPN transistor. Pins: c, b, e. Optional non-idealities (see
+   * bjt.ts; absent = ideal, exactly the plain model): rb / rc / re series
+   * resistances of the base, collector and emitter (ohms, the solver puts
+   * internal nodes behind them), vaf the forward Early voltage (volts) and
+   * rleak a collector-base leakage resistance (ohms: ICBO, amplified to
+   * ICEO = (1 + beta) ICBO with an open base).
+   */
+  | { kind: 'npn'; is: number; bf: number; br: number } & BjtExtras
   /** Ebers-Moll PNP transistor: an NPN with every junction voltage and current reversed. Pins: c, b, e. */
-  | { kind: 'pnp'; is: number; bf: number; br: number }
+  | { kind: 'pnp'; is: number; bf: number; br: number } & BjtExtras
   /**
    * Level-1 (square-law) enhancement MOSFET. polarity 1 is N-channel, -1 is
-   * P-channel (then vth is negative). kp in A/V^2. Pins: g, d, s.
+   * P-channel (then vth is negative). kp in A/V^2. Optional rd / rs: drain
+   * and source lead resistances (ohms, internal nodes like a diode's rs).
+   * Pins: g, d, s.
    */
-  | { kind: 'mosfet'; polarity: 1 | -1; vth: number; kp: number; lambda: number }
+  | { kind: 'mosfet'; polarity: 1 | -1; vth: number; kp: number; lambda: number; rd?: number; rs?: number }
   /**
    * Insulated-gate bipolar transistor, expanded by the solver into the usual
    * equivalent circuit (no device physics of its own; see solve.ts): a
@@ -64,6 +73,12 @@ export type ComponentModel =
    * transient solver integrates it. Pins: a, b.
    */
   | { kind: 'inductor'; henries: number; dcr?: number }
+  /**
+   * Half-bridge gate driver (IR2104-like), a behavioural model expanded by
+   * the solver into resistors switched by a logic state (see driver.ts).
+   * Pins: vcc, in, sd, com, lo, vs, ho, vb.
+   */
+  | { kind: 'halfdriver' }
   /** Reference node (0 V). Pin: gnd. */
   | { kind: 'ground' }
   /** Conducts nothing (e.g. a burned-out part). No pins of its own. */
@@ -77,6 +92,15 @@ export type ComponentModel =
    * mixed-signal bridge (src/mcu/mixedsignal.ts). Pins: gnd, rails, io.
    */
   | { kind: 'board'; rails: Record<string, number>; io: Record<string, PinDrive> };
+
+/** Optional non-idealities of a bipolar transistor model (see the `npn` model). */
+export interface BjtExtras {
+  rb?: number;
+  rc?: number;
+  re?: number;
+  vaf?: number;
+  rleak?: number;
+}
 
 /**
  * How a microcontroller pin acts on the circuit: a Thevenin source of

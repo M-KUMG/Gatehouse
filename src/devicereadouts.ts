@@ -45,3 +45,14 @@ export function igbtReadout(r: PartResult, polarity: 1 | -1): string[] {
   }
   return [`Ic ${formatSI(-r.current, 'A')} (E→C) · Veg ${formatSI(-vge, 'V')}`, `Vec ${formatSI(-vce, 'V')} · ${formatSI(r.power, 'W')}`];
 }
+
+/** Half-bridge driver: output states and the two supplies (see sim/driver.ts for the `volts` keys). */
+export function driverReadout(r: PartResult): string[] {
+  const v = r.volts ?? {};
+  const on = (key: string): string => ((v[`logic.${key}`] ?? 0) >= 0.5 ? 'high' : 'low');
+  const lock = [(v['logic.sd'] ?? 0) < 0.5 ? 'SD' : '', (v['logic.vcc'] ?? 0) < 0.5 ? 'UVLO' : ''].filter((s) => s !== '');
+  return [
+    `HO ${on('ho')} · LO ${on('lo')}${lock.length ? ` (${lock.join(', ')})` : ''}`,
+    `VCC ${formatSI(v.vcc ?? r.voltage, 'V')} · VB-VS ${formatSI(v.vbs ?? 0, 'V')}`,
+  ];
+}

@@ -17,6 +17,9 @@ import { RESISTOR_ART, resistorArt } from './art/resistor';
 import { TOGGLE_ART, TOGGLE_ON_SVG } from './art/toggle';
 import { NMOS_ART, PMOS_ART } from './art/to220';
 import { IGBT_ART, IGBT_BURNED_SVG, PIGBT_ART, PIGBT_BURNED_SVG } from './art/to247';
+import { DRIVER_ART, DRIVER_BURNED_SVG, DRIVER_PIN_POINTS } from './art/driver';
+import { driverReadout } from './devicereadouts';
+import { driverStress } from './sim/driver';
 import { PNP_ART, TRANSISTOR_ART } from './art/transistor';
 import { NANO_ART, NANO_LEFT, NANO_RESET, NANO_RIGHT, drawNanoLeds } from './art/nano';
 import { UNO_ART, UNO_BOTTOM, UNO_RESET, UNO_TOP, drawUnoLeds, type HeaderPin } from './art/uno';
@@ -27,6 +30,7 @@ import { NANO_SPEC, UNO_SPEC } from './mcu/avr/uno';
 import { parseBoardId } from './project/boardidparse';
 import { ledBrightness } from './sim/inspect';
 import { dielectricVolts, igbtStress, polarizedCapStress, type Stress } from './sim/ratings';
+import { partSpec, specStress } from './sim/specs';
 import {
   BC547, BC557, D1N4148, GENERIC_IGBT, GENERIC_PIGBT, LOGIC_NMOS, POWER_PMOS, RED_LED, type ComponentModel, type PartResult,
 } from './sim';
@@ -230,8 +234,9 @@ const TO220_PINS: readonly PinDef[] = [
 //                                     mirror puts + below -, no turn does that.
 // Not mirrorable: battery, ground, resistor, capacitor, ecap, inductor, diode,
 // switch, button (pins on the box's centre line, or the button's linked
-// pairs, so a mirror equals a 180-degree turn or nothing) and the boards (a
-// mirrored board does not exist). A new polarized part with an asymmetric pin
+// pairs, so a mirror equals a 180-degree turn or nothing), the boards (a
+// mirrored board does not exist) and ICs such as the DIP-8 halfdriver (its
+// mirror image is the chip upside down, which nobody places). A new polarized part with an asymmetric pin
 // layout sets `mirrorable: true`. In a mixed group flip the others only move
 // (see flip.ts).
 export const PARTS: readonly PartType[] = [
@@ -383,6 +388,23 @@ export const PARTS: readonly PartType[] = [
     sim: (s) => (s.burned ? { kind: 'open' } : GENERIC_PIGBT),
   },
   {
+    // Behavioural model (sim/driver.ts). SD is active low: tie it high to run.
+    // Not mirrorable: a mirrored DIP would be the chip upside down (turns cover every real placement).
+    id: 'halfdriver', name: 'Half-bridge driver (IR2104-like)', ...DRIVER_ART,
+    pins: DRIVER_PIN_POINTS,
+    readout: driverReadout,
+    warnWhen: (r) => {
+      const st = driverStress(r.volts?.vcc ?? r.voltage);
+      return st.level === 'ok' ? null : st.reason;
+    },
+    burnWhen: (r) => {
+      const st = driverStress(r.volts?.vcc ?? r.voltage);
+      return st.level === 'burn' ? st.reason : null;
+    },
+    variant: (s) => (s.burned ? { key: 'burned', svg: DRIVER_BURNED_SVG } : null),
+    sim: (s) => (s.burned ? { kind: 'open' } : { kind: 'halfdriver' }),
+  },
+  {
     id: 'uno', name: 'Arduino Uno', ...UNO_ART,
     pins: UNO_PINS,
     links: [['gnd', 'gnd2'], ['gnd', 'gnd3']],
@@ -405,6 +427,24 @@ export const PARTS: readonly PartType[] = [
     overlay: (ctx, _s, r) => drawNanoLeds(ctx, (r?.volts?.d13 ?? 0) / NANO_SPEC.electrical.vcc, r !== undefined),
   },
 ];
+
+/**
+ * The rating table (sim/specs.ts) applied to every part type with a row:
+ * warnWhen / burnWhen read it (after any rule of the type's own), and a
+ * burned part is an open circuit, like the LED. So rating a part type needs
+ * only its row in the table.
+ */
+function applySpecs(type: PartType): void {
+  const sim = type.sim;
+  if (!partSpec(type.id) || !sim) return;
+  const own = { warn: type.warnWhen, burn: type.burnWhen };
+  const stress = (r: PartResult, s: PartState): Stress => specStress(type.id, r, sim(s));
+  type.warnWhen = (r, s) => own.warn?.(r, s) ?? warnText(stress(r, s));
+  type.burnWhen = (r, s) => own.burn?.(r, s) ?? burnText(stress(r, s));
+  type.sim = (s) => (s.burned ? { kind: 'open' } : sim(s));
+}
+
+for (const type of PARTS) applySpecs(type);
 
 export function getPart(id: string): PartType | undefined {
   return PARTS.find((p) => p.id === id);

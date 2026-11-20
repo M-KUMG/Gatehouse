@@ -248,7 +248,9 @@ export class MixedSignal {
       // An edit is a discontinuity: the charge now (interpolated if a step ran
       // ahead) is kept for the parts that still exist, the error control restarts.
       // The warm start stays: the solver ignores it if the netlist changed shape.
-      this.engine.restart(this.time, ({ time, stored, warm }) => ({ time, stored: keepStored(circuit, stored), ...(warm ? { warm } : {}) }));
+      this.engine.restart(this.time, ({ time, stored, warm, logic }) => ({
+        time, stored: keepStored(circuit, stored), ...(warm ? { warm } : {}), ...(logic ? { logic } : {}),
+      }));
       this.transient = this.engine.base.state;
     }
     this.refresh();

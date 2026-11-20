@@ -11,6 +11,10 @@ import {
   GMIN, POT_END_OHMS, SWITCH_CLOSED_OHMS, SWITCH_OPEN_OHMS, VT,
   criticalVoltage, junction, limitJunction,
 } from './devices';
+import {
+  DEFAULT_LOGIC, DRIVER_PINS, MAX_LOGIC_ROUNDS, commonLogic, decideLogic, driverBranches, driverResult, sameLogic,
+  sensePins, type DriverElement, type DriverLogic,
+} from './driver';
 import { solveLinear } from './linear';
 import { makeMosfet, mosfetResult, stampMosfet, updateMosfet, type Mosfet } from './mosfet';
 import { buildNets, modelPins } from './nets';
@@ -94,17 +98,32 @@ interface Elements {
   bjts: Bjt[];
   mosfets: Mosfet[];
   igbts: Igbt[];
+  /** Half-bridge drivers: their resistors are in `resistors` (part -1), switched by `logic` (driver.ts). */
+  drivers: DriverElement[];
   /** `pins`: the model's two pin names (a, b; pos, neg for a polarized capacitor). */
   reactives: (Reactive & { kind: 'capacitor' | 'inductor'; pins: readonly string[] })[];
   drives: Drive[];
   nodes: number; // including the reference and internal nodes
 }
 
+/**
+ * A series resistance of `ohms` from `node` to a new internal node, which is
+ * returned (an unnamed resistor: it reports nothing of its own); `node`
+ * itself when there is none.
+ */
+function seriesNode(el: Elements, node: number, ohms: number | undefined): number {
+  if (ohms === undefined || !(ohms > 0)) return node;
+  const inner = el.nodes++;
+  el.resistors.push({ part: -1, a: node, b: inner, g: 1 / ohms, pinA: '', pinB: '' });
+  return inner;
+}
+
 function buildElements(
   input: SimInput, netOf: (part: number, pin: string) => number, netCount: number, step: Companion | undefined,
+  logic?: Readonly<Record<number, DriverLogic>>,
 ): Elements {
   const el: Elements = {
-    resistors: [], sources: [], diodes: [], bjts: [], mosfets: [], igbts: [], reactives: [], drives: [], nodes: netCount,
+    resistors: [], sources: [], diodes: [], bjts: [], mosfets: [], igbts: [], drivers: [], reactives: [], drives: [], nodes: netCount,
   };
   const resistor = (part: number, pinA: string, pinB: string, ohms: number): void => {
     el.resistors.push({ part, a: netOf(part, pinA), b: netOf(part, pinB), g: 1 / ohms, pinA, pinB });
@@ -139,13 +158,18 @@ function buildElements(
       }
       case 'npn':
       case 'pnp': {
-        const nodes = { c: netOf(id, 'c'), b: netOf(id, 'b'), e: netOf(id, 'e') };
-        el.bjts.push(makeBjt(id, nodes, m.kind === 'npn' ? 1 : -1, m.is, m.bf, m.br));
+        // Series resistances (bjt.ts): the model sits on internal nodes behind them.
+        const ext = { c: netOf(id, 'c'), b: netOf(id, 'b'), e: netOf(id, 'e') };
+        const nodes = { c: seriesNode(el, ext.c, m.rc), b: seriesNode(el, ext.b, m.rb), e: seriesNode(el, ext.e, m.re) };
+        const gleak = m.rleak !== undefined && m.rleak > 0 ? 1 / m.rleak : 0;
+        el.bjts.push(makeBjt(id, nodes, m.kind === 'npn' ? 1 : -1, m.is, m.bf, m.br, { vaf: m.vaf, gleak, ext }));
         break;
       }
       case 'mosfet': {
-        const nodes = { d: netOf(id, 'd'), g: netOf(id, 'g'), s: netOf(id, 's') };
-        el.mosfets.push(makeMosfet(id, nodes, m.polarity, m.vth, m.kp, m.lambda));
+        // Drain and source lead resistances: the channel sits on internal nodes behind them.
+        const ext = { d: netOf(id, 'd'), g: netOf(id, 'g'), s: netOf(id, 's') };
+        const nodes = { d: seriesNode(el, ext.d, m.rd), g: ext.g, s: seriesNode(el, ext.s, m.rs) };
+        el.mosfets.push(makeMosfet(id, nodes, m.polarity, m.vth, m.kp, m.lambda, ext));
         break;
       }
       case 'igbt': {
@@ -166,6 +190,16 @@ function buildElements(
         el.mosfets.push(mos);
         el.bjts.push(bjt);
         el.igbts.push({ part: id, g, c, e, base, polarity: m.polarity, mos, bjt });
+        break;
+      }
+      case 'halfdriver': {
+        // Resistors only, switched by the logic state this solve uses (see driver.ts and solveSettled).
+        const nodes = Object.fromEntries(DRIVER_PINS.map((p) => [p, netOf(id, p)])) as DriverElement['nodes'];
+        const d: DriverElement = { part: id, nodes, logic: logic?.[id] ?? DEFAULT_LOGIC };
+        for (const b of driverBranches(d.logic)) {
+          el.resistors.push({ part: -1, a: nodes[b.a], b: nodes[b.b], g: 1 / b.ohms, pinA: '', pinB: '' });
+        }
+        el.drivers.push(d);
         break;
       }
       case 'capacitor':
@@ -362,7 +396,7 @@ interface NewtonRun {
  * With `relaxed` (the convergence aids only) an unknown that still moves is
  * accepted too when the step leaves its equation balanced: the residual of
  * its row, (A dx)_i, is within CURRENT_TOL (a node) or ABS_TOL (a source
- * branch) plus REL_TOL of the row's terms. That is a node held only by GMIN
+ * branch) plus REL_TOL of the row's terms (for a node: of its branch currents). That is a node held only by GMIN
  * and reverse-biased junctions (a floating base): its voltage is pinned by
  * currents of ~1e-14 A and wanders by microvolts from rounding alone, so the
  * plain test can never pass, yet nothing in the circuit depends on it.
@@ -404,10 +438,23 @@ function newton(
         let residual = 0;
         let scale = 0;
         const row = ws.savedRows[i];
+        // A node row's scale is the sum of its branch currents' magnitudes:
+        // conductance to node j times the voltage across it, the rest of the
+        // diagonal (to the reference) times the node's own voltage. (Row
+        // terms times node voltages instead would let a floating node behind
+        // a small series resistance, e.g. a transistor's re, pass with a
+        // residual of microamps.) A source branch row: its terms as they are.
+        let toRef = 0;
         for (let j = 0; j < size; j++) {
           residual += row[j] * (next[j] - x[j]);
-          scale += Math.abs(row[j] * next[j]);
+          if (i < nodeRows && j < nodeRows) {
+            toRef += row[j];
+            if (j !== i) scale += Math.abs(row[j] * (next[j] - next[i]));
+          } else {
+            scale += Math.abs(row[j] * next[j]);
+          }
         }
+        if (i < nodeRows) scale += Math.abs(toRef * next[i]);
         if (Math.abs(residual) > (i < nodeRows ? CURRENT_TOL : ABS_TOL) + REL_TOL * scale) settled = false;
       }
     }
@@ -483,7 +530,7 @@ function sourceStepping(ws: Workspace): NewtonRun {
 }
 
 export function solveCircuit(input: SimInput): SimResult {
-  return solveWith(input, undefined, input.time ?? 0).result;
+  return solveSettled(input, undefined, input.time ?? 0).result;
 }
 
 /** Which convergence aid a solve needed (and the next warm-started one should go to). */
@@ -545,6 +592,7 @@ function shapeOf(input: SimInput, nets: ReturnType<typeof buildNets>, el: Elemen
  */
 export function solveWith(
   input: SimInput, step: Companion | undefined, time: number, warm?: WarmStart,
+  logic?: Readonly<Record<number, DriverLogic>>,
 ): { result: SimResult; stored: Record<number, ReactiveState> | null; warm: WarmStart | null } {
   const nets = buildNets(input);
   const result: SimResult = {
@@ -558,7 +606,7 @@ export function solveWith(
     parts: {},
   };
   const netOf = (part: number, pin: string): number => nets.index.get(`${part}:${pin}`) ?? 0;
-  const el = buildElements(input, netOf, nets.count, step);
+  const el = buildElements(input, netOf, nets.count, step, logic);
   const size = Math.max(0, el.nodes - 1) + el.sources.length;
 
   let x: Float64Array = new Float64Array(size);
@@ -626,6 +674,50 @@ export function solveWith(
   return { result, stored, warm: next };
 }
 
+/** Logic state of every half-bridge driver by component id (kept in TransientState.logic). */
+export type LogicState = Record<number, DriverLogic>;
+
+/**
+ * solveWith plus the fixed point over the drivers' logic (see driver.ts):
+ * starts from `prev` (the last accepted state; DEFAULT_LOGIC for a driver
+ * without one), re-decides every driver's logic from the solution with
+ * hysteresis against `prev`, and solves again (warm-started from the round
+ * before) until nothing changes, at most MAX_LOGIC_ROUNDS solves plus one;
+ * an unsettled state falls back to the flags common to the last two rounds.
+ * Without drivers this is exactly one solveWith call. `logic` is the state
+ * the returned result was solved with (`prev`'s when it did not converge);
+ * result.iterations counts every round.
+ */
+export function solveSettled(
+  input: SimInput, step: Companion | undefined, time: number, warm?: WarmStart, prev: Readonly<LogicState> = {},
+): ReturnType<typeof solveWith> & { logic: LogicState } {
+  const drivers = input.components.filter((c) => c.model.kind === 'halfdriver').map((c) => c.id);
+  if (drivers.length === 0) return { ...solveWith(input, step, time, warm), logic: {} };
+  const prevOf = (id: number): DriverLogic => prev[id] ?? DEFAULT_LOGIC;
+  let logic: LogicState = Object.fromEntries(drivers.map((id) => [id, prevOf(id)]));
+  let out = solveWith(input, step, time, warm, logic);
+  let iterations = out.result.iterations;
+  for (let round = 1; out.result.converged; round++) {
+    const r = out.result;
+    const next: LogicState = {};
+    let changed = false;
+    for (const id of drivers) {
+      next[id] = decideLogic(prevOf(id), sensePins((pin) => r.voltages[r.nets[`${id}:${pin}`] ?? 0] ?? 0));
+      if (!sameLogic(next[id], logic[id])) changed = true;
+    }
+    if (!changed) break;
+    if (round >= MAX_LOGIC_ROUNDS) {
+      for (const id of drivers) next[id] = commonLogic(logic[id], next[id]);
+    }
+    logic = next;
+    out = solveWith(input, step, time, out.warm ?? warm, logic);
+    iterations += out.result.iterations;
+    if (round >= MAX_LOGIC_ROUNDS) break;
+  }
+  out.result.iterations = iterations;
+  return { ...out, logic: out.result.converged ? logic : Object.fromEntries(drivers.map((id) => [id, prevOf(id)])) };
+}
+
 function collectResults(
   input: SimInput, el: Elements, volt: (n: number) => number, x: Float64Array, result: SimResult,
 ): void {
@@ -667,6 +759,7 @@ function collectResults(
   for (const q of el.bjts) if (q.part >= 0) parts[q.part] = bjtResult(q, volt);
   for (const q of el.mosfets) if (q.part >= 0) parts[q.part] = mosfetResult(q, volt);
   for (const q of el.igbts) parts[q.part] = igbtResult(q, volt);
+  for (const d of el.drivers) parts[d.part] = driverResult(d, volt);
   for (const r of el.reactives) {
     const i = r.g * (volt(r.inner) - volt(r.b)) + r.ieq;
     const v = volt(r.a) - volt(r.b);

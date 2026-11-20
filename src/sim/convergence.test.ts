@@ -7,7 +7,7 @@ import { decodeGth } from '../project/gth';
 import { Project } from '../project/project';
 import { fromFileMap } from '../project/storage';
 import { Simulation, boardParts, buildNetlist } from '../simulation';
-import { BC547, BC557, D1N4148, LOGIC_NMOS, initialState, solveCircuit, solveStep } from './index';
+import { BC547, D1N4148, LOGIC_NMOS, initialState, solveCircuit, solveStep } from './index';
 import type { ComponentModel, SimInput, SimResult, Terminal } from './index';
 
 /** Plain Newton + gmin stepping + source stepping budgets (solve.ts). */
@@ -25,6 +25,9 @@ function circuit(models: ComponentModel[], wires: [string, string][]): SimInput 
 }
 
 const battery = (volts: number, rInternal = 0): ComponentModel => ({ kind: 'battery', volts, rInternal });
+
+/** The BC557 model before step 7c: plain Ebers-Moll, no series resistances, Early effect or leakage. */
+const IDEAL_PNP: ComponentModel = { kind: 'pnp', is: 6e-14, bf: 250, br: 5 };
 
 /** Converged with finite node voltages within [-1, 10] V and a finite battery current. */
 function expectSane(r: SimResult): void {
@@ -45,11 +48,13 @@ function expectSane(r: SimResult): void {
  * MOSFET's drain) across a 9 V battery, plus a 100 uF capacitor hanging
  * off the + rail (open in DC, but its 10 mOhm ESR puts 100 S into the
  * matrix). The bases are held by ~1e-12 S only; their voltages jitter by
- * ~1e-5 V from rounding, so plain Newton never settles.
+ * ~1e-5 V from rounding, so plain Newton never settles. The PNPs are the
+ * ideal pre-7c BC557 (no collector-base leakage: the real part's 20 GOhm
+ * holds the bases well enough for plain Newton, see IDEAL_PNP).
  */
 function floatingBases(): SimInput {
   return circuit(
-    [LOGIC_NMOS, { kind: 'capacitor', farads: 100e-6, esr: 0.01 }, BC557, BC557, battery(9, 1.5), { kind: 'ground' }],
+    [LOGIC_NMOS, { kind: 'capacitor', farads: 100e-6, esr: 0.01 }, IDEAL_PNP, IDEAL_PNP, battery(9, 1.5), { kind: 'ground' }],
     [
       ['5.neg', '6.gnd'], ['5.neg', '1.g'], ['1.d', '4.b'], ['1.s', '4.e'], ['4.c', '5.pos'],
       ['3.e', '6.gnd'], ['3.c', '4.e'], ['2.a', '5.pos'],

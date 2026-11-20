@@ -27,12 +27,18 @@ export interface Mosfet {
   kp: number; lambda: number;
   /** Vgs and Vds in the N-channel frame, as limited by the last Newton step. */
   vgs: number; vds: number;
+  /**
+   * The pins' nodes. d and s above are internal nodes behind the drain and
+   * source lead resistances when the model has them (see solve.ts); else the same.
+   */
+  ext: { d: number; g: number; s: number };
 }
 
 export function makeMosfet(
   part: number, nodes: { d: number; g: number; s: number }, polarity: 1 | -1, vth: number, kp: number, lambda: number,
+  ext?: { d: number; g: number; s: number },
 ): Mosfet {
-  return { part, ...nodes, polarity, vth: polarity * vth, kp, lambda, vgs: 0, vds: 0 };
+  return { part, ...nodes, polarity, vth: polarity * vth, kp, lambda, vgs: 0, vds: 0, ext: ext ?? { ...nodes } };
 }
 
 /** Drain current (drain -> source, N-channel frame, vds >= 0) and its derivatives. */
@@ -136,7 +142,8 @@ export function updateMosfet(q: Mosfet, volt: VoltOf, tol: number): boolean {
 
 /**
  * Result: voltage is Vds, current the drain current into the part (negative
- * for a conducting P-channel device); volts holds each pin against the source.
+ * for a conducting P-channel device); volts holds each pin against the
+ * source. Voltages are the pins' (lead resistances included, also in the power).
  */
 export function mosfetResult(q: Mosfet, volt: VoltOf): PartResult {
   const p = q.polarity;
@@ -147,12 +154,14 @@ export function mosfetResult(q: Mosfet, volt: VoltOf): PartResult {
   const channel = o.forward ? o.i : -o.i; // into the drain
   const id = channel + GMIN * (vd - vg) + GMIN * (vd - vs);
   const ig = GATE_LEAK * (vg - vs) + GMIN * (vg - vd);
-  const vds = vd - vs;
+  const vsPin = volt(q.ext.s);
+  const vds = volt(q.ext.d) - vsPin;
+  const vgs = volt(q.ext.g) - vsPin;
   return {
     voltage: vds,
     current: id,
-    power: vds * id + (vg - vs) * ig,
+    power: vds * id + vgs * ig,
     pins: { d: id, g: ig, s: -(id + ig) },
-    volts: { g: vg - vs, d: vds, s: 0 },
+    volts: { g: vgs, d: vds, s: 0 },
   };
 }

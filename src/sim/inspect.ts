@@ -38,10 +38,15 @@
 //     the rest of the collector current.
 //   - Polarized capacitor: ESR, rated voltage and a state text from the
 //     rating rules of ratings.ts ('ok', 'reverse!', 'over-voltage!').
+//   - Part types in the rating table (specs.ts, InspectPart.type): a
+//     'rating' text, 'ok' or the warning text ("Ic 130 mA exceeds its
+//     100 mA rating."). Potentiometer: the power of each half of the track.
 
+import { driverQuantities } from './driverinspect';
 import { level1 } from './mosfet';
 import { modelPins, terminalKey } from './nets';
 import { dielectricVolts, igbtStress, polarizedCapStress } from './ratings';
+import { partSpec, specStress } from './specs';
 import type { ComponentModel, PartResult, SimResult } from './types';
 
 export type QuantityKind =
@@ -71,6 +76,10 @@ export interface InspectPart {
   pins?: readonly { id: string; name: string }[];
   /** A diode drawn as an LED: adds the brightness. */
   led?: boolean;
+  /** Part type id: a type with a row in the rating table (specs.ts) gets a 'rating' text quantity. */
+  type?: string;
+  /** Why a burned part (model `open`) burned, for its status text. */
+  burnedBy?: string;
 }
 
 /** Forward junction voltage at which a BJT junction counts as conducting (device frame). */
@@ -146,7 +155,9 @@ function ratio(a: number, b: number): number {
  */
 export function inspect(model: ComponentModel, result: SimResult, part: InspectPart): Quantity[] {
   if (model.kind === 'ground' || model.kind === 'node') return [];
-  if (model.kind === 'open') return [text('status', 'State', 'Open (burned out)')];
+  if (model.kind === 'open') {
+    return [text('status', 'State', part.burnedBy ? `Open (burned out by ${part.burnedBy})` : 'Open (burned out)')];
+  }
   const r = result.parts[part.id];
   if (!r) return [text('status', 'State', 'Not simulated')];
   if (!result.converged) return [text('status', 'State', 'No solution (the solver did not converge)')];
@@ -156,6 +167,11 @@ export function inspect(model: ComponentModel, result: SimResult, part: InspectP
   };
   if (model.kind === 'board') return boardQuantities(model, r, part);
   const main = mainQuantities(model, r, part, node);
+  if (part.type !== undefined && partSpec(part.type)) {
+    // The rating table's verdict: 'ok' or the warning / burn text (specs.ts).
+    const st = specStress(part.type, r, model);
+    main.push(text('rating', 'Rating', st.level === 'ok' ? 'ok' : st.reason));
+  }
   const names = new Map((part.pins ?? []).map((p) => [p.id, p.name]));
   const pins = modelPins(model);
   const order = part.pins?.length ? part.pins.map((p) => p.id).filter((id) => pins.includes(id)) : pins;
@@ -192,6 +208,8 @@ function mainQuantities(
       return mosfet(model, r, node);
     case 'igbt':
       return igbt(model, r, node);
+    case 'halfdriver':
+      return driverQuantities(r);
     case 'switch':
       return [text('state', 'State', model.closed ? 'closed' : 'open'), amps('i', 'I', r.current), volts('v', 'V', r.voltage), watts('p', 'P', r.power)];
     case 'pot':
@@ -291,10 +309,16 @@ function igbt(model: ModelOf<'igbt'>, r: PartResult, node: (pin: string) => numb
 }
 
 function pot(model: ModelOf<'pot'>, r: PartResult, node: (pin: string) => number): Quantity[] {
+  const vaw = node('a') - node('w');
+  const vwb = node('w') - node('b');
+  const iaw = r.pins.a ?? 0;
+  const iwb = -(r.pins.b ?? 0);
   return [
-    volts('vw', 'V wiper', node('w')), volts('vaw', 'V(1–wiper)', node('a') - node('w')), volts('vwb', 'V(wiper–3)', node('w') - node('b')),
-    amps('iaw', 'I(1→wiper)', r.pins.a ?? 0), amps('iwb', 'I(wiper→3)', -(r.pins.b ?? 0)), amps('iw', 'I wiper (in)', r.pins.w ?? 0),
+    volts('vw', 'V wiper', node('w')), volts('vaw', 'V(1–wiper)', vaw), volts('vwb', 'V(wiper–3)', vwb),
+    amps('iaw', 'I(1→wiper)', iaw), amps('iwb', 'I(wiper→3)', iwb), amps('iw', 'I wiper (in)', r.pins.w ?? 0),
     watts('p', 'P', r.power), num('pos', 'Position', 'ratio', '%', 100 * Math.min(1, Math.max(0, model.position))),
+    // Dissipation of each half of the track (the rating applies to each, see specs.ts).
+    watts('paw', 'P(1–wiper)', vaw * iaw), watts('pwb', 'P(wiper–3)', vwb * iwb),
   ];
 }
 
@@ -327,6 +351,8 @@ export function defaultPlot(model: ComponentModel): string[] {
       return ['vgs', 'vds', 'id'];
     case 'igbt':
       return ['vge', 'vce', 'ic'];
+    case 'halfdriver':
+      return ['vcc', 'vbs'];
     case 'diode':
       return ['vf', 'if'];
     case 'pot':

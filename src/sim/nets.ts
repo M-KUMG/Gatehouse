@@ -13,6 +13,7 @@ export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readon
   pnp: ['c', 'b', 'e'],
   mosfet: ['g', 'd', 's'],
   igbt: ['g', 'c', 'e'],
+  halfdriver: ['vcc', 'in', 'sd', 'com', 'lo', 'vs', 'ho', 'vb'],
   capacitor: ['a', 'b'],
   inductor: ['a', 'b'],
   ground: ['gnd'],

@@ -201,7 +201,9 @@ export class AdaptiveStepper {
       const q = a.stored[id];
       stored[id] = { volts: p.volts + (q.volts - p.volts) * w, amps: p.amps + (q.amps - p.amps) * w };
     }
-    return a.warm ? { time: t, stored, warm: a.warm } : { time: t, stored };
+    const out: TransientState = a.warm ? { time: t, stored, warm: a.warm } : { time: t, stored };
+    // The drivers' logic is discrete: the step ahead's (it held over that whole step).
+    return a.logic ? { ...out, logic: a.logic } : out;
   }
 
   /** Accepted steps that became past since the last call. */

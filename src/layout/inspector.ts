@@ -233,7 +233,9 @@ export class ScopeWindow {
     if (key === this.modelKey) return;
     this.modelKey = key;
     this.model = model;
-    this.info = part && type ? { id: part.id, pins: type.pins, led: part.typeId === 'led' } : null;
+    this.info = part && type
+      ? { id: part.id, pins: type.pins, led: part.typeId === 'led', type: part.typeId, burnedBy: part.state?.burnedBy }
+      : null;
     this.seenResult = null;
     if (part && model && !this.plotted.has(part.id)) this.plotted.set(part.id, defaultPlot(model));
   }

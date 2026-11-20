@@ -185,8 +185,12 @@ describe('NPN transistor', () => {
     const r = solveCircuit(stage(2_200_000, true));
     const q = r.parts[4];
     expect(q.voltage).toBeGreaterThan(1); // not saturated
-    expect(q.pins.c / q.pins.b).toBeGreaterThan(285);
-    expect(q.pins.c / q.pins.b).toBeLessThan(301);
+    // Early effect (step 7c): beta = bf (1 + (Vce - Vbe) / VAF), 300 at Vce = 5 V and about 305 here (Vce ~6.8 V).
+    const m = BC547 as Extract<ComponentModel, { kind: 'npn' }>;
+    const beta = m.bf * (1 + (q.voltage - q.volts!.b) / m.vaf!);
+    expect(Math.abs(q.pins.c / q.pins.b - beta) / beta).toBeLessThan(1e-3);
+    expect(q.pins.c / q.pins.b).toBeGreaterThan(300);
+    expect(q.pins.c / q.pins.b).toBeLessThan(310);
   });
 });
 

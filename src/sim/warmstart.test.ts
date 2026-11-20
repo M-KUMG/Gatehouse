@@ -7,7 +7,7 @@ import { decodeGth } from '../project/gth';
 import { Project } from '../project/project';
 import { fromFileMap } from '../project/storage';
 import { Simulation, boardParts, buildNetlist } from '../simulation';
-import { BC557, LOGIC_NMOS, RED_LED, initialState, solveStep } from './index';
+import { LOGIC_NMOS, RED_LED, initialState, solveStep } from './index';
 import type { ComponentModel, SimInput, SimResult, Terminal, TransientState } from './index';
 
 function circuit(models: ComponentModel[], wires: [string, string][]): SimInput {
@@ -38,10 +38,13 @@ const ledCap = (extra = false): SimInput =>
       ...(extra ? [['2.b', '6.a'], ['6.b', '1.neg']] as [string, string][] : [])],
   );
 
+/** The BC557 model before step 7c (no leakage), as in convergence.test.ts. */
+const IDEAL_PNP: ComponentModel = { kind: 'pnp', is: 6e-14, bf: 250, br: 5 };
+
 /** The floating-base chain of convergence.test.ts: plain Newton never settles it. */
 const floatingBases = (): SimInput =>
   circuit(
-    [LOGIC_NMOS, { kind: 'capacitor', farads: 100e-6, esr: 0.01 }, BC557, BC557, battery(9, 1.5), { kind: 'ground' }],
+    [LOGIC_NMOS, { kind: 'capacitor', farads: 100e-6, esr: 0.01 }, IDEAL_PNP, IDEAL_PNP, battery(9, 1.5), { kind: 'ground' }],
     [
       ['5.neg', '6.gnd'], ['5.neg', '1.g'], ['1.d', '4.b'], ['1.s', '4.e'], ['4.c', '5.pos'],
       ['3.e', '6.gnd'], ['3.c', '4.e'], ['2.a', '5.pos'],
@@ -115,7 +118,10 @@ describe('warm start', () => {
       const warm = trajectory(input, 10e-6, 200, true);
       const coldRun = trajectory(input, 10e-6, 200, false);
       // Floating nodes (see expectSameTrajectory): mV in volts, but the currents agree to 1e-10 A.
-      expectSameTrajectory(warm.results, coldRun.results, 5e-3, 1e-10);
+      // Since step 7c the BJTs' collector-base leakage (20 GOhm) lets the cold start settle the
+      // floating LED cathode by the plain test while the hinted warm path keeps the relaxed one:
+      // they differ by up to 5.3 mV there (was 2.5 mV), so 1e-2 V.
+      expectSameTrajectory(warm.results, coldRun.results, 1e-2, 1e-10);
       warm.states.forEach((s, k) => {
         for (const id in s.stored) expect(Math.abs(s.stored[id].volts - coldRun.states[k].stored[id].volts)).toBeLessThan(1e-6);
       });

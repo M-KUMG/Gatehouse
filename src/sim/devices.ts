@@ -21,14 +21,45 @@ export const RED_LED: ComponentModel = {
   is: 0.02 / Math.exp((2.0 - 0.02 * LED_RS) / (LED_N * VT)),
 };
 
-/** BC547B-like small-signal NPN. */
-export const BC547: ComponentModel = { kind: 'npn', is: 1.8e-14, bf: 300, br: 10 };
+/** Forward Early voltage of the BC547B (SPICE models of the part: 60..100 V). */
+const BC547_VAF = 100;
+/** Forward Early voltage of the BC557B (PNPs have a lower one: about 50 V). */
+const BC557_VAF = 50;
+/** Collector-base leakage of both: ICBO 1.5 nA at Vcb 30 V (a tenth of the datasheets' 15 nA maximum at 25 C). */
+const BJT_RLEAK = 2e10;
 
 /**
- * BC557B-like small-signal PNP: hFE 250 (datasheet B group 220..475, lower
- * than the NPN as usual for PNPs), Veb about 0.63 V at 2 mA, poor reverse beta.
+ * BC547B-like small-signal NPN. hFE 300 at the datasheet's test point
+ * (Vce 5 V, Ic 2 mA, Vbe 0.65 V): bf is that over the Early factor
+ * 1 + (5 - 0.65) / VAF, so the gain is still 300 there and grows with Vce.
+ * Series resistances as in the usual SPICE models: RB 10, RC 1, RE 0.3 ohm.
+ * br 1 (the plain Ebers-Moll model has no base-collector recombination term,
+ * so a low reverse beta stands in for it): Vce(sat) about 0.1 V at 10 mA /
+ * 0.5 mA and 0.21 V at 100 mA / 5 mA (datasheet typical 0.09 / 0.2 V, max
+ * 0.25 / 0.6 V); 0.08 V at 10 mA / 1 mA.
  */
-export const BC557: ComponentModel = { kind: 'pnp', is: 6e-14, bf: 250, br: 5 };
+export const BC547: ComponentModel = {
+  kind: 'npn', is: 1.8e-14, bf: 300 / (1 + (5 - 0.65) / BC547_VAF), br: 1,
+  rb: 10, rc: 1, re: 0.3, vaf: BC547_VAF, rleak: BJT_RLEAK,
+};
+
+/**
+ * BC557B-like small-signal PNP: hFE 250 at Vec 5 V, Ic 2 mA (datasheet B
+ * group 220..475, lower than the NPN as usual for PNPs; bf over the Early
+ * factor as for the BC547), Veb about 0.63 V at 2 mA, poor reverse beta.
+ * RB 10, RC 1.5, RE 0.3 ohm: Vec(sat) about 0.1 V at 10 mA / 0.5 mA and
+ * 0.26 V at 100 mA / 5 mA (datasheet max 0.3 / 0.65 V).
+ */
+export const BC557: ComponentModel = {
+  kind: 'pnp', is: 6e-14, bf: 250 / (1 + (5 - 0.63) / BC557_VAF), br: 1,
+  rb: 10, rc: 1.5, re: 0.3, vaf: BC557_VAF, rleak: BJT_RLEAK,
+};
+
+/**
+ * Drain and source lead resistance of a TO-220 MOSFET (leads and bond
+ * wires, about 0.5 mOhm each; the datasheets give only the total Rds(on)).
+ */
+const TO220_LEAD_OHMS = 0.0005;
 
 /**
  * 1N4148 small-signal silicon diode: the widely used SPICE parameters
@@ -39,15 +70,21 @@ export const D1N4148: ComponentModel = { kind: 'diode', is: 2.52e-9, n: 1.752, r
 /**
  * Logic-level N-channel power MOSFET, IRLZ44N-like: kp chosen so that
  * Rds(on) = 1 / (kp (Vgs - Vth)) is about 25 mOhm at Vgs = 5 V (the datasheet
- * maximum); saturation current at 5 V is kp / 2 * 3^2 = 58 A.
+ * maximum); saturation current at 5 V is kp / 2 * 3^2 = 58 A. Plus 0.5 mOhm
+ * of lead resistance at the drain and at the source (26.6 mOhm in all at 5 V).
  */
-export const LOGIC_NMOS: ComponentModel = { kind: 'mosfet', polarity: 1, vth: 2.0, kp: 13, lambda: 0.02 };
+export const LOGIC_NMOS: ComponentModel = {
+  kind: 'mosfet', polarity: 1, vth: 2.0, kp: 13, lambda: 0.02, rd: TO220_LEAD_OHMS, rs: TO220_LEAD_OHMS,
+};
 
 /**
  * P-channel power MOSFET, IRF9540N-like: Rds(on) = 1 / (kp (|Vgs| - 3)) is
- * about 120 mOhm at Vgs = -10 V (datasheet 117 mOhm), 0.4 ohm at -5 V.
+ * about 120 mOhm at Vgs = -10 V (datasheet 117 mOhm), 0.4 ohm at -5 V; plus
+ * the TO-220 lead resistances like the N-channel part.
  */
-export const POWER_PMOS: ComponentModel = { kind: 'mosfet', polarity: -1, vth: -3.0, kp: 1.2, lambda: 0.02 };
+export const POWER_PMOS: ComponentModel = {
+  kind: 'mosfet', polarity: -1, vth: -3.0, kp: 1.2, lambda: 0.02, rd: TO220_LEAD_OHMS, rs: TO220_LEAD_OHMS,
+};
 
 /**
  * Generic 600 V / 20 A N-channel IGBT in TO-247 (the usual MOSFET + PNP
