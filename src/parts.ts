@@ -3,6 +3,15 @@
 // grid points, which is where the pins are.
 // To add a part: draw its art in src/art and add one entry below.
 
+import { PSU_ART, psuLabel, psuSvg } from './art/psu';
+import { SIGGEN_ART, siggenSvg } from './art/siggen';
+import { RELAY_ART, drawRelayContacts, relaySvg } from './art/relay';
+import { MOTOR_ART, drawMotorFan, motorSvg } from './art/motor';
+import { MOTOR_BURN_AMPS, MOTOR_DEFAULT, MOTOR_WARN_AMPS } from './sim/motor';
+import {
+  RELAY_COIL_VOLTS, RELAY_CONTACT_BURN_AMPS, RELAY_CONTACT_WARN_AMPS, RELAY_DEFAULT_VOLTS, contactAmps, relayModel,
+} from './sim/relay';
+import { SIGNAL_MAX_HZ, SIGNAL_MIN_HZ, SIGNAL_OUT_OHMS, SIGNAL_WAVES, type SignalWave } from './sim/signal';
 import { CAPACITOR_ART } from './art/capacitor';
 import { ECAP_ART, ECAP_BURNED_SVG } from './art/ecap';
 import { INDUCTOR_ART } from './art/inductor';
@@ -55,6 +64,22 @@ export interface PartState {
   vcc?: number;
   /** LDR only: the light falling on it in lux, LDR_MIN_LUX..LDR_MAX_LUX (see ldrOhms in basicparts.ts). */
   lux?: number;
+  /** Function generator only: waveform, amplitude (peak, V), offset (V) and square duty (0..1); `value` is its frequency in Hz. */
+  wave?: SignalWave;
+  amp?: number;
+  offset?: number;
+  duty?: number;
+}
+
+/** One more editable field in a part's popup beside its main `value` (a function generator's waveform, amplitude, ...). */
+export interface ExtraField {
+  key: 'wave' | 'amp' | 'offset' | 'duty';
+  label: string;
+  unit: string;
+  min: number;
+  max: number;
+  /** Text choices instead of a number (the waveform name). */
+  choices?: readonly string[];
 }
 
 export interface PinDef {
@@ -82,6 +107,8 @@ export interface PartType {
    * values are allowed (the popup offers a choice list).
    */
   value?: { label: string; unit: string; min: number; max: number; key?: 'value' | 'vcc' | 'lux'; options?: readonly number[] };
+  /** More fields in the same popup (the popup then stays open after each change; see valueedit.ts). */
+  fields?: readonly ExtraField[];
   /** Mouse behavior: closed while held, flips on click, or has a knob to turn. */
   control?: 'momentary' | 'toggle' | 'knob';
   /** Knob circle in cells inside the unrotated cell box. */
@@ -104,7 +131,7 @@ export interface PartType {
   /** Different artwork for some states (key identifies the look), or null for `svg`. */
   variant?(state: PartState): { key: string; svg: string } | null;
   /** Live drawing on top of the artwork; the canvas is in art units, unrotated. */
-  overlay?(ctx: CanvasRenderingContext2D, state: PartState, result: PartResult | undefined): void;
+  overlay?(ctx: CanvasRenderingContext2D, state: PartState, result: PartResult | undefined, partId?: number): void;
   /** Hover text lines for the simulated values (default: chosen from the pins, see src/readout.ts). */
   readout?(result: PartResult): string[];
   /** Electrical model; its pin names are this part's pin ids. */
@@ -133,6 +160,36 @@ export interface PartType {
 }
 
 const DEFAULT_OHMS = 220;
+/** Programmable power supply: default and largest set voltage, output resistance. */
+export const DEFAULT_PSU_VOLTS = 5;
+export const PSU_MAX_VOLTS = 1000;
+const PSU_OHMS = 0.05;
+/** A relay against its ratings: the coil's voltage and the contacts' current (null while fine). */
+function relayWarning(r: PartResult, nominal: number): string | null {
+  const v = Math.abs(r.voltage);
+  if (v > 1.3 * nominal) return `Coil at ${v.toFixed(1)} V, rated ${nominal} V.`;
+  const i = contactAmps(r);
+  return i > RELAY_CONTACT_WARN_AMPS ? `Contacts carry ${i.toFixed(1)} A, rated ${RELAY_CONTACT_WARN_AMPS} A.` : null;
+}
+
+function relayBurn(r: PartResult, nominal: number): string | null {
+  if (Math.abs(r.voltage) > 2 * nominal) return `coil overvoltage (${Math.abs(r.voltage).toFixed(1)} V, rated ${nominal} V)`;
+  const i = contactAmps(r);
+  return i > RELAY_CONTACT_BURN_AMPS ? `contacts burned by ${i.toFixed(1)} A (rated ${RELAY_CONTACT_WARN_AMPS} A)` : null;
+}
+
+/** Function generator defaults: a 1 Hz square wave between 0 and 5 V. */
+export const DEFAULT_SIGGEN = { freq: 1, wave: 'square' as SignalWave, amp: 2.5, offset: 2.5, duty: 0.5 };
+
+/** A function generator's settings with defaults for anything missing or invalid. */
+export function siggenSettings(s: PartState): { freq: number; wave: SignalWave; amp: number; offset: number; duty: number } {
+  const wave = SIGNAL_WAVES.includes(s.wave as SignalWave) ? (s.wave as SignalWave) : DEFAULT_SIGGEN.wave;
+  const ok = (v: number | undefined, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+  return {
+    freq: ok(s.value, DEFAULT_SIGGEN.freq), wave, amp: ok(s.amp, DEFAULT_SIGGEN.amp),
+    offset: ok(s.offset, DEFAULT_SIGGEN.offset), duty: ok(s.duty, DEFAULT_SIGGEN.duty),
+  };
+}
 const DEFAULT_POT_OHMS = 10_000;
 const DEFAULT_FARADS = 100e-9;
 const DEFAULT_HENRIES = 10e-3;
@@ -265,6 +322,72 @@ export const PARTS: readonly PartType[] = [
     id: 'battery9v', name: 'Battery (9 V)', ...BATTERY_9V_ART, mirrorable: true,
     pins: [{ id: 'pos', name: '+', x: 5, y: 1 }, { id: 'neg', name: '−', x: 5, y: 2 }],
     sim: () => ({ kind: 'battery', volts: 9, rInternal: 1.5 }),
+  },
+  {
+    id: 'psu', name: 'Power supply (programmable)', ...PSU_ART, mirrorable: true,
+    pins: [{ id: 'pos', name: '+', x: 6, y: 1 }, { id: 'neg', name: '−', x: 6, y: 3 }],
+    defaults: { value: DEFAULT_PSU_VOLTS },
+    value: { label: 'Voltage', unit: 'V', min: 0, max: PSU_MAX_VOLTS },
+    // An ideal-ish bench supply: the set voltage behind 50 mohm. It has no current limit yet,
+    // so a short circuit draws volts / 0.05 A (the warning below fires first).
+    warnAbove: 5,
+    variant: (s) => ((s.value ?? DEFAULT_PSU_VOLTS) === DEFAULT_PSU_VOLTS ? null : { key: psuLabel(s.value ?? DEFAULT_PSU_VOLTS), svg: psuSvg(s.value ?? DEFAULT_PSU_VOLTS) }),
+    sim: (s) => ({ kind: 'battery', volts: s.value ?? DEFAULT_PSU_VOLTS, rInternal: PSU_OHMS }),
+  },
+  {
+    id: 'siggen', name: 'Function generator', ...SIGGEN_ART, mirrorable: true,
+    pins: [{ id: 'pos', name: '+', x: 6, y: 1 }, { id: 'neg', name: '−', x: 6, y: 3 }],
+    defaults: { value: DEFAULT_SIGGEN.freq, wave: DEFAULT_SIGGEN.wave, amp: DEFAULT_SIGGEN.amp, offset: DEFAULT_SIGGEN.offset, duty: DEFAULT_SIGGEN.duty },
+    value: { label: 'Frequency', unit: 'Hz', min: SIGNAL_MIN_HZ, max: SIGNAL_MAX_HZ },
+    fields: [
+      { key: 'wave', label: 'Waveform', unit: '', min: 0, max: 0, choices: SIGNAL_WAVES },
+      { key: 'amp', label: 'Amplitude (peak)', unit: 'V', min: 0, max: 100 },
+      { key: 'offset', label: 'Offset', unit: 'V', min: -100, max: 100 },
+      { key: 'duty', label: 'Duty (square)', unit: '', min: 0.01, max: 0.99 },
+    ],
+    variant: (s) => {
+      const g = siggenSettings(s);
+      return g.wave === DEFAULT_SIGGEN.wave && g.freq === DEFAULT_SIGGEN.freq ? null : { key: `${g.wave}-${g.freq}`, svg: siggenSvg(g.wave, g.freq) };
+    },
+    sim: (s) => {
+      const g = siggenSettings(s);
+      return { kind: 'signal', wave: g.wave, freq: g.freq, amp: g.amp, offset: g.offset, duty: g.duty, rOut: SIGNAL_OUT_OHMS };
+    },
+  },
+  {
+    id: 'motor', name: 'DC motor (6 V)', ...MOTOR_ART, mirrorable: true,
+    pins: [{ id: 'pos', name: '+', x: 0, y: 1 }, { id: 'neg', name: '−', x: 0, y: 2 }],
+    // Current above 1.5 A warns (stall is 2 A at 6 V), above 10 A burns it out (see sim/motor.ts).
+    warnAbove: MOTOR_WARN_AMPS,
+    burnAbove: MOTOR_BURN_AMPS,
+    variant: (s) => (s.burned ? { key: 'burned', svg: motorSvg(true) } : null),
+    overlay: (ctx, s, r, id) => {
+      if (!s.burned && r) drawMotorFan(ctx, id ?? -1, r.volts?.['mech.omega'] ?? 0);
+    },
+    sim: (s) => (s.burned ? { kind: 'open' } : MOTOR_DEFAULT),
+  },
+  {
+    id: 'relay', name: 'Relay (SPDT)', ...RELAY_ART, mirrorable: true,
+    pins: [
+      { id: 'coil1', name: 'Coil 1', x: 0, y: 1 }, { id: 'coil2', name: 'Coil 2', x: 0, y: 3 },
+      { id: 'nc', name: 'NC (normally closed)', x: 6, y: 1 }, { id: 'com', name: 'COM (common)', x: 6, y: 2 },
+      { id: 'no', name: 'NO (normally open)', x: 6, y: 3 },
+    ],
+    defaults: { value: RELAY_DEFAULT_VOLTS },
+    // The nominal coil voltage picks the winding (3, 5, 6, 9, 12 or 24 V; see sim/relay.ts).
+    value: { label: 'Coil voltage', unit: 'V', min: RELAY_COIL_VOLTS[0], max: RELAY_COIL_VOLTS[RELAY_COIL_VOLTS.length - 1], options: RELAY_COIL_VOLTS },
+    // Coil above 1.3 x nominal warns, above 2 x burns; contacts above 3 A warn, above 10 A burn.
+    warnWhen: (r, s) => relayWarning(r, s.value ?? RELAY_DEFAULT_VOLTS),
+    burnWhen: (r, s) => relayBurn(r, s.value ?? RELAY_DEFAULT_VOLTS),
+    variant: (s) => {
+      const v = s.value ?? RELAY_DEFAULT_VOLTS;
+      if (s.burned) return { key: `burned-${v}`, svg: relaySvg(v, true) };
+      return v === RELAY_DEFAULT_VOLTS ? null : { key: `v${v}`, svg: relaySvg(v) };
+    },
+    overlay: (ctx, s, r) => {
+      if (!s.burned && r) drawRelayContacts(ctx, (r.volts?.['logic.on'] ?? 0) >= 0.5);
+    },
+    sim: (s) => (s.burned ? { kind: 'open' } : relayModel(s.value ?? RELAY_DEFAULT_VOLTS)),
   },
   {
     id: 'ground', name: 'Ground', ...GROUND_ART,

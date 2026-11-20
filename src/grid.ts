@@ -359,7 +359,7 @@ export class GridView {
       // Live parts of the art (glow, knob pointer) are drawn in art units.
       ctx.shadowColor = 'transparent';
       ctx.scale(cell / ART_CELL, cell / ART_CELL);
-      type.overlay(ctx, p.state ?? {}, p.id === undefined ? undefined : this.sim?.partResult(p.id));
+      type.overlay(ctx, p.state ?? {}, p.id === undefined ? undefined : this.sim?.partResult(p.id), p.id);
     }
     ctx.restore();
   }

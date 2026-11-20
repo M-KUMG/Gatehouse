@@ -27,6 +27,9 @@ import { stampInto, type Stamp } from './stamp';
 import type { PartResult, SimInput, SimResult } from './types';
 import { buzzerCurve } from './buzzer';
 import { SEVENSEG_SEGMENTS } from './sevenseg';
+import { resolveSignals } from './signal';
+import { DEFAULT_MOTOR_LOGIC, decideMotor, expandMotors, isMotorLogic, motorResults, sameMotor, type MotorLogic } from './motor';
+import { DEFAULT_RELAY_LOGIC, decideRelay, expandRelays, isRelayLogic, relayResults, type RelayLogic } from './relay';
 import { breakdownOf, diodeCurrent, diodeStep, type DiodeCurve } from './zener';
 
 const MAX_ITERATIONS = 200;
@@ -635,6 +638,20 @@ function shapeOf(input: SimInput, nets: ReturnType<typeof buildNets>, el: Elemen
  * so no separate re-probe is needed). No convergence: no warm start at all.
  */
 export function solveWith(
+  rawInput: SimInput, step: Companion | undefined, time: number, warm?: WarmStart,
+  logic?: Readonly<LogicState>,
+): { result: SimResult; stored: Record<number, ReactiveState> | null; warm: WarmStart | null } {
+  // Function generators are time-dependent sources: fix their value for this solve.
+  // A relay becomes its coil (an inductor) and two contact switches set by the logic state (relay.ts).
+  const expanded = expandRelays(resolveSignals(rawInput, time), logic);
+  const motored = expandMotors(expanded.input, logic);
+  const out = solveCore(motored.input, step, time, warm, logic);
+  if (motored.motors.length > 0) motorResults(out.result, motored.motors);
+  if (expanded.relays.length > 0) relayResults(out.result, expanded.relays);
+  return out;
+}
+
+function solveCore(
   input: SimInput, step: Companion | undefined, time: number, warm?: WarmStart,
   logic?: Readonly<LogicState>,
 ): { result: SimResult; stored: Record<number, ReactiveState> | null; warm: WarmStart | null } {
@@ -719,7 +736,7 @@ export function solveWith(
 }
 
 /** Logic state of one part with one: a half-bridge driver (driver.ts) or a logic gate (gates.ts). */
-export type PartLogic = DriverLogic | GateLogic;
+export type PartLogic = DriverLogic | GateLogic | RelayLogic | MotorLogic;
 
 /** Logic state of every logic part by component id (kept in TransientState.logic). */
 export type LogicState = Record<number, PartLogic>;
@@ -735,7 +752,7 @@ interface LogicRule {
   id: number;
   gate: boolean;
   initial(stored: unknown): PartLogic;
-  decide(prev: PartLogic, volts: (pin: string) => number): PartLogic;
+  decide(prev: PartLogic, volts: (pin: string) => number, result: SimResult, dt: number): PartLogic;
   same(a: PartLogic, b: PartLogic): boolean;
   fallback(last: PartLogic, next: PartLogic, first: PartLogic): PartLogic;
 }
@@ -751,6 +768,24 @@ function logicRules(input: SimInput): LogicRule[] {
         same: (a, b) => sameLogic(a as DriverLogic, b as DriverLogic),
         // Flags that kept flipping end up off (outputs low): the safe side.
         fallback: (last, next) => commonLogic(last as DriverLogic, next as DriverLogic),
+      });
+    } else if (m.kind === 'motor') {
+      // The shaft speed follows the armature current (implicit step); the rounds repeat until it stops changing.
+      rules.push({
+        id, gate: false,
+        initial: (s) => (isMotorLogic(s) ? s : DEFAULT_MOTOR_LOGIC),
+        decide: (p, _v, r, dt) => decideMotor(p as MotorLogic, r.parts[id]?.current ?? 0, dt, m),
+        same: (a, b) => sameMotor(a as MotorLogic, b as MotorLogic),
+        fallback: (_last, next) => next,
+      });
+    } else if (m.kind === 'relay') {
+      // The armature follows the coil current with hysteresis; a relay never oscillates by itself, so no special fallback.
+      rules.push({
+        id, gate: false,
+        initial: (s) => (isRelayLogic(s) ? s : DEFAULT_RELAY_LOGIC),
+        decide: (p, _v, r) => decideRelay(p as RelayLogic, r.parts[id]?.current ?? 0, m),
+        same: (a, b) => (a as RelayLogic).on === (b as RelayLogic).on,
+        fallback: (_last, next) => next,
       });
     } else if (m.kind === 'gate') {
       const same = (a: PartLogic, b: PartLogic): boolean => sameGate(a as GateLogic, b as GateLogic);
@@ -807,7 +842,7 @@ export function solveSettled(
     const next: LogicState = {};
     const changed: LogicRule[] = [];
     for (const p of rules) {
-      next[p.id] = p.decide(prevOf(p), (pin) => r.voltages[r.nets[`${p.id}:${pin}`] ?? 0] ?? 0);
+      next[p.id] = p.decide(prevOf(p), (pin) => r.voltages[r.nets[`${p.id}:${pin}`] ?? 0] ?? 0, r, step?.dt ?? 0);
       if (!p.same(next[p.id], logic[p.id])) changed.push(p);
     }
     first ??= { ...next };

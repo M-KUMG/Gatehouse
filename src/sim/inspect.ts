@@ -200,6 +200,27 @@ function mainQuantities(
       return capacitor(model, r);
     case 'inductor':
       return inductor(model, r);
+    case 'motor': {
+      const w = r.volts?.['mech.omega'] ?? 0;
+      return [
+        volts('v', 'V', r.voltage), amps('i', 'I', r.current), watts('p', 'P', r.power),
+        num('rpm', 'Speed', 'ratio', 'rpm', (w * 60) / (2 * Math.PI)), num('omega', 'ω', 'ratio', 'rad/s', w),
+        num('torque', 'Torque', 'ratio', 'N·m', r.volts?.['mech.torque'] ?? 0), volts('emf', 'Back-EMF', r.volts?.['mech.emf'] ?? 0),
+        text('state', 'Shaft', Math.abs(w) < 1 ? 'stopped' : w > 0 ? 'turning forward' : 'turning backward'),
+      ];
+    }
+    case 'relay': {
+      const on = (r.volts?.['logic.on'] ?? 0) >= 0.5;
+      return [
+        volts('vcoil', 'Coil V', r.voltage), amps('icoil', 'Coil I', r.current), watts('p', 'P', r.power),
+        text('state', 'Armature', on ? 'pulled in (COM-NO closed)' : 'released (COM-NC closed)'),
+        amps('icom', 'Contact I', Math.abs(r.pins.com ?? 0)),
+        num('pull', 'Pull-in at', 'current', 'A', model.pullAmps), num('drop', 'Drop-out at', 'current', 'A', model.dropAmps),
+        volts('nominal', 'Coil rating', model.coilVolts),
+      ];
+    }
+    case 'signal':
+      return [volts('v', 'V', r.voltage), amps('i', 'I', r.current), watts('p', 'P', r.power), num('f', 'f', 'ratio', 'Hz', model.freq), volts('amp', 'Amplitude', model.amp), volts('off', 'Offset', model.offset)];
     case 'battery':
       return [
         volts('v', 'V', r.voltage), amps('i', 'I', r.current), watts('p', 'P', r.power),
@@ -381,7 +402,12 @@ export function defaultPlot(model: ComponentModel): string[] {
     case 'capacitor':
     case 'inductor':
     case 'battery':
+    case 'signal':
       return ['v', 'i'];
+    case 'relay':
+      return ['vcoil', 'icoil'];
+    case 'motor':
+      return ['rpm', 'i'];
     default:
       return [];
   }

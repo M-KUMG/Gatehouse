@@ -21,6 +21,7 @@
 // averages the pins of slices with more than AVERAGE_ABOVE pin segments.
 
 import type { SimInput } from '../sim';
+import { signalMaxStep } from '../sim/signal';
 import type { BoardElectrical } from './board';
 
 /** Steps per smallest time constant estimate (first guess only). */
@@ -44,6 +45,7 @@ const R_DEFAULT = 1000;
 export function isReactive(input: SimInput): boolean {
   return input.components.some((c) => (
     c.model.kind === 'capacitor' || c.model.kind === 'inductor' || c.model.kind === 'halfdriver' || c.model.kind === 'gate'
+    || c.model.kind === 'signal' || c.model.kind === 'relay' || c.model.kind === 'motor'
   ));
 }
 
@@ -62,6 +64,8 @@ export function smallestTimeConstant(input: SimInput, boards: readonly BoardElec
   for (const { model: m } of input.components) {
     if (m.kind === 'capacitor' && m.farads > 0) tau = Math.min(tau, m.farads * lo);
     else if (m.kind === 'inductor' && m.henries > 0) tau = Math.min(tau, m.henries / hi);
+    else if (m.kind === 'motor' && m.henries > 0) tau = Math.min(tau, m.henries / Math.max(m.ohms, 1));
+    else if (m.kind === 'relay' && m.coilHenries > 0) tau = Math.min(tau, m.coilHenries / Math.max(m.coilOhms, 1));
   }
   return tau;
 }
@@ -69,6 +73,7 @@ export function smallestTimeConstant(input: SimInput, boards: readonly BoardElec
 /** The first step length the rule above guesses, within one slice of `sliceSeconds`. */
 export function stepSeconds(input: SimInput, boards: readonly BoardElectrical[], sliceSeconds: number): number {
   const tau = smallestTimeConstant(input, boards);
-  if (!Number.isFinite(tau)) return sliceSeconds;
-  return Math.min(sliceSeconds, Math.max(MIN_STEP_SECONDS, tau / STEPS_PER_TAU));
+  const signal = signalMaxStep(input); // a function generator also limits the step (a fraction of its period)
+  if (!Number.isFinite(tau)) return Math.min(sliceSeconds, Math.max(MIN_STEP_SECONDS, signal));
+  return Math.min(sliceSeconds, Math.max(MIN_STEP_SECONDS, Math.min(tau / STEPS_PER_TAU, signal)));
 }

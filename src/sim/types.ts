@@ -17,6 +17,12 @@ export interface Terminal {
 export type ComponentModel =
   /** EMF in series with an internal resistance. Pins: pos, neg. */
   | { kind: 'battery'; volts: number; rInternal: number }
+  /** SPDT relay (src/sim/relay.ts): a coil that pulls in at `pullAmps` and drops out at `dropAmps`. Pins: coil1, coil2, com, no, nc. */
+  /** Brushed DC motor (src/sim/motor.ts): armature R and L, back-EMF constant ke (V s/rad, also the torque constant), friction b, rotor inertia, constant load torque. Pins: pos, neg. */
+  | { kind: 'motor'; ohms: number; henries: number; ke: number; friction: number; inertia: number; load: number }
+  | { kind: 'relay'; coilVolts: number; coilOhms: number; coilHenries: number; pullAmps: number; dropAmps: number }
+  /** Function generator: a voltage source whose value follows `wave` over time (src/sim/signal.ts). Pins: pos, neg. */
+  | { kind: 'signal'; wave: 'sine' | 'square' | 'triangle' | 'sawtooth'; freq: number; amp: number; offset: number; duty: number; rOut: number }
   /** Pins: a, b. `lux`: data only, the light level an LDR's ohms were computed from (the part inspector shows it). */
   | { kind: 'resistor'; ohms: number; lux?: number }
   /** Tiny resistance when closed, huge when open. Pins: a, b. */

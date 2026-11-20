@@ -108,6 +108,8 @@ function reactivesOf(input: SimInput): Reactive[] {
   for (const { id, model: m } of input.components) {
     if (m.kind === 'capacitor' && m.farads > 0) out.push({ id, kind: 'capacitor', farads: m.farads });
     else if (m.kind === 'inductor') out.push({ id, kind: 'inductor', henries: Math.max(m.henries, 1e-15) });
+    else if (m.kind === 'motor') out.push({ id, kind: 'inductor', henries: Math.max(m.henries, 1e-15) }); // its armature
+    else if (m.kind === 'relay') out.push({ id, kind: 'inductor', henries: Math.max(m.coilHenries, 1e-15) }); // its coil
   }
   return out;
 }

@@ -55,6 +55,7 @@
 
 import { solveCircuit, solveStep, type PartResult, type PinDrive, type SimInput, type SimResult, type TransientState } from '../sim';
 import { ADAPTIVE_DEFAULTS, AdaptiveStepper } from '../sim/adaptive';
+import { signalMaxStep } from '../sim/signal';
 import type { StepObserver } from '../scope/analog';
 import type { BoardElectrical, BoardEmulator, DriveCode, IoPinDef, SerialBytes, SliceResult } from './board';
 import { AVERAGE_ABOVE, MAX_STEPS_PER_SLICE, isReactive, stepSeconds } from './timestep';
@@ -146,7 +147,7 @@ function keepStored(circuit: SimInput, stored: TransientState['stored']): Transi
   const out: TransientState['stored'] = {};
   for (const { id, model } of circuit.components) {
     const s = stored[id];
-    if (s && (model.kind === 'capacitor' || model.kind === 'inductor')) out[id] = { ...s };
+    if (s && (model.kind === 'capacitor' || model.kind === 'inductor' || model.kind === 'relay' || model.kind === 'motor')) out[id] = { ...s };
   }
   return out;
 }
@@ -369,7 +370,7 @@ export class MixedSignal {
     const end = this.time;
     const start = end - dt;
     const engine = (this.engine ??= new AdaptiveStepper(
-      this.stepper, { ...ADAPTIVE_DEFAULTS }, this.transient ?? { time: start, stored: {} }, this.step,
+      this.stepper, { ...ADAPTIVE_DEFAULTS, maxStep: Math.min(ADAPTIVE_DEFAULTS.maxStep, signalMaxStep(this.circuit)) }, this.transient ?? { time: start, stored: {} }, this.step,
     ));
     const before = engine.stats.solves;
     const at = (offset: number): number => (offset >= dt ? end : start + offset);

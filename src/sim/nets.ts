@@ -5,6 +5,9 @@ import type { ComponentModel, Reference, SimInput, Terminal } from './types';
 /** Pin names of each fixed-pin model, in a fixed order. */
 export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readonly string[]> = {
   battery: ['pos', 'neg'],
+  relay: ['coil1', 'coil2', 'com', 'no', 'nc'],
+  motor: ['pos', 'neg'],
+  signal: ['pos', 'neg'],
   resistor: ['a', 'b'],
   switch: ['a', 'b'],
   pot: ['a', 'w', 'b'],

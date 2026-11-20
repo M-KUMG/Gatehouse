@@ -77,7 +77,7 @@ const MAX_BURN_REASON = 200;
 function partState(v: unknown, typeId: string, where: string): PartState {
   const o = obj(v, where);
   // v4: a board's program is a .hex file in its folder, no longer part state.
-  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'burnedBy', 'name', 'vcc', 'lux'], where);
+  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'burnedBy', 'name', 'vcc', 'lux', 'wave', 'amp', 'offset', 'duty'], where);
   const state: PartState = {};
   for (const key of Object.keys(o)) {
     if (key === 'closed' || key === 'burned') {
@@ -93,6 +93,19 @@ function partState(v: unknown, typeId: string, where: string): PartState {
       const p = num(o, key, where);
       if (p < 0 || p > 1) fail(`${where}.position must be between 0 and 1 (got ${p}).`);
       state.position = p;
+    } else if (key === 'wave' || key === 'amp' || key === 'offset' || key === 'duty') {
+      // A function generator's extra settings: only on parts that list the field, within its range.
+      const field = getPart(typeId)?.fields?.find((f) => f.key === key);
+      if (!field) fail(`${where}.${key} is only allowed on function generators, but a ${typeId} part has no such setting.`);
+      if (key === 'wave') {
+        const w = str(o, key, where);
+        if (!field.choices?.includes(w)) fail(`${where}.wave must be one of ${field.choices?.join(', ')} (got ${JSON.stringify(w)}).`);
+        state.wave = w as NonNullable<PartState['wave']>;
+      } else {
+        const v = num(o, key, where);
+        if (v < field.min || v > field.max) fail(`${where}.${key} must be between ${field.min} and ${field.max} ${field.unit} (got ${v}).`);
+        state[key] = v;
+      }
     } else if (key === 'lux') {
       // An LDR's light level: only on parts whose value popup edits it, within its range.
       const lux = num(o, key, where);
