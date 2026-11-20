@@ -17,7 +17,7 @@ import {
   D1N4148, GENERIC_IGBT, modelPins, solveCircuit, solveStep, type ComponentModel, type PartResult, type SimInput,
   type SimResult, type Terminal, type TransientState,
 } from './sim';
-import { DRIVER_UVLO_ON, DRIVER_VIH, DRIVER_VIL } from './sim/driver';
+import { DRIVER_UVLO_ON, DRIVER_VIH, DRIVER_VIL, type DriverLogic } from './sim/driver';
 import { inspect } from './sim/inspect';
 import { solveSettled } from './sim/solve';
 import { boardParts, buildInput, buildNetlist } from './simulation';
@@ -151,10 +151,10 @@ describe('half-bridge driver logic (DC)', () => {
   it('decides against the previous state: between the thresholds a high input stays high', () => {
     const high = { [DRV]: { in: true, sd: true, vcc: true, vbs: true } };
     const r = solveSettled(logicCircuit({ vin: 2.0 }), undefined, 0, undefined, high);
-    expect(r.logic[DRV].in).toBe(true);
+    expect((r.logic[DRV] as DriverLogic).in).toBe(true);
     expect(flags(r.result).ho).toBe(1);
     const low = solveSettled(logicCircuit({ vin: 0.7 }), undefined, 0, undefined, high);
-    expect(low.logic[DRV].in).toBe(false);
+    expect((low.logic[DRV] as DriverLogic).in).toBe(false);
   });
 
   it('shows logic state, outputs, lockouts and supplies in the inspector', () => {

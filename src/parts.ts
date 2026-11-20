@@ -20,6 +20,8 @@ import { IGBT_ART, IGBT_BURNED_SVG, PIGBT_ART, PIGBT_BURNED_SVG } from './art/to
 import { DRIVER_ART, DRIVER_BURNED_SVG, DRIVER_PIN_POINTS } from './art/driver';
 import { driverReadout } from './devicereadouts';
 import { driverStress } from './sim/driver';
+import { GATE_PARTS } from './gateparts';
+import { DIODE_FAMILY_PARTS, OUTPUT_SENSOR_PARTS } from './basicparts';
 import { PNP_ART, TRANSISTOR_ART } from './art/transistor';
 import { NANO_ART, NANO_LEFT, NANO_RESET, NANO_RIGHT, drawNanoLeds } from './art/nano';
 import { UNO_ART, UNO_BOTTOM, UNO_RESET, UNO_TOP, drawUnoLeds, type HeaderPin } from './art/uno';
@@ -49,6 +51,10 @@ export interface PartState {
   burnedBy?: string;
   /** Boards only: the user's display name (see project/boardname.ts); without it the board shows its default label. */
   name?: string;
+  /** Logic gates only: the supply (logic high) level in volts, one of GATE_VCC_CHOICES (see gateparts.ts). */
+  vcc?: number;
+  /** LDR only: the light falling on it in lux, LDR_MIN_LUX..LDR_MAX_LUX (see ldrOhms in basicparts.ts). */
+  lux?: number;
 }
 
 export interface PinDef {
@@ -71,8 +77,11 @@ export interface PartType {
   links?: readonly (readonly [string, string])[];
   /** State of a newly placed part. */
   defaults?: PartState;
-  /** The editable `state.value`. */
-  value?: { label: string; unit: string; min: number; max: number };
+  /**
+   * The editable `state.value` (or `state[key]`). With `options` only those
+   * values are allowed (the popup offers a choice list).
+   */
+  value?: { label: string; unit: string; min: number; max: number; key?: 'value' | 'vcc' | 'lux'; options?: readonly number[] };
   /** Mouse behavior: closed while held, flips on click, or has a knob to turn. */
   control?: 'momentary' | 'toggle' | 'knob';
   /** Knob circle in cells inside the unrotated cell box. */
@@ -236,7 +245,14 @@ const TO220_PINS: readonly PinDef[] = [
 // switch, button (pins on the box's centre line, or the button's linked
 // pairs, so a mirror equals a 180-degree turn or nothing), the boards (a
 // mirrored board does not exist) and ICs such as the DIP-8 halfdriver (its
-// mirror image is the chip upside down, which nobody places). A new polarized part with an asymmetric pin
+// mirror image is the chip upside down, which nobody places).
+//   gate-and, -nand, -or, -nor,     - inputs A, B above and below the centre
+//   -xor, -xnor                       line: a vertical mirror swaps them, no
+//                                     turn does (gateparts.ts). NOT / BUFFER
+//                                     have theirs on the centre line: not mirrorable.
+// Not mirrorable either: zener, schottky, ldr, buzzer (two pins on the centre
+// line) and the 7-segment display (two pin rows like a DIP); see basicparts.ts.
+// A new polarized part with an asymmetric pin
 // layout sets `mirrorable: true`. In a mixed group flip the others only move
 // (see flip.ts).
 export const PARTS: readonly PartType[] = [
@@ -307,6 +323,8 @@ export const PARTS: readonly PartType[] = [
     },
     sim: (s) => (s.burned ? { kind: 'open' } : RED_LED),
   },
+  // Photoresistor, active buzzer, 7-segment display: see basicparts.ts.
+  ...OUTPUT_SENSOR_PARTS,
   {
     id: 'switch', name: 'Toggle switch', ...TOGGLE_ART,
     pins: [{ id: 'a', name: '1', x: 0, y: 1 }, { id: 'b', name: '2', x: 4, y: 1 }],
@@ -387,6 +405,8 @@ export const PARTS: readonly PartType[] = [
     variant: (s) => (s.burned ? { key: 'burned', svg: PIGBT_BURNED_SVG } : null),
     sim: (s) => (s.burned ? { kind: 'open' } : GENERIC_PIGBT),
   },
+  // Zener and Schottky diodes: see basicparts.ts.
+  ...DIODE_FAMILY_PARTS,
   {
     // Behavioural model (sim/driver.ts). SD is active low: tie it high to run.
     // Not mirrorable: a mirrored DIP would be the chip upside down (turns cover every real placement).
@@ -404,6 +424,8 @@ export const PARTS: readonly PartType[] = [
     variant: (s) => (s.burned ? { key: 'burned', svg: DRIVER_BURNED_SVG } : null),
     sim: (s) => (s.burned ? { kind: 'open' } : { kind: 'halfdriver' }),
   },
+  // Ideal logic gates (no supply pins): gate-not ... gate-xnor, see gateparts.ts.
+  ...GATE_PARTS,
   {
     id: 'uno', name: 'Arduino Uno', ...UNO_ART,
     pins: UNO_PINS,

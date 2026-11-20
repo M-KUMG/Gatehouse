@@ -146,6 +146,40 @@ export const PART_SPECS: Readonly<Record<string, PartSpec>> = {
   },
   switch: CONTACT,
   button: CONTACT,
+  zener: {
+    // Breakdown is its normal use: no reverse-voltage limit, the power limits it.
+    source: '1N4733A: Pd 1 W (warned above 80 %, burned at 2 x); forward current about 200 mA (Vf 1.2 V max there)',
+    limits: [
+      semi('P', 'too much power', 'W', 1, (r) => Math.abs(r.power), SEMI_BURN_POWER),
+      semi('If', 'too much forward current', 'A', 0.2, (r) => r.current),
+    ],
+  },
+  schottky: {
+    source: '1N5819: IF(AV) 1 A (IFSM 25 A surge), VRRM 40 V',
+    limits: [
+      { label: 'If', what: 'too much forward current', unit: 'A', rated: 1, warnAbove: 1, burnAbove: 3, measure: (r) => r.current },
+      { label: 'Vr', what: 'reverse over-voltage', unit: 'V', rated: 40, warnAbove: 40, burnAbove: 60, measure: (r) => -r.voltage },
+    ],
+  },
+  ldr: {
+    source: 'GL55-series CdS photoresistor: 100 mW; burns at about 2 x that',
+    limits: [{ label: 'P', what: 'too much power', unit: 'W', rated: 0.1, warnAbove: 0.1, burnAbove: 0.2, measure: (r) => Math.abs(r.power) }],
+  },
+  buzzer: {
+    source: '5 V active buzzer: operating 3..6.5 V (warned above), destroyed above 15 V, or above 12 V reversed',
+    limits: [
+      { label: 'V', what: 'over-voltage', unit: 'V', rated: 6.5, warnAbove: 6.5, burnAbove: 15, measure: (r) => r.voltage },
+      { label: 'Vr', what: 'reverse voltage', unit: 'V', rated: 12, warnAbove: 0.8 * 12, burnAbove: 12, measure: (r) => -r.voltage },
+    ],
+  },
+  sevenseg: {
+    // Per segment, like the single red LED (30 mA warns, 100 mA burns).
+    source: '0.56 in red 7-segment display: IF 25..30 mA per segment (IFP 100 mA)',
+    limits: [{
+      label: 'If', what: 'too much segment current', unit: 'A', rated: 0.03, warnAbove: 0.03, burnAbove: 0.1,
+      measure: (r) => Math.max(0, ...['a', 'b', 'c', 'd', 'e', 'f', 'g', 'dp'].map((s) => r.pins[s] ?? 0)),
+    }],
+  },
 };
 
 /** The ratings of a part type, or undefined when it has none in the table. */

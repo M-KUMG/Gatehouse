@@ -145,7 +145,10 @@ const linkTexts = (s: Scene): string[] =>
 
 describe('which parts are mirrorable', () => {
   it('is data on the part types: the asymmetric parts only, never a board', () => {
-    expect(PARTS.filter(canMirror).map((t) => t.id).sort()).toEqual(['battery9v', 'bjt', 'igbt', 'led', 'nmos', 'pigbt', 'pmos', 'pnp', 'pot']);
+    expect(PARTS.filter(canMirror).map((t) => t.id).sort()).toEqual([
+      'battery9v', 'bjt', 'gate-and', 'gate-nand', 'gate-nor', 'gate-or', 'gate-xnor', 'gate-xor',
+      'igbt', 'led', 'nmos', 'pigbt', 'pmos', 'pnp', 'pot',
+    ]);
     for (const type of PARTS) if (type.board) expect(canMirror(type), type.id).toBe(false);
     expect(isMirrorable('uno')).toBe(false);
     expect(isMirrorable('resistor')).toBe(false);
@@ -153,7 +156,8 @@ describe('which parts are mirrorable', () => {
 
   it('a symmetric part mirrored on its own would equal itself or a half turn (pins by link group)', () => {
     // ICs are left out like the boards: a mirrored DIP is the chip upside down, which no one places.
-    for (const type of PARTS.filter((t) => !canMirror(t) && !t.board && t.id !== 'halfdriver')) {
+    // So is the 7-segment display (two pin rows like a DIP).
+    for (const type of PARTS.filter((t) => !canMirror(t) && !t.board && t.id !== 'halfdriver' && t.id !== 'sevenseg')) {
       const groups = new Map(type.pins.map((p) => [p.id, type.links?.find((l) => l.includes(p.id))?.[0] ?? p.id]));
       const places = (o: Orientation): string[] =>
         type.pins.map((pin) => {

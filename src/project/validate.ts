@@ -77,7 +77,7 @@ const MAX_BURN_REASON = 200;
 function partState(v: unknown, typeId: string, where: string): PartState {
   const o = obj(v, where);
   // v4: a board's program is a .hex file in its folder, no longer part state.
-  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'burnedBy', 'name'], where);
+  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'burnedBy', 'name', 'vcc', 'lux'], where);
   const state: PartState = {};
   for (const key of Object.keys(o)) {
     if (key === 'closed' || key === 'burned') {
@@ -93,6 +93,20 @@ function partState(v: unknown, typeId: string, where: string): PartState {
       const p = num(o, key, where);
       if (p < 0 || p > 1) fail(`${where}.position must be between 0 and 1 (got ${p}).`);
       state.position = p;
+    } else if (key === 'lux') {
+      // An LDR's light level: only on parts whose value popup edits it, within its range.
+      const lux = num(o, key, where);
+      const spec = getPart(typeId)?.value;
+      if (spec?.key !== 'lux') fail(`${where}.lux is only allowed on light-dependent resistors, but a ${typeId} part has no light level.`);
+      if (lux < spec.min || lux > spec.max) fail(`${where}.lux must be between ${spec.min} and ${spec.max} lx (got ${lux}).`);
+      state.lux = lux;
+    } else if (key === 'vcc') {
+      // A logic gate's supply level: only on parts whose value popup edits it, one of its choices.
+      const v = num(o, key, where);
+      const spec = getPart(typeId)?.value;
+      if (spec?.key !== 'vcc') fail(`${where}.vcc is only allowed on logic gates, but a ${typeId} part has no supply level.`);
+      if (spec.options && !spec.options.includes(v)) fail(`${where}.vcc must be one of ${spec.options.join(', ')} V (got ${v}).`);
+      state.vcc = v;
     } else {
       const value = num(o, key, where);
       const spec = getPart(typeId)?.value;

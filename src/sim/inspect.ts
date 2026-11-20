@@ -43,6 +43,8 @@
 //     100 mA rating."). Potentiometer: the power of each half of the track.
 
 import { driverQuantities } from './driverinspect';
+import { buzzerQuantities, sevensegQuantities, zenerQuantities } from './partinspect';
+import { gateQuantities } from './gateinspect';
 import { level1 } from './mosfet';
 import { modelPins, terminalKey } from './nets';
 import { dielectricVolts, igbtStress, polarizedCapStress } from './ratings';
@@ -188,8 +190,12 @@ function mainQuantities(
   r: PartResult, part: InspectPart, node: (pin: string) => number,
 ): Quantity[] {
   switch (model.kind) {
-    case 'resistor':
-      return [volts('v', 'V', r.voltage), amps('i', 'I', r.current), watts('p', 'P', r.power), num('r', 'R', 'resistance', 'Ω', model.ohms)];
+    case 'resistor': {
+      const out = [volts('v', 'V', r.voltage), amps('i', 'I', r.current), watts('p', 'P', r.power), num('r', 'R', 'resistance', 'Ω', model.ohms)];
+      // An LDR: the light level its resistance comes from.
+      if (model.lux !== undefined) out.push(num('lux', 'Light', 'ratio', 'lx', model.lux));
+      return out;
+    }
     case 'capacitor':
       return capacitor(model, r);
     case 'inductor':
@@ -200,7 +206,11 @@ function mainQuantities(
         watts('ploss', 'P loss', r.current * r.current * model.rInternal), volts('emf', 'EMF', model.volts),
       ];
     case 'diode':
-      return diode(r, part.led === true);
+      return model.bv !== undefined ? zenerQuantities(model, r) : diode(r, part.led === true);
+    case 'buzzer':
+      return buzzerQuantities(model, r);
+    case 'sevenseg':
+      return sevensegQuantities(model, r);
     case 'npn':
     case 'pnp':
       return bjt(model, r, node);
@@ -210,6 +220,8 @@ function mainQuantities(
       return igbt(model, r, node);
     case 'halfdriver':
       return driverQuantities(r);
+    case 'gate':
+      return gateQuantities(model, r);
     case 'switch':
       return [text('state', 'State', model.closed ? 'closed' : 'open'), amps('i', 'I', r.current), volts('v', 'V', r.voltage), watts('p', 'P', r.power)];
     case 'pot':
@@ -353,8 +365,14 @@ export function defaultPlot(model: ComponentModel): string[] {
       return ['vge', 'vce', 'ic'];
     case 'halfdriver':
       return ['vcc', 'vbs'];
+    case 'gate':
+      return ['va', 'vy'];
     case 'diode':
       return ['vf', 'if'];
+    case 'buzzer':
+      return ['v', 'i'];
+    case 'sevenseg':
+      return ['i'];
     case 'pot':
       return ['vw', 'iaw'];
     case 'switch':

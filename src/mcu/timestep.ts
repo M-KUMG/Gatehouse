@@ -38,11 +38,13 @@ const R_DEFAULT = 1000;
 
 /**
  * True when the circuit has a capacitor or an inductor, or a part with a
- * logic state (a half-bridge driver: its input hysteresis needs the state of
- * the previous step): it then needs time steps.
+ * logic state (a half-bridge driver or a logic gate: input hysteresis and
+ * latches need the state of the previous step): it then needs time steps.
  */
 export function isReactive(input: SimInput): boolean {
-  return input.components.some((c) => c.model.kind === 'capacitor' || c.model.kind === 'inductor' || c.model.kind === 'halfdriver');
+  return input.components.some((c) => (
+    c.model.kind === 'capacitor' || c.model.kind === 'inductor' || c.model.kind === 'halfdriver' || c.model.kind === 'gate'
+  ));
 }
 
 /** Smallest time constant estimate of the circuit (seconds), Infinity without reactive parts. */

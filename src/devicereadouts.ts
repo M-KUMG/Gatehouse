@@ -3,12 +3,34 @@
 
 import { formatSI } from './format';
 import type { PartResult } from './sim';
+import { ACTIVE_BUZZER } from './sim/buzzer';
+import { ledBrightness } from './sim/inspect';
+import { buzzerState, zenerRegion } from './sim/partinspect';
+import { SEVENSEG_SEGMENTS } from './sim/sevenseg';
 
 /** Signal diode: forward drop and current, or the reverse voltage it blocks. */
 export function diodeReadout(r: PartResult): string[] {
   const dissipated = formatSI(r.power, 'W');
   if (r.voltage >= 0) return [`Vf ${formatSI(r.voltage, 'V')} · If ${formatSI(r.current, 'A')}`, dissipated];
   return [`Blocking ${formatSI(-r.voltage, 'V')} reverse`, `leakage ${formatSI(-r.current, 'A')}`];
+}
+
+/** Zener diode: forward like a diode, in breakdown the Zener voltage and current, else the reverse voltage it blocks. */
+export function zenerReadout(r: PartResult): string[] {
+  const region = zenerRegion(r.voltage, r.current);
+  if (region === 'breakdown') return [`Vz ${formatSI(-r.voltage, 'V')} · Iz ${formatSI(-r.current, 'A')} (breakdown)`, formatSI(r.power, 'W')];
+  return diodeReadout(r);
+}
+
+/** Active buzzer: voltage, current and whether it sounds. */
+export function buzzerReadout(r: PartResult): string[] {
+  return [`${formatSI(r.voltage, 'V')} · ${formatSI(r.current, 'A')}`, buzzerState(ACTIVE_BUZZER, r.voltage)];
+}
+
+/** 7-segment display: which segments are lit, and the common current. */
+export function sevensegReadout(r: PartResult): string[] {
+  const lit = SEVENSEG_SEGMENTS.filter((s) => ledBrightness(r.pins[s] ?? 0) > 0);
+  return [`Lit: ${lit.length ? lit.join(' ') : 'none'}`, `I com ${formatSI(-(r.pins.com ?? 0), 'A')} out · ${formatSI(r.power, 'W')}`];
 }
 
 /** PNP: conventional currents flow out of the collector and base, so they are shown as positive outflows. */

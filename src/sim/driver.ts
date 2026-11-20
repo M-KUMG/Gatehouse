@@ -97,8 +97,8 @@ export interface DriverSense {
   vbs: number; // VB - VS
 }
 
-/** A Schmitt input: a high level stays high until below VIL, a low one goes high only above VIH. */
-function schmitt(prev: boolean, v: number, low: number, high: number): boolean {
+/** A Schmitt input: a high level stays high until below VIL, a low one goes high only above VIH (shared with gates.ts). */
+export function schmitt(prev: boolean, v: number, low: number, high: number): boolean {
   return prev ? !(v < low) : v > high;
 }
 
@@ -110,6 +110,11 @@ export function decideLogic(prev: DriverLogic, v: DriverSense): DriverLogic {
     vcc: schmitt(prev.vcc, v.vcc, DRIVER_UVLO_OFF, DRIVER_UVLO_ON),
     vbs: schmitt(prev.vbs, v.vbs, DRIVER_UVLO_OFF, DRIVER_UVLO_ON),
   };
+}
+
+/** True for a stored logic state of a driver (TransientState.logic may hold other parts' states too, see solve.ts). */
+export function isDriverLogic(l: unknown): l is DriverLogic {
+  return typeof l === 'object' && l !== null && 'in' in l && 'sd' in l && 'vcc' in l && 'vbs' in l;
 }
 
 export function sameLogic(a: DriverLogic, b: DriverLogic): boolean {

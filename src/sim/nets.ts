@@ -9,11 +9,14 @@ export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readon
   switch: ['a', 'b'],
   pot: ['a', 'w', 'b'],
   diode: ['anode', 'cathode'],
+  buzzer: ['pos', 'neg'],
+  sevenseg: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'dp', 'com'],
   npn: ['c', 'b', 'e'],
   pnp: ['c', 'b', 'e'],
   mosfet: ['g', 'd', 's'],
   igbt: ['g', 'c', 'e'],
   halfdriver: ['vcc', 'in', 'sd', 'com', 'lo', 'vs', 'ho', 'vb'],
+  gate: ['a', 'b', 'y'], // a 1-input gate: a, y (GATE1_PINS)
   capacitor: ['a', 'b'],
   inductor: ['a', 'b'],
   ground: ['gnd'],
@@ -24,6 +27,9 @@ export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readon
 /** Pins of a polarized capacitor (an electrolytic), in place of a, b: pos is a, neg is b. */
 export const POLARIZED_PINS: readonly string[] = ['pos', 'neg'];
 
+/** Pins of a 1-input logic gate (NOT, BUFFER), in place of a, b, y. */
+export const GATE1_PINS: readonly string[] = ['a', 'y'];
+
 /** The one pin of a `node` model (a wire junction). */
 export const NODE_PIN = 'n';
 
@@ -31,6 +37,7 @@ export const NODE_PIN = 'n';
 export function modelPins(model: ComponentModel): readonly string[] {
   if (model.kind === 'board') return ['gnd', ...Object.keys(model.rails), ...Object.keys(model.io)];
   if (model.kind === 'capacitor' && model.polarized) return POLARIZED_PINS;
+  if (model.kind === 'gate' && model.inputs === 1) return GATE1_PINS;
   return MODEL_PINS[model.kind];
 }
 

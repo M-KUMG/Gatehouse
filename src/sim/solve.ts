@@ -9,18 +9,25 @@
 import { bjtResult, makeBjt, stampBjt, updateBjt, type Bjt } from './bjt';
 import {
   GMIN, POT_END_OHMS, SWITCH_CLOSED_OHMS, SWITCH_OPEN_OHMS, VT,
-  criticalVoltage, junction, limitJunction,
+  criticalVoltage, limitJunction,
 } from './devices';
 import {
-  DEFAULT_LOGIC, DRIVER_PINS, MAX_LOGIC_ROUNDS, commonLogic, decideLogic, driverBranches, driverResult, sameLogic,
+  DEFAULT_LOGIC, DRIVER_PINS, MAX_LOGIC_ROUNDS, commonLogic, decideLogic, driverBranches, driverResult, isDriverLogic, sameLogic,
   sensePins, type DriverElement, type DriverLogic,
 } from './driver';
+import {
+  DEFAULT_GATE_LOGIC, GATE_INPUT_OHMS, GATE_OUT_OHMS, decideGate, gateOutput, gateResult, isGateLogic, sameGate,
+  type GateElement, type GateLogic,
+} from './gates';
 import { solveLinear } from './linear';
 import { makeMosfet, mosfetResult, stampMosfet, updateMosfet, type Mosfet } from './mosfet';
 import { buildNets, modelPins } from './nets';
 import { companionOf, stampReactive, type Companion, type Reactive, type ReactiveState } from './reactive';
 import { stampInto, type Stamp } from './stamp';
 import type { PartResult, SimInput, SimResult } from './types';
+import { buzzerCurve } from './buzzer';
+import { SEVENSEG_SEGMENTS } from './sevenseg';
+import { breakdownOf, diodeCurrent, diodeStep, type DiodeCurve } from './zener';
 
 const MAX_ITERATIONS = 200;
 /** Output resistance of a board's supply rails (USB 5 V, 3.3 V regulator). */
@@ -73,12 +80,14 @@ interface Source {
 }
 /** Norton form of a Thevenin source: conductance g from `node` to `ref`, pushing g * volts into `node`. */
 interface Drive { part: number; node: number; ref: number; g: number; volts: number }
-interface Diode {
+/** A junction (diode, LED, Zener, one 7-segment LED) or a curve of its own (the buzzer); see zener.ts. */
+interface Diode extends DiodeCurve {
   part: number; anode: number; cathode: number;
   /** Node between the series resistance and the junction (the anode itself when rs is 0). */
   inner: number;
-  is: number; nvt: number; vCrit: number;
   v: number; // junction voltage the model is linearized at
+  /** The part's pin names for anode and cathode (default 'anode', 'cathode'); several elements of one part add up. */
+  pins?: readonly [string, string];
 }
 /**
  * An IGBT expanded into its equivalent circuit: `mos` and `bjt` are ordinary
@@ -100,6 +109,8 @@ interface Elements {
   igbts: Igbt[];
   /** Half-bridge drivers: their resistors are in `resistors` (part -1), switched by `logic` (driver.ts). */
   drivers: DriverElement[];
+  /** Logic gates: input resistors in `resistors`, the output a Thevenin source in `drives` (both part -1; gates.ts). */
+  gates: GateElement[];
   /** `pins`: the model's two pin names (a, b; pos, neg for a polarized capacitor). */
   reactives: (Reactive & { kind: 'capacitor' | 'inductor'; pins: readonly string[] })[];
   drives: Drive[];
@@ -120,10 +131,11 @@ function seriesNode(el: Elements, node: number, ohms: number | undefined): numbe
 
 function buildElements(
   input: SimInput, netOf: (part: number, pin: string) => number, netCount: number, step: Companion | undefined,
-  logic?: Readonly<Record<number, DriverLogic>>,
+  logic?: Readonly<LogicState>,
 ): Elements {
   const el: Elements = {
-    resistors: [], sources: [], diodes: [], bjts: [], mosfets: [], igbts: [], drivers: [], reactives: [], drives: [], nodes: netCount,
+    resistors: [], sources: [], diodes: [], bjts: [], mosfets: [], igbts: [], drivers: [], gates: [], reactives: [], drives: [],
+    nodes: netCount,
   };
   const resistor = (part: number, pinA: string, pinB: string, ohms: number): void => {
     el.resistors.push({ part, a: netOf(part, pinA), b: netOf(part, pinB), g: 1 / ohms, pinA, pinB });
@@ -151,11 +163,29 @@ function buildElements(
         const inner = m.rs > 0 ? el.nodes++ : anode;
         el.diodes.push({
           part: id, anode, cathode: netOf(id, 'cathode'), inner,
-          is: m.is, nvt, vCrit: criticalVoltage(m.is, nvt), v: 0,
+          is: m.is, nvt, vCrit: criticalVoltage(m.is, nvt), v: 0, ...breakdownOf(m),
         });
         if (m.rs > 0) el.resistors.push({ part: -1, a: anode, b: inner, g: 1 / m.rs, pinA: '', pinB: '' });
         break;
       }
+      case 'sevenseg': {
+        // Eight LEDs, segment pin -> com, each behind its own rs.
+        const nvt = m.n * VT;
+        const com = netOf(id, 'com');
+        for (const seg of SEVENSEG_SEGMENTS) {
+          const anode = netOf(id, seg);
+          const inner = seriesNode(el, anode, m.rs);
+          el.diodes.push({ part: id, anode, cathode: com, inner, is: m.is, nvt, vCrit: criticalVoltage(m.is, nvt), v: 0, pins: [seg, 'com'] });
+        }
+        break;
+      }
+      case 'buzzer':
+        // A diode element with the buzzer's own curve (buzzer.ts).
+        el.diodes.push({
+          part: id, anode: netOf(id, 'pos'), cathode: netOf(id, 'neg'), inner: netOf(id, 'pos'),
+          is: 0, nvt: VT, vCrit: 0, v: 0, curve: (v) => buzzerCurve(m, v), pins: ['pos', 'neg'],
+        });
+        break;
       case 'npn':
       case 'pnp': {
         // Series resistances (bjt.ts): the model sits on internal nodes behind them.
@@ -195,11 +225,25 @@ function buildElements(
       case 'halfdriver': {
         // Resistors only, switched by the logic state this solve uses (see driver.ts and solveSettled).
         const nodes = Object.fromEntries(DRIVER_PINS.map((p) => [p, netOf(id, p)])) as DriverElement['nodes'];
-        const d: DriverElement = { part: id, nodes, logic: logic?.[id] ?? DEFAULT_LOGIC };
+        const held = logic?.[id];
+        const d: DriverElement = { part: id, nodes, logic: isDriverLogic(held) ? held : DEFAULT_LOGIC };
         for (const b of driverBranches(d.logic)) {
           el.resistors.push({ part: -1, a: nodes[b.a], b: nodes[b.b], g: 1 / b.ohms, pinA: '', pinB: '' });
         }
         el.drivers.push(d);
+        break;
+      }
+      case 'gate': {
+        // Inputs: 10 MOhm to the reference; output: vcc or 0 V behind 25 ohm to the reference (gates.ts).
+        const held = logic?.[id];
+        const nodes = { a: netOf(id, 'a'), b: m.inputs === 2 ? netOf(id, 'b') : -1, y: netOf(id, 'y') };
+        const g: GateElement = {
+          part: id, fn: m.fn, inputs: m.inputs, vcc: m.vcc, nodes, logic: isGateLogic(held) ? held : DEFAULT_GATE_LOGIC,
+        };
+        el.resistors.push({ part: -1, a: nodes.a, b: 0, g: 1 / GATE_INPUT_OHMS, pinA: '', pinB: '' });
+        if (m.inputs === 2) el.resistors.push({ part: -1, a: nodes.b, b: 0, g: 1 / GATE_INPUT_OHMS, pinA: '', pinB: '' });
+        el.drives.push({ part: -1, node: nodes.y, ref: 0, g: 1 / GATE_OUT_OHMS, volts: gateOutput(m.fn, g.logic) ? m.vcc : 0 });
+        el.gates.push(g);
         break;
       }
       case 'capacitor':
@@ -347,7 +391,7 @@ function stampLinear(el: Elements, a: Float64Array[], z: Float64Array, stamp: St
 function stampDevices(el: Elements, stamp: Stamp, scale: number): void {
   const { addG, addI } = stamp;
   for (const d of el.diodes) {
-    const { i, g } = junction(d.v, d.is, d.nvt);
+    const { i, g } = diodeCurrent(d, d.v);
     addG(d.inner, d.cathode, g + GMIN);
     addI(d.inner, d.cathode, i - g * d.v);
   }
@@ -460,7 +504,7 @@ function newton(
     }
     x = next;
     iterations = iter;
-    for (const d of el.diodes) d.v = step(volt(d.inner) - volt(d.cathode), d.v, d.nvt, d.vCrit);
+    for (const d of el.diodes) d.v = diodeStep(d, volt(d.inner) - volt(d.cathode), d.v, step);
     for (const q of el.bjts) updateBjt(q, volt, bjtStep);
     for (const q of el.mosfets) if (updateMosfet(q, volt, ABS_TOL)) settled = false;
     if (settled) return { x: own(x), converged: true, iterations, strict };
@@ -592,7 +636,7 @@ function shapeOf(input: SimInput, nets: ReturnType<typeof buildNets>, el: Elemen
  */
 export function solveWith(
   input: SimInput, step: Companion | undefined, time: number, warm?: WarmStart,
-  logic?: Readonly<Record<number, DriverLogic>>,
+  logic?: Readonly<LogicState>,
 ): { result: SimResult; stored: Record<number, ReactiveState> | null; warm: WarmStart | null } {
   const nets = buildNets(input);
   const result: SimResult = {
@@ -674,48 +718,125 @@ export function solveWith(
   return { result, stored, warm: next };
 }
 
-/** Logic state of every half-bridge driver by component id (kept in TransientState.logic). */
-export type LogicState = Record<number, DriverLogic>;
+/** Logic state of one part with one: a half-bridge driver (driver.ts) or a logic gate (gates.ts). */
+export type PartLogic = DriverLogic | GateLogic;
+
+/** Logic state of every logic part by component id (kept in TransientState.logic). */
+export type LogicState = Record<number, PartLogic>;
 
 /**
- * solveWith plus the fixed point over the drivers' logic (see driver.ts):
- * starts from `prev` (the last accepted state; DEFAULT_LOGIC for a driver
- * without one), re-decides every driver's logic from the solution with
- * hysteresis against `prev`, and solves again (warm-started from the round
- * before) until nothing changes, at most MAX_LOGIC_ROUNDS solves plus one;
- * an unsettled state falls back to the flags common to the last two rounds.
- * Without drivers this is exactly one solveWith call. `logic` is the state
- * the returned result was solved with (`prev`'s when it did not converge);
- * result.iterations counts every round.
+ * How solveSettled treats one logic part: its starting state from the stored
+ * one (`initial`, ignoring a state of another kind), the decision from pin
+ * voltages with hysteresis against the accepted state, equality, and the
+ * state to take when the rounds run out (`fallback`, from the state of the
+ * last round, the one decided from it and the one decided in round 1).
+ */
+interface LogicRule {
+  id: number;
+  gate: boolean;
+  initial(stored: unknown): PartLogic;
+  decide(prev: PartLogic, volts: (pin: string) => number): PartLogic;
+  same(a: PartLogic, b: PartLogic): boolean;
+  fallback(last: PartLogic, next: PartLogic, first: PartLogic): PartLogic;
+}
+
+function logicRules(input: SimInput): LogicRule[] {
+  const rules: LogicRule[] = [];
+  for (const { id, model: m } of input.components) {
+    if (m.kind === 'halfdriver') {
+      rules.push({
+        id, gate: false,
+        initial: (s) => (isDriverLogic(s) ? s : DEFAULT_LOGIC),
+        decide: (p, v) => decideLogic(p as DriverLogic, sensePins(v)),
+        same: (a, b) => sameLogic(a as DriverLogic, b as DriverLogic),
+        // Flags that kept flipping end up off (outputs low): the safe side.
+        fallback: (last, next) => commonLogic(last as DriverLogic, next as DriverLogic),
+      });
+    } else if (m.kind === 'gate') {
+      const same = (a: PartLogic, b: PartLogic): boolean => sameGate(a as GateLogic, b as GateLogic);
+      rules.push({
+        id, gate: true,
+        initial: (s) => (isGateLogic(s) ? s : DEFAULT_GATE_LOGIC),
+        decide: (p, v) => decideGate(p as GateLogic, v('a'), v('b'), m.vcc, m.inputs),
+        same,
+        // A gate with no stable state (a loop that inverts itself) takes its
+        // round-1 decision: it flips once per call, i.e. once per time step.
+        fallback: (last, next, first) => (same(last, next) ? next : first),
+      });
+    }
+  }
+  return rules;
+}
+
+/** Extra rounds per gate on top of MAX_LOGIC_ROUNDS (a chain of n gates needs up to n rounds). */
+const ROUNDS_PER_GATE = 1;
+
+/**
+ * solveWith plus the fixed point over the logic parts' states (half-bridge
+ * drivers, driver.ts; logic gates, gates.ts): starts from `prev` (the last
+ * accepted state; everything low/off for a part without one), re-decides
+ * every part's logic from the solution with hysteresis against `prev`, and
+ * solves again (warm-started from the round before) until nothing changes,
+ * at most MAX_LOGIC_ROUNDS + ROUNDS_PER_GATE x (gates) solves plus one.
+ * All parts update together each round; once a gate goes back to a state it
+ * already had in this call (a feedback loop swinging, e.g. a NOR latch
+ * starting from both outputs high) only the first changed gate (component
+ * order) updates per round, which breaks the symmetry deterministically.
+ * When the rounds run out each part takes its rule's fallback (drivers: the
+ * flags common to the last two rounds; gates: see logicRules) and that state
+ * is solved once more. Without logic parts this is exactly one solveWith
+ * call; with drivers only it is the driver's original loop. `logic` is the
+ * state the returned result was solved with (`prev`'s when it did not
+ * converge); result.iterations counts every round.
  */
 export function solveSettled(
   input: SimInput, step: Companion | undefined, time: number, warm?: WarmStart, prev: Readonly<LogicState> = {},
 ): ReturnType<typeof solveWith> & { logic: LogicState } {
-  const drivers = input.components.filter((c) => c.model.kind === 'halfdriver').map((c) => c.id);
-  if (drivers.length === 0) return { ...solveWith(input, step, time, warm), logic: {} };
-  const prevOf = (id: number): DriverLogic => prev[id] ?? DEFAULT_LOGIC;
-  let logic: LogicState = Object.fromEntries(drivers.map((id) => [id, prevOf(id)]));
+  const rules = logicRules(input);
+  if (rules.length === 0) return { ...solveWith(input, step, time, warm), logic: {} };
+  const maxRounds = MAX_LOGIC_ROUNDS + ROUNDS_PER_GATE * rules.filter((p) => p.gate).length;
+  const prevOf = (p: LogicRule): PartLogic => p.initial(prev[p.id]);
+  let logic: LogicState = Object.fromEntries(rules.map((p) => [p.id, prevOf(p)]));
+  const tried = new Map(rules.filter((p) => p.gate).map((p) => [p.id, [logic[p.id]]]));
+  let first: LogicState | null = null;
+  let serial = false;
   let out = solveWith(input, step, time, warm, logic);
   let iterations = out.result.iterations;
   for (let round = 1; out.result.converged; round++) {
     const r = out.result;
     const next: LogicState = {};
-    let changed = false;
-    for (const id of drivers) {
-      next[id] = decideLogic(prevOf(id), sensePins((pin) => r.voltages[r.nets[`${id}:${pin}`] ?? 0] ?? 0));
-      if (!sameLogic(next[id], logic[id])) changed = true;
+    const changed: LogicRule[] = [];
+    for (const p of rules) {
+      next[p.id] = p.decide(prevOf(p), (pin) => r.voltages[r.nets[`${p.id}:${pin}`] ?? 0] ?? 0);
+      if (!p.same(next[p.id], logic[p.id])) changed.push(p);
     }
-    if (!changed) break;
-    if (round >= MAX_LOGIC_ROUNDS) {
-      for (const id of drivers) next[id] = commonLogic(logic[id], next[id]);
+    first ??= { ...next };
+    if (changed.length === 0) break;
+    for (const p of changed) {
+      const seen = tried.get(p.id);
+      if (!seen) continue;
+      if (seen.some((s) => p.same(s, next[p.id]))) serial = true;
+      seen.push(next[p.id]);
+    }
+    if (serial) {
+      // Only the first changed gate moves this round (drivers always do).
+      let moved = false;
+      for (const p of changed) {
+        if (!p.gate) continue;
+        if (moved) next[p.id] = logic[p.id];
+        moved = true;
+      }
+    }
+    if (round >= maxRounds) {
+      for (const p of rules) next[p.id] = p.fallback(logic[p.id], next[p.id], first[p.id]);
     }
     logic = next;
     out = solveWith(input, step, time, out.warm ?? warm, logic);
     iterations += out.result.iterations;
-    if (round >= MAX_LOGIC_ROUNDS) break;
+    if (round >= maxRounds) break;
   }
   out.result.iterations = iterations;
-  return { ...out, logic: out.result.converged ? logic : Object.fromEntries(drivers.map((id) => [id, prevOf(id)])) };
+  return { ...out, logic: out.result.converged ? logic : Object.fromEntries(rules.map((p) => [p.id, prevOf(p)])) };
 }
 
 function collectResults(
@@ -750,16 +871,29 @@ function collectResults(
     const v = volt(s.pos) - volt(s.neg);
     parts[s.part] = { voltage: v, current: -into, power: -into * v, pins: { pos: into, neg: -into } };
   }
+  const multi = new Set<number>(); // parts with a diode element reported already (a 7-segment display's LEDs add up)
   for (const d of el.diodes) {
     const vj = volt(d.inner) - volt(d.cathode);
-    const i = junction(vj, d.is, d.nvt).i + GMIN * vj;
+    const i = diodeCurrent(d, vj).i + GMIN * vj;
     const v = volt(d.anode) - volt(d.cathode);
-    parts[d.part] = { voltage: v, current: i, power: v * i, pins: { anode: i, cathode: -i } };
+    const [pa, pk] = d.pins ?? ['anode', 'cathode'];
+    const p = parts[d.part];
+    if (!multi.has(d.part) || !p) {
+      multi.add(d.part);
+      parts[d.part] = { voltage: v, current: i, power: v * i, pins: { [pa]: i, [pk]: -i } };
+    } else {
+      addPin(p, pa, i);
+      addPin(p, pk, -i);
+      p.current += i;
+      p.power += v * i;
+      p.voltage = Math.max(p.voltage, v);
+    }
   }
   for (const q of el.bjts) if (q.part >= 0) parts[q.part] = bjtResult(q, volt);
   for (const q of el.mosfets) if (q.part >= 0) parts[q.part] = mosfetResult(q, volt);
   for (const q of el.igbts) parts[q.part] = igbtResult(q, volt);
   for (const d of el.drivers) parts[d.part] = driverResult(d, volt);
+  for (const g of el.gates) parts[g.part] = gateResult(g, volt);
   for (const r of el.reactives) {
     const i = r.g * (volt(r.inner) - volt(r.b)) + r.ieq;
     const v = volt(r.a) - volt(r.b);

@@ -183,6 +183,130 @@ export const EXAMPLES: readonly Example[] = [
     },
   },
   {
+    // Ideal gates (no supply pins) run at 9 V here, the battery's level, so a closed switch
+    // (9 V) reads high and an open one low through the gate's own 10 Mohm pull-down.
+    name: 'Logic gates',
+    hint: 'Two toggle switches feed an AND gate and an XOR gate (both set to 9 V, the battery\'s level); '
+      + 'each output lights an LED through 330 Ω. Click the switches: AND lights with both closed, '
+      + 'XOR with exactly one. An open switch reads low (the gate inputs pull down). Double-click a gate '
+      + 'to choose its supply level.',
+    state: {
+      version: 4,
+      parts: [
+        part(1, 'battery9v', 0, 0),
+        part(2, 'ground', 8, 4),
+        part(3, 'switch', 12, 0),
+        part(4, 'switch', 12, 6),
+        part(5, 'gate-and', 20, 0, 0, { vcc: 9 }),
+        part(6, 'gate-xor', 20, 14, 0, { vcc: 9 }),
+        part(7, 'resistor', 25, 2, 90, { value: 330 }),
+        part(8, 'led', 25, 7, 180),
+        part(9, 'ground', 29, 9),
+        part(10, 'resistor', 25, 16, 90, { value: 330 }),
+        part(11, 'led', 25, 21, 180),
+        part(12, 'ground', 29, 23),
+      ],
+      wires: [
+        wire(31, '1.neg', '2.gnd', [[9, 2]]),
+        wire(32, '1.pos', '3.a'),
+        wire(33, '3.a', '4.a', [[11, 1], [11, 7]]),
+        // Switch A -> both A inputs, switch B -> both B inputs.
+        wire(34, '3.b', '5.a'),
+        wire(35, '3.b', '6.a', [[18, 1], [18, 15]]),
+        wire(36, '4.b', '5.b', [[17, 7], [17, 3]]),
+        wire(37, '4.b', '6.b', [[17, 7], [17, 17]]),
+        // Outputs -> 330 ohm -> LED -> ground.
+        wire(38, '5.y', '7.a'),
+        wire(39, '7.b', '8.anode'),
+        wire(40, '8.cathode', '9.gnd', [[27, 6], [30, 6]]),
+        wire(41, '6.y', '10.a'),
+        wire(42, '10.b', '11.anode'),
+        wire(43, '11.cathode', '12.gnd', [[27, 20], [30, 20]]),
+      ],
+      junctions: [],
+    },
+  },
+  {
+    // Cross-coupled NOR gates: Qbar = NOR(S, Q) (part 5), Q = NOR(R, Qbar) (part 6). The solver
+    // settles the loop deterministically; from power-up it reads Q low (reset).
+    name: 'SR latch from NOR gates',
+    hint: 'Two NOR gates (9 V) cross-coupled into a set-reset latch: hold S to set Q (top LED off, bottom LED on), '
+      + 'hold R to reset it. Start the clock (Start) so the latch remembers between presses: it keeps its '
+      + 'state when the button is released. It starts reset (Q low).',
+    state: {
+      version: 4,
+      parts: [
+        part(1, 'battery9v', 0, 0),
+        part(2, 'ground', 8, 4),
+        part(3, 'button', 12, 0),
+        part(4, 'button', 12, 8),
+        part(5, 'gate-nor', 20, 0, 0, { vcc: 9 }),
+        part(6, 'gate-nor', 20, 8, 0, { vcc: 9 }),
+        part(7, 'resistor', 27, 10, 90, { value: 330 }),
+        part(8, 'led', 27, 15, 180),
+        part(9, 'ground', 31, 17),
+        part(10, 'resistor', 31, 2, 90, { value: 330 }),
+        part(11, 'led', 31, 7, 180),
+        part(12, 'ground', 35, 9),
+      ],
+      wires: [
+        wire(31, '1.neg', '2.gnd', [[9, 2]]),
+        wire(32, '1.pos', '3.a'),
+        wire(33, '3.a', '4.a', [[11, 1], [11, 9]]),
+        // S -> Qbar gate input A, R -> Q gate input A.
+        wire(34, '3.b2', '5.a', [[18, 2], [18, 1]]),
+        wire(35, '4.b2', '6.a', [[18, 10], [18, 9]]),
+        // Cross-coupling: Q -> Qbar gate input B, Qbar -> Q gate input B.
+        wire(36, '6.y', '5.b', [[25, 10], [25, 6], [19, 6], [19, 3]]),
+        wire(37, '5.y', '6.b', [[26, 2], [26, 13], [19, 13], [19, 11]]),
+        // Q -> 330 ohm -> LED (bottom), Qbar -> 330 ohm -> LED (top).
+        wire(38, '6.y', '7.a'),
+        wire(39, '7.b', '8.anode'),
+        wire(40, '8.cathode', '9.gnd', [[29, 14], [32, 14]]),
+        wire(41, '5.y', '10.a'),
+        wire(42, '10.b', '11.anode'),
+        wire(43, '11.cathode', '12.gnd', [[33, 6], [36, 6]]),
+      ],
+      junctions: [],
+    },
+  },
+  {
+    // Common cathode to ground; segments a, b, c each from battery + through a switch and 330 ohm
+    // ((9 V - 1.95 V) / 330 = 21 mA, below the 30 mA per-segment warning; 220 ohm would give 32 mA).
+    name: 'Seven-segment',
+    hint: 'A common-cathode 7-segment display: three toggle switches light segments a, b and c from the 9 V battery '
+      + 'through 330 Ω each (about 21 mA per segment). Close all three for a 7.',
+    state: {
+      version: 4,
+      parts: [
+        part(1, 'battery9v', 0, 0),
+        part(2, 'ground', 4, 4),
+        part(3, 'switch', 8, -10),
+        part(4, 'resistor', 14, -10, 0, { value: 330 }),
+        part(5, 'switch', 8, -8),
+        part(6, 'resistor', 14, -8, 0, { value: 330 }),
+        part(7, 'switch', 8, 7),
+        part(8, 'resistor', 14, 7, 0, { value: 330 }),
+        part(9, 'sevenseg', 24, -2),
+        part(10, 'ground', 20, 2),
+      ],
+      wires: [
+        wire(11, '1.neg', '2.gnd'),
+        wire(12, '1.pos', '3.a', [[6, 1], [6, -9]]),
+        wire(13, '1.pos', '5.a', [[7, 1], [7, -7]]),
+        wire(14, '1.pos', '7.a', [[7, 1], [7, 8]]),
+        wire(15, '3.b', '4.a'),
+        wire(16, '5.b', '6.a'),
+        wire(17, '7.b', '8.a'),
+        wire(18, '4.b', '9.b', [[29, -9]]),
+        wire(19, '6.b', '9.a', [[28, -7]]),
+        wire(20, '8.b', '9.c', [[28, 8]]),
+        wire(21, '9.com', '10.gnd', [[27, -5], [21, -5]]),
+      ],
+      junctions: [],
+    },
+  },
+  {
     name: 'Uno blink',
     hint: 'Arduino Uno with the Blink program: pin 13 → 220 Ω → LED → GND. Select the board and press Run.',
     state: {

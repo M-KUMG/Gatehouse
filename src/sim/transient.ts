@@ -51,9 +51,10 @@ export interface TransientState {
    */
   warm?: WarmStart;
   /**
-   * Accepted logic state of each half-bridge driver by component id (see
-   * driver.ts): the next step decides its input levels and lockouts with
-   * hysteresis against it. Missing: everything low/off (DEFAULT_LOGIC).
+   * Accepted logic state of each half-bridge driver and logic gate by
+   * component id (see driver.ts, gates.ts): the next step decides its input
+   * levels (and a driver's lockouts) with hysteresis against it. Missing:
+   * everything low/off (DEFAULT_LOGIC, DEFAULT_GATE_LOGIC).
    */
   logic?: LogicState;
 }

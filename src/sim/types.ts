@@ -2,6 +2,8 @@
 // is plain serializable data (no classes, no DOM), so the solver can later
 // move into a Web Worker and be extended with digital parts (MCU pins).
 
+import type { GateFn } from './gates';
+
 /** One pin of one component, e.g. { part: 3, pin: 'anode' }. */
 export interface Terminal {
   part: number;
@@ -15,14 +17,30 @@ export interface Terminal {
 export type ComponentModel =
   /** EMF in series with an internal resistance. Pins: pos, neg. */
   | { kind: 'battery'; volts: number; rInternal: number }
-  /** Pins: a, b. */
-  | { kind: 'resistor'; ohms: number }
+  /** Pins: a, b. `lux`: data only, the light level an LDR's ohms were computed from (the part inspector shows it). */
+  | { kind: 'resistor'; ohms: number; lux?: number }
   /** Tiny resistance when closed, huge when open. Pins: a, b. */
   | { kind: 'switch'; closed: boolean }
   /** Track of `ohms` between a and b; the wiper w sits at `position` (0 = at a, 1 = at b). */
   | { kind: 'pot'; ohms: number; position: number }
-  /** Shockley diode with series resistance. Pins: anode, cathode. */
-  | { kind: 'diode'; is: number; n: number; rs: number }
+  /**
+   * Shockley diode with series resistance. Pins: anode, cathode. Optional
+   * reverse breakdown (a Zener, see zener.ts): the junction conducts
+   * ibv * exp(-(v + bv) / (nbv VT)) backwards, i.e. `ibv` amps at a junction
+   * voltage of -`bv` (nbv default 1). Without `bv` there is no breakdown.
+   */
+  | { kind: 'diode'; is: number; n: number; rs: number; bv?: number; ibv?: number; nbv?: number }
+  /**
+   * Active buzzer (see buzzer.ts): a smooth voltage-controlled resistance,
+   * `ohmsOff` below `vOff`, `ohmsOn` (parallel to ohmsOff) above `vOn`,
+   * smoothstep in between; reverse voltage sees ohmsOff only. Pins: pos, neg.
+   */
+  | { kind: 'buzzer'; vOff: number; vOn: number; ohmsOff: number; ohmsOn: number }
+  /**
+   * Common-cathode 7-segment display: eight LEDs (diode parameters is, n,
+   * rs), one from each segment pin to com. Pins: a, b, c, d, e, f, g, dp, com.
+   */
+  | { kind: 'sevenseg'; is: number; n: number; rs: number }
   /**
    * Ebers-Moll NPN transistor. Pins: c, b, e. Optional non-idealities (see
    * bjt.ts; absent = ideal, exactly the plain model): rb / rc / re series
@@ -79,6 +97,12 @@ export type ComponentModel =
    * Pins: vcc, in, sd, com, lo, vs, ho, vb.
    */
   | { kind: 'halfdriver' }
+  /**
+   * Ideal logic gate without supply pins (see gates.ts): inputs against the
+   * circuit's 0 V reference, the output a switched source of `vcc` or 0 V
+   * behind 25 ohm to that reference. Pins: a, b (2 inputs only), y.
+   */
+  | { kind: 'gate'; fn: GateFn; inputs: 1 | 2; vcc: number }
   /** Reference node (0 V). Pin: gnd. */
   | { kind: 'ground' }
   /** Conducts nothing (e.g. a burned-out part). No pins of its own. */

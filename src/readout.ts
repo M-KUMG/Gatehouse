@@ -18,7 +18,8 @@ export function describePart(part: PlacedPart, sim: Simulation): ReadoutText | n
   if (!type) return null;
   const state = part.state ?? {};
   const facts: string[] = [];
-  if (type.value && state.value !== undefined) facts.push(formatSI(state.value, type.value.unit));
+  const value = type.value ? state[type.value.key ?? 'value'] : undefined;
+  if (type.value && value !== undefined) facts.push(formatSI(value, type.value.unit));
   if (type.control === 'knob') facts.push(`wiper ${Math.round((state.position ?? 0.5) * 100)} %`);
   if (type.control === 'toggle' || type.control === 'momentary') facts.push(state.closed ? 'closed' : 'open');
   const text: ReadoutText = { title: [type.name, ...facts].join(' · '), lines: [] };
