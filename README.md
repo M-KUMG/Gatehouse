@@ -2,13 +2,19 @@
 
 Web and Electron simulator for Arduino and RP2040 boards and circuits. A university project, built entirely with Claude (a requirement of the course). Gatehouse itself is MIT licensed (see `LICENSE`).
 
+## Get it
+
+- **Web app** (nothing to install, desktop browser): https://gatehouse-sim.duckdns.org/app/
+- **Windows desktop app:** download `Gatehouse-Setup-<version>.exe` from the [latest release](https://github.com/M-KUMG/Gatehouse/releases/latest). It is not code-signed, so Windows SmartScreen asks: choose "More info", then "Run anyway".
+- **Main site:** https://gatehouse-sim.duckdns.org/
+
 ## Status
 
-Early but working. You can build circuits on a grid, wire them, write an Arduino sketch, compile it in the browser and run it on an emulated Uno that drives the circuit.
+Early but working (version 0.1). You can build circuits on a grid, wire them, write an Arduino sketch, compile it on your own machine and run it on an emulated Uno or Nano that drives the circuit.
 
-- **Works:** grid editor (pan, zoom, select, move, rotate, copy, delete, undo/redo), wires, battery / ground / resistor / LED / diode / switch / push button / potentiometer / NPN and PNP transistor / N- and P-MOSFET parts, a DC circuit solver, an Arduino Uno running real AVR code, **compiling sketches in the browser (WebAssembly, no server)**, save/open projects as `.gth` files, autosave, and an IDE-style window layout with a Serial console, a File explorer, a Code editor and a Build output window (each board has its own source files, saved automatically into the project).
-- **Compiler limits:** Uno and Nano profiles only (no Mega yet), no C compiler (`.c` files are compiled as C++), only the bundled libraries (Wire, SPI, SoftwareSerial, EEPROM, Servo, NeoPixel, HC-SR04). Sketches using `Wire` or SPI compile but hang when run, because I2C and SPI are not emulated yet. The compiler is **not part of the production build** yet (see "Compiler files" below).
-- **Not built yet:** I2C/SPI in the emulator, Nano and Mega parts, sending text to a board's serial port, opening a real project folder, capacitors and time-based circuits, breadboard, Raspberry Pi Pico, several boards wired together, component database.
+- **Works:** grid editor (pan, zoom, select, move, rotate, flip, copy, delete, undo/redo), wires, a DC and time-stepping circuit solver (capacitors, inductors, diodes, LEDs, BJTs, MOSFETs, IGBTs, relays, a DC motor, logic gates, a programmable power supply, a function generator), an Arduino Uno and Nano running real AVR code (UART, I2C, SPI and watchdog are emulated on the chip side), **compiling sketches in the browser or desktop app (WebAssembly, no server, offline once loaded)**, a part inspector / scope and a logic analyzer with a UART decoder, simulation start / pause / reset / speed, projects saved as `.gth` files (and, in the desktop app, as real folders), autosave, and an IDE-style window layout with a Serial console, a File explorer, a Code editor and a Build output window.
+- **Compiler limits:** Uno and Nano profiles only (no Mega yet), no C compiler (`.c` files are compiled as C++), only the bundled libraries (Wire, SPI, SoftwareSerial, EEPROM, Servo, NeoPixel, HC-SR04). Sketches using `Wire` or SPI compile, but there is no way yet to attach I2C/SPI devices, and the buses are not modelled electrically.
+- **Not built yet:** breadboard, Raspberry Pi Pico, several boards wired together, Mega, a component library with editable specs, a schematic view, a phone layout, electrical I2C/SPI buses.
 
 The full roadmap, decisions and honest status are in [`docs/PLAN.md`](docs/PLAN.md).
 
@@ -37,7 +43,7 @@ Then press Run (or Build) on a board with sketch files: the first time the brows
 
 - `npm run toolchain:sources` downloads the matching source archives (about 100 MB) for the GPL source mirror. This is only needed before publishing a build that contains the compiler; the steps are in `scripts/MIRROR.md`.
 - The pack format, sizes and how the Worker loads them are in `docs/toolchain-packs.md`.
-- `vite build` deliberately does not copy the compiler packs into `dist/`, so a deployed site would use `firmware.hex` until the packs are published with it. `npm start` (Electron) serves the app and `toolchain/packs/` through a small built-in `gatehouse://app/` address, so compiling should work there too after the two toolchain commands (not yet confirmed by hand); the installer (`npm run dist`) carries the packs inside the app.
+- `vite build` deliberately does not copy the compiler packs into `dist/`: a web deploy must put `toolchain/packs/` next to the app as `toolchain-packs/` (the live site does, under `/app/toolchain-packs/`, served without `Content-Encoding`). `npm start` (Electron) serves the app and `toolchain/packs/` through a small built-in `gatehouse://app/` address, so compiling works there too after the two toolchain commands; the installer (`npm run dist`) carries the packs inside the app.
 - Compiler tests that use the real tools run automatically when `toolchain/` exists and are skipped otherwise: `npx vitest run src/build/wasm`.
 
 ## Using it
@@ -65,4 +71,4 @@ Then press Run (or Build) on a board with sketch files: the first time the brows
 
 ## Licence notes
 
-Gatehouse is MIT. Third-party libraries (currently `avr8js`, `dockview`, CodeMirror 6 and `fflate`, all MIT) keep their own licences, listed in `THIRD_PARTY_LICENSES.txt`. The built-in Blink program contains avr-libc and GCC start-up code, and the browser compiler uses GPL-3.0 and LGPL tools (GCC 7.3.0, binutils 2.42, the Arduino core): their notices and the written source offer are in `NOTICE`, the texts in `licenses/toolchain/`. **Before publishing a build that includes the compiler, publish the source mirror** (`scripts/MIRROR.md`).
+Gatehouse is MIT. Third-party libraries (currently `avr8js`, `dockview`, CodeMirror 6 and `fflate`, all MIT) keep their own licences, listed in `THIRD_PARTY_LICENSES.txt`. The built-in Blink program contains avr-libc and GCC start-up code, and the browser compiler uses GPL-3.0 and LGPL tools (GCC 7.3.0, binutils 2.42, the Arduino core): their notices and the written source offer are in `NOTICE`, the texts in `licenses/toolchain/`. The corresponding source is published in the [`toolchain-sources-v1` release](https://github.com/M-KUMG/Gatehouse/releases/tag/toolchain-sources-v1) (how it was made: `scripts/MIRROR.md`); publish a new mirror release before shipping a different toolchain build.
