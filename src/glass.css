@@ -100,6 +100,7 @@ body::before {
 #palette-toggle,
 .palette-item,
 .palette-example,
+.palette-cat-head,
 .transport-speed,
 .dialog-button,
 .serial-button,
@@ -119,7 +120,8 @@ body::before {
 }
 
 .palette-item,
-.palette-example {
+.palette-example,
+.palette-cat-head {
   border-radius: var(--gh-radius-md);
 }
 
@@ -130,6 +132,7 @@ body::before {
 
 .palette-item:hover,
 .palette-example:hover,
+.palette-cat-head:hover,
 #palette-toggle:hover,
 .serial-button:hover:not(:disabled),
 .bo-button:hover:not(:disabled),
@@ -262,6 +265,7 @@ body::before {
   #palette-toggle,
   .palette-item,
   .palette-example,
+  .palette-cat-head,
   .transport-speed,
   .dialog-button,
   .serial-button,
