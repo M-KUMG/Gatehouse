@@ -58,6 +58,7 @@ body::before {
 .dialog,
 .tip-bubble,
 .welcome-card,
+.shortcut-sheet,
 .windows-menu-list {
   background: var(--gh-glass-sheen), var(--gh-panel-glass);
   -webkit-backdrop-filter: var(--gh-glass-blur);
@@ -72,6 +73,7 @@ body::before {
 .value-editor,
 .build-card,
 .toast,
+.shortcut-sheet,
 .tip-bubble {
   background: var(--gh-glass-sheen), var(--gh-panel-glass-strong);
 }
@@ -101,11 +103,13 @@ body::before {
 }
 
 .dialog,
-.welcome-card {
+.welcome-card,
+.shortcut-sheet {
   border-radius: calc(var(--gh-radius-lg) + 4px);
 }
 
-.dialog-backdrop {
+.dialog-backdrop,
+.shortcut-backdrop {
   background: rgba(4, 6, 12, 0.35);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
@@ -128,6 +132,7 @@ body::before {
 .palette-example,
 .palette-cat-head,
 .welcome-action,
+.help-button,
 .transport-speed,
 .dialog-button,
 .serial-button,
@@ -161,6 +166,7 @@ body::before {
 .palette-example:hover,
 .palette-cat-head:hover,
 .welcome-action:not(.primary):hover,
+.help-button:hover,
 #palette-toggle:hover,
 .serial-button:hover:not(:disabled),
 .bo-button:hover:not(:disabled),
@@ -455,6 +461,9 @@ body::before {
   .palette-cat-head,
   .welcome-card,
   .welcome-action,
+  .shortcut-sheet,
+  .shortcut-backdrop,
+  .help-button,
   .transport-speed,
   .dialog-button,
   .serial-button,

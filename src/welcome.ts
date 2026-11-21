@@ -85,7 +85,7 @@ export class Welcome {
 
     const tip = document.createElement('p');
     tip.className = 'welcome-tip';
-    tip.textContent = 'Or drag any part from the menu on the right, or search for one.';
+    tip.textContent = 'Or drag any part from the menu on the right, or search for one. Press ? for the keyboard shortcuts.';
 
     card.append(close, title, text, list, tip);
     root.appendChild(card);

@@ -44,6 +44,7 @@ Then press Run (or Build) on a board with sketch files: the first time the brows
 - Drag a part from the menu on the right onto the grid. Press a part's pin and drag to another pin to wire them; click grid points for bends, `Esc` cancels.
 - A wire can also end on (or, by pressing and dragging, start from) any point of another wire: a junction dot joins them. Parts whose pins touch, or a pin placed on a wire, are connected without a wire.
 - Click to select, drag to move, drag on empty space for a selection box, `Shift`+click to add to the selection. Dragging with the middle or the right mouse button moves the grid, the wheel zooms.
+- Press `?` (or the round `?` button in the bottom-right corner of the grid) for the full list of keyboard and mouse shortcuts.
 - Keys: `R` rotate, `Delete` remove, `Ctrl+D` duplicate, `Ctrl+A` select all, `Esc` clear. Zoom: `+` / `-` step the zoom, `0` goes back to 100%, `F` fits everything in view (the same as the zoom buttons in the bottom-left corner).
 - `Ctrl+Z` undoes a circuit edit, `Ctrl+Y` (or `Ctrl+Shift+Z`) redoes it; the arrow buttons in the top-left bar do the same. Flipping switches, turning knobs and running boards are not undone.
 - Switches and buttons toggle on click; double-click a part to edit its value (such as a resistor's ohms).
