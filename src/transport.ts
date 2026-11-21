@@ -28,6 +28,8 @@ export class TransportBar {
   private readonly timeEl = document.createElement('span');
   private readonly behindEl = document.createElement('span');
   private shown = '';
+  /** The icon now in the toggle button (see update). */
+  private icon = '';
 
   constructor(
     parent: HTMLElement,
@@ -89,7 +91,13 @@ export class TransportBar {
     const key = JSON.stringify(v);
     if (key === this.shown) return;
     this.shown = key;
-    this.toggleButton.innerHTML = ICONS[v.icon];
+    // Rewrite the icon only when it really changed. While running this method runs every frame (the
+    // time readout changes); replacing the svg under the pointer between press and release made the
+    // browser drop the click, so Pause only worked at the button's edge.
+    if (this.icon !== v.icon) {
+      this.icon = v.icon;
+      this.toggleButton.innerHTML = ICONS[v.icon];
+    }
     this.toggleButton.title = v.toggleTitle;
     this.toggleButton.setAttribute('aria-label', v.icon === 'pause' ? 'Pause' : 'Start');
     this.resetButton.title = v.resetTitle;

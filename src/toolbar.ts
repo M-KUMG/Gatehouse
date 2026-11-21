@@ -63,6 +63,7 @@ export class Toolbar {
   private readonly renameButton: HTMLButtonElement;
   private readonly boardGroup = document.createElement('div');
   /** What the board buttons show now (so they are only touched when it changes). */
+  private runIcon = '';
   private boardShown = '';
 
   constructor(
@@ -133,7 +134,11 @@ export class Toolbar {
     if (!board || key === this.boardShown) return;
     this.boardShown = key;
     const run = board.run;
-    this.runButton.innerHTML = run.icon === 'pause' ? ICONS.pause : ICONS.run;
+    // Only when the icon changes: replacing the svg under the pointer between press and release drops the click.
+    if (this.runIcon !== run.icon) {
+      this.runIcon = run.icon;
+      this.runButton.innerHTML = run.icon === 'pause' ? ICONS.pause : ICONS.run;
+    }
     this.runButton.title = run.title;
     this.runButton.setAttribute('aria-label', run.title.split('\n')[0]);
     this.runButton.disabled = run.disabled;

@@ -19,7 +19,7 @@ describe('idle skipping (built-in Blink)', () => {
     expect(spin.skippedCycles / spin.cycles).toBeGreaterThan(0.9);
     expect(serialText(full)).toContain('LED on');
     expect(pinEvents(full).length).toBeGreaterThan(5);
-  });
+  }, 30_000); // the full 5 s run takes a few seconds; under the whole suite running in parallel the default 5 s limit flaked
 
   it("'sleep' skips nothing in a program without SLEEP and changes nothing", () => {
     const full = record(blink, 'off', 1);
