@@ -31,8 +31,10 @@ import { installTooltips } from './tooltips';
 import { Welcome } from './welcome';
 import { Simulation, buildNetlist } from './simulation';
 import { TransportBar } from './transport';
-// Last on purpose: the glass look overrides the plain styles above.
+// Last on purpose: the glass look overrides the plain styles above, and motion.css (press
+// feedback, fades) goes after it. It only adds motion.
 import './glass.css';
+import './motion.css';
 
 const app = document.getElementById('app');
 const dock = document.getElementById('dock');

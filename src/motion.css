@@ -1,0 +1,179 @@
+/* Small motion for the whole app: press feedback on buttons, and short fades when
+   windows, menus, dialogs and toasts appear. Loaded after glass.css (last import in
+   main.ts). It only adds motion: no colours, sizes or layout. Numbers come from the
+   motion tokens in tokens.css. Everything here is switched off for people who ask
+   for reduced motion (see the end of the file). */
+
+@keyframes gh-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A window or card settling into place: a short rise with a tiny grow. */
+@keyframes gh-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.975);
+  }
+}
+
+/* A menu opening downwards from its corner. */
+@keyframes gh-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+}
+
+/* The toast is centred with translateX(-50%) in style.css, so its animation has to keep that. */
+@keyframes gh-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+}
+
+/* ---- Press feedback ------------------------------------------------------
+   A pressed button sinks a little and springs back. The transitions below also
+   list the colour properties that the buttons already animate (a `transition`
+   declaration replaces the earlier one, it does not add to it). Controls that
+   already have their own press or lift effect (parts menu tiles, welcome and
+   help buttons, the movable bars) are not in this list. */
+
+.file-button,
+.tool-button,
+.zoom-button,
+.zoom-readout,
+.dialog-button,
+.serial-button,
+.bo-button,
+.palette-cat-head,
+.palette-example,
+#palette-toggle,
+.shortcut-close,
+.welcome-close,
+.palette-search-clear,
+.fx-button,
+.ce-tab-close {
+  transition:
+    transform var(--gh-fade-fast) var(--gh-ease-spring),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    opacity 150ms ease;
+}
+
+.file-button:active:not(:disabled),
+.tool-button:active:not(:disabled),
+.zoom-button:active:not(:disabled),
+.zoom-readout:active,
+.dialog-button:active:not(:disabled),
+.serial-button:active:not(:disabled),
+.bo-button:active:not(:disabled),
+#palette-toggle:active,
+.shortcut-close:active,
+.welcome-close:active,
+.palette-search-clear:active,
+.fx-button:active:not(:disabled),
+.ce-tab-close:active {
+  transform: scale(var(--gh-press-scale));
+}
+
+.palette-cat-head:active,
+.palette-example:active {
+  transform: scale(var(--gh-press-scale-wide));
+}
+
+.help-button:active,
+.welcome-action:active {
+  transform: scale(var(--gh-press-scale-wide));
+}
+
+/* The tool buttons next to a selection are round glass buttons: a pressed one also lights up a little. */
+.tool-button:active:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+.context-menu-item:active:not(:disabled),
+.windows-menu-item:active {
+  filter: brightness(1.12);
+}
+
+/* ---- Things appearing ----------------------------------------------------
+   Elements that are created or shown when needed play their animation each time
+   they appear (display none to block restarts it). */
+
+/* Docked and floating windows, and the content of a tab that comes to the front. */
+.gh-dock .dv-groupview {
+  animation: gh-fade-in var(--gh-fade) ease-out;
+}
+
+.gh-dock .dv-content-container > * {
+  animation: gh-fade-in var(--gh-fade-fast) ease-out;
+}
+
+.gh-dock .dv-resize-container {
+  animation: gh-pop-in var(--gh-fade) var(--gh-ease-spring);
+}
+
+/* Menus */
+.windows-menu-list:not([hidden]),
+.gh-dock .dv-context-menu {
+  animation: gh-menu-in var(--gh-fade-fast) var(--gh-ease-spring);
+  transform-origin: top left;
+}
+
+/* Dialogs and toasts */
+.dialog-backdrop {
+  animation: gh-fade-in var(--gh-fade-fast) ease-out;
+}
+
+.dialog {
+  animation: gh-pop-in var(--gh-fade) var(--gh-ease-spring);
+}
+
+.shortcut-backdrop:not([hidden]) {
+  animation: gh-fade-in var(--gh-fade-fast) ease-out;
+}
+
+.toast {
+  animation: gh-toast-in var(--gh-fade) var(--gh-ease-spring);
+}
+
+/* ---- Reduced motion: no animation, and a pressed button does not move ------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .gh-dock .dv-groupview,
+  .gh-dock .dv-content-container > *,
+  .gh-dock .dv-resize-container,
+  .windows-menu-list,
+  .gh-dock .dv-context-menu,
+  .dialog-backdrop,
+  .dialog,
+  .shortcut-backdrop,
+  .toast {
+    animation: none;
+  }
+
+  .file-button:active,
+  .tool-button:active,
+  .zoom-button:active,
+  .zoom-readout:active,
+  .dialog-button:active,
+  .serial-button:active,
+  .bo-button:active,
+  .palette-cat-head:active,
+  .palette-example:active,
+  #palette-toggle:active,
+  .shortcut-close:active,
+  .welcome-close:active,
+  .palette-search-clear:active,
+  .fx-button:active,
+  .ce-tab-close:active,
+  .help-button:active,
+  .welcome-action:active {
+    transform: none;
+  }
+}
