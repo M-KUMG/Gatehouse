@@ -242,7 +242,7 @@ export class EngineHost {
       let hb = this.boards.get(b.partId);
       if (hb && hb.typeId !== b.typeId) hb = undefined;
       if (!hb || hb.key !== b.key) {
-        const emulator = b.key !== 0 && b.flash ? spec.create(b.flash) : null;
+        const emulator = b.key !== 0 && b.flash ? spec.create(b.flash, { clockHz: b.clockHz }) : null;
         if (emulator && this.idleSkip) emulator.setIdleSkip?.(this.idleSkip);
         if (hb) {
           hb.key = b.key;

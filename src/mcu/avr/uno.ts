@@ -76,7 +76,7 @@ interface TxEdge {
 }
 
 export class UnoEmulator implements BoardEmulator {
-  readonly clockHz = UNO_CLOCK_HZ;
+  readonly clockHz: number;
   readonly io = UNO_IO;
   readonly electrical = UNO_ELECTRICAL;
   private readonly chip: Atmega328p;
@@ -104,10 +104,12 @@ export class UnoEmulator implements BoardEmulator {
   /**
    * `flash` is the program memory image (see parseIntelHex). Starts from
    * reset. `idleSkip` (default 'spin'): skip idle loops, see idleskip.ts;
-   * 'off' executes every instruction.
+   * 'off' executes every instruction. `clockHz` (default 16 MHz): how fast
+   * the chip runs; timers, serial, I2C and SPI follow it.
    */
-  constructor(flash: Uint8Array, options: { idleSkip?: IdleSkipMode } = {}) {
-    this.chip = new Atmega328p(flash, UNO_CLOCK_HZ, options.idleSkip ?? 'spin');
+  constructor(flash: Uint8Array, options: { idleSkip?: IdleSkipMode; clockHz?: number } = {}) {
+    this.clockHz = options.clockHz ?? UNO_CLOCK_HZ;
+    this.chip = new Atmega328p(flash, this.clockHz, options.idleSkip ?? 'spin');
     this.ports = this.wire();
     this.lastPortDrives = this.portDrives();
     this.lastDrives = this.drives();
@@ -349,7 +351,7 @@ export const UNO_SPEC: BoardSpec = {
   io: UNO_IO,
   electrical: UNO_ELECTRICAL,
   serialPorts: UNO_SERIAL_PORTS,
-  create: (flash) => new UnoEmulator(flash),
+  create: (flash, options) => new UnoEmulator(flash, { clockHz: options?.clockHz }),
 };
 
 /**

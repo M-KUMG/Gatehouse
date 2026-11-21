@@ -27,6 +27,8 @@ export type BuildEvent =
 export interface BuildInput {
   boardTypeId: string;
   files: Readonly<Record<string, string>>;
+  /** The board's chosen emulated clock in hertz (clock.ts); absent: the default. Read by the runtime, not by compilers. */
+  clockHz?: number;
   /** Called with progress and download events during the build. */
   onEvent?: (e: BuildEvent) => void;
 }

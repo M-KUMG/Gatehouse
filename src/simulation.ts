@@ -35,6 +35,7 @@ import type { Scene, WireEnd } from './model';
 import type { IdleSkipMode, SerialBytes } from './mcu/board';
 import { BoardRuntimes, type BoardPartInfo, type BoardRuntime } from './mcu/runtime';
 import { getPart } from './parts';
+import { boardClockHz } from './mcu/clock';
 import { AnalogRecorder } from './scope/analog';
 import { SignalRecorder } from './scope/recorder';
 import { terminalKey, type PartResult, type SimInput, type SimResult } from './sim';
@@ -101,7 +102,7 @@ export function boardParts(scene: Scene): BoardPartInfo[] {
 export function buildInput(scene: Scene, partId: number): BuildInput | null {
   const part = scene.find(partId);
   if (!part?.boardId || !Object.hasOwn(scene.files, part.boardId)) return null;
-  return { boardTypeId: part.typeId, files: { ...scene.files[part.boardId].files } };
+  return { boardTypeId: part.typeId, files: { ...scene.files[part.boardId].files }, clockHz: boardClockHz(part) };
 }
 
 /** The parts as the engine needs them (type ids and states, scene order). */
@@ -162,8 +163,8 @@ export class Simulation implements SimView {
   private useLocal(): void {
     this.engine = new SimEngine({ observer: this.recorder, stepObserver: this.analog });
     this.engine.clockRunning = this.clockRunning;
-    this.boards.createEmulator = (spec, flash) => {
-      const emu = spec.create(flash);
+    this.boards.createEmulator = (spec, flash, _partId, clockHz) => {
+      const emu = spec.create(flash, { clockHz });
       if (this.idleSkip) emu.setIdleSkip?.(this.idleSkip);
       return emu;
     };
@@ -173,8 +174,8 @@ export class Simulation implements SimView {
     this.link = link;
     link.onmessage = (msg) => this.receive(msg);
     link.onfail = (why) => this.fallBack(why);
-    this.boards.createEmulator = (spec, flash, partId) =>
-      new RemoteEmulator(spec, flash, (key, port, bytes) => this.sendSerialRemote(partId, key, port, bytes));
+    this.boards.createEmulator = (spec, flash, partId, clockHz) =>
+      new RemoteEmulator(spec, flash, (key, port, bytes) => this.sendSerialRemote(partId, key, port, bytes), clockHz);
     this.recorder.onArm = this.analog.onArm = () => this.sendArmed();
     // A board's Run / Pause reaches the Worker without waiting for the next
     // frame's update(); a new program goes with the circuit there (update()).
@@ -202,7 +203,7 @@ export class Simulation implements SimView {
     this.recorder.onArm = this.analog.onArm = null;
     this.useLocal();
     for (const rt of this.boards.runtimes()) {
-      if (rt.emulator instanceof RemoteEmulator) rt.emulator = this.boards.createEmulator(rt.spec, rt.emulator.flash, rt.partId);
+      if (rt.emulator instanceof RemoteEmulator) rt.emulator = this.boards.createEmulator(rt.spec, rt.emulator.flash, rt.partId, rt.emulator.chosenClockHz);
     }
     this.boards.version++;
     this.signature = '';
@@ -451,6 +452,7 @@ export class Simulation implements SimView {
     const boards: BoardMsg[] = slots.map((rt) => {
       const emu = rt.emulator instanceof RemoteEmulator ? rt.emulator : null;
       const msg: BoardMsg = { partId: rt.partId, typeId: this.scene.find(rt.partId)?.typeId ?? '', key: emu?.key ?? 0, running: rt.running };
+      if (emu?.chosenClockHz !== undefined) msg.clockHz = emu.chosenClockHz;
       if (emu && this.sentKeys.get(rt.partId) !== emu.key) {
         msg.flash = emu.flash;
         this.sentKeys.set(rt.partId, emu.key);

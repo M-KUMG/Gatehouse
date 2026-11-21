@@ -60,6 +60,8 @@ export interface PartState {
   burnedBy?: string;
   /** Boards only: the user's display name (see project/boardname.ts); without it the board shows its default label. */
   name?: string;
+  /** Boards only: the emulated clock in hertz, one of CLOCK_CHOICES (see mcu/clock.ts); without it the board runs at 16 MHz. */
+  clockHz?: number;
   /** Logic gates only: the supply (logic high) level in volts, one of GATE_VCC_CHOICES (see gateparts.ts). */
   vcc?: number;
   /** LDR only: the light falling on it in lux, LDR_MIN_LUX..LDR_MAX_LUX (see ldrOhms in basicparts.ts). */

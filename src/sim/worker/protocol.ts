@@ -16,6 +16,8 @@ export interface BoardMsg {
   key: number;
   /** Program memory, sent once per key (omitted when the worker has it already). */
   flash?: Uint8Array;
+  /** The clock the emulator of this program is made with (clock.ts); absent: the board's own. */
+  clockHz?: number;
   running: boolean;
 }
 

@@ -135,6 +135,8 @@ export class RemoteEmulator implements BoardEmulator {
     readonly spec: BoardSpec,
     readonly flash: Uint8Array,
     private readonly send: (key: number, port: string, bytes: readonly number[]) => void,
+    /** The clock the Worker's emulator is made with (absent: the board's own); `clockHz` above is what it reports back. */
+    readonly chosenClockHz?: number,
   ) {
     this.io = spec.io;
     this.electrical = spec.electrical;

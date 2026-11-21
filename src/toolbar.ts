@@ -53,6 +53,8 @@ export interface ToolbarActions {
   console: () => void;
   /** Board button: open the rename popup. */
   rename: () => void;
+  /** Board button: unfold the clock chooser. */
+  clock: () => void;
 }
 
 const NO_BUTTONS: ToolbarButtons = { rotate: true, flipH: true, flipV: true, duplicate: true, edit: false, board: null };
@@ -81,6 +83,8 @@ export class Toolbar {
   private readonly resetButton: HTMLButtonElement;
   private readonly consoleButton: HTMLButtonElement;
   private readonly renameButton: HTMLButtonElement;
+  /** Shows the board's emulated clock ("16 MHz"); a click unfolds the chooser. */
+  private readonly clockButton = document.createElement('button');
   private readonly boardGroup = document.createElement('div');
   /** What the board buttons show now (so they are only touched when it changes). */
   private runIcon = '';
@@ -117,8 +121,12 @@ export class Toolbar {
     this.resetButton = button('Reset (rebuild from files)', ICONS.reset, actions.reset);
     this.consoleButton = button('Open serial console', ICONS.console, actions.console);
     this.renameButton = button('Rename board (display name only)', ICONS.rename, actions.rename);
+    this.clockButton.type = 'button';
+    this.clockButton.className = 'tool-button tool-text-button';
+    this.clockButton.title = 'Emulated clock of this board';
+    this.clockButton.addEventListener('click', actions.clock);
     this.boardGroup.className = 'tool-group';
-    this.boardGroup.append(this.runButton, this.buildButton, this.resetButton, this.consoleButton, this.renameButton);
+    this.boardGroup.append(this.runButton, this.buildButton, this.resetButton, this.consoleButton, this.renameButton, this.clockButton);
     this.row.className = 'tool-row';
     this.row.append(
       this.chip,
@@ -140,9 +148,10 @@ export class Toolbar {
   }
 
   /** Show the toolbar beside a viewport rectangle, or hide it with null. */
-  show(target: ScreenRect | null, buttons: ToolbarButtons = NO_BUTTONS, label: SelectionLabel | null = null): void {
+  show(target: ScreenRect | null, buttons: ToolbarButtons = NO_BUTTONS, label: SelectionLabel | null = null, clock = ''): void {
     const el = this.el;
     this.showChip(label, buttons.edit);
+    if (this.clockButton.textContent !== clock) this.clockButton.textContent = clock;
     for (const name of SIMPLE_BUTTONS) {
       this.buttons[name].style.display = buttons[name] ? '' : 'none';
     }

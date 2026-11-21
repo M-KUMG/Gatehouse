@@ -95,8 +95,8 @@ export interface BoardSpec {
   electrical: BoardElectrical;
   /** Serial ports, in the order the console lists them (first = default). */
   serialPorts: readonly SerialPortDef[];
-  /** A new emulator, reset, with `flash` as its program memory. */
-  create(flash: Uint8Array): BoardEmulator;
+  /** A new emulator, reset, with `flash` as its program memory. `clockHz`: the chosen clock (see clock.ts); absent: the board's own. */
+  create(flash: Uint8Array, options?: { clockHz?: number }): BoardEmulator;
 }
 
 export interface BoardEmulator {

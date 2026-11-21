@@ -21,6 +21,8 @@ import {
   boundsOf, boxesOverlap, footprint, isPinEnd, type FlipAxis, type GridPoint, type PinRef, type PlacedPart, type ProjectState, type Scene,
 } from './model';
 import { NameEditor } from './nameedit';
+import { ClockEditor } from './clockedit';
+import { boardClockHz, formatClock } from './mcu/clock';
 import { boardLabel, defaultBoardLabel, getPart } from './parts';
 import { findPin, pinAt, wirePointAt, wireRoute } from './pins';
 import type { FileOpResult } from './project/boardfiles';
@@ -109,6 +111,7 @@ export class Editor {
   private readonly readout: Readout;
   private readonly valueEditor = new ValueEditor();
   private readonly nameEditor = new NameEditor();
+  private readonly clockEditor = new ClockEditor();
   private readonly updateZoomReadout: () => void;
   private readonly cameraTween: CameraTween;
   private readonly contextMenu = new ContextMenu();
@@ -131,6 +134,8 @@ export class Editor {
   onOpenBuildOutput: ((partId: number) => void) | null = null;
   /** Give a board (part id) a new display name; the project keeps the data (renameBoard). Empty input restores the default. */
   onRenameBoard: ((partId: number, input: string) => FileOpResult) | null = null;
+  /** Set a board's (part id) emulated clock in hertz; the project keeps the data (setBoardClock). */
+  onSetBoardClock: ((partId: number, hz: number) => FileOpResult) | null = null;
 
   constructor(
     private readonly view: GridView,
@@ -177,9 +182,11 @@ export class Editor {
         if (board) this.onOpenConsole?.(board.id);
       },
       rename: () => this.renameSelectedBoard(),
+      clock: () => this.editSelectedBoardClock(),
     });
     this.valueEditor.setHost(() => this.toolbar.foldHost);
     this.nameEditor.setHost(() => this.toolbar.foldHost);
+    this.clockEditor.setHost(() => this.toolbar.foldHost);
     this.statusChip = new BoardStatusChip(canvas);
     this.statusChip.onClick = () => {
       const board = selectedBoard(this.selection.parts());
@@ -325,7 +332,7 @@ export class Editor {
 
   /** A gesture is half done (dragging, drawing a wire, placing a part, typing a value). */
   get busy(): boolean {
-    return this.placer.active || this.wiring.active || this.drag !== null || this.valueEditor.isOpen || this.nameEditor.isOpen;
+    return this.placer.active || this.wiring.active || this.drag !== null || this.valueEditor.isOpen || this.nameEditor.isOpen || this.clockEditor.isOpen;
   }
 
   /** Drop the gesture in progress, putting back what a drag changed (e.g. before undo). */
@@ -748,10 +755,27 @@ export class Editor {
     );
   }
 
-  /** Close the value and name popups. */
+  /** Unfold the clock chooser of the selected board. */
+  private editSelectedBoardClock(): void {
+    const board = selectedBoard(this.selection.parts());
+    if (!board || this.drag || !this.onSetBoardClock) return;
+    const setClock = this.onSetBoardClock;
+    const anchor = this.toolbar.rect ?? this.view.toScreen(footprint(board));
+    this.closePopups();
+    this.clockEditor.open(
+      boardClockHz(board),
+      anchor,
+      this.view.canvas.getBoundingClientRect(),
+      (hz) => setClock(board.id, hz),
+      this.view.requestRender, // the render also records the undo step
+    );
+  }
+
+  /** Close the value, name and clock popups. */
   private closePopups(): void {
     this.valueEditor.close();
     this.nameEditor.close();
+    this.clockEditor.close();
   }
 
   private onKeyDown = (e: KeyboardEvent): void => {
@@ -820,6 +844,7 @@ export class Editor {
       box && !busy ? this.view.toScreen(box) : null,
       toolbarButtons(parts, (id) => this.sim.boards.boardRunState(id), (id) => this.sim.boards.buildLog.get(id).status === 'failed'),
       selectionLabel(parts, selectedBoard(parts) ? boardLabel(selectedBoard(parts)!) : undefined),
+      selectedBoard(parts) ? formatClock(boardClockHz(selectedBoard(parts)!)) : '',
     );
     const board = selectedBoard(parts);
     this.statusChip.show(
@@ -830,7 +855,7 @@ export class Editor {
     );
 
     const p = this.pointer;
-    const text = p && !this.placer.active && !dragging && !this.valueEditor.isOpen && !this.nameEditor.isOpen ? this.hoverText() : null;
+    const text = p && !this.placer.active && !dragging && !this.valueEditor.isOpen && !this.nameEditor.isOpen && !this.clockEditor.isOpen ? this.hoverText() : null;
     this.readout.show(text, p?.x, p?.y);
   };
 

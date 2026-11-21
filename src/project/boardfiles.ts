@@ -19,6 +19,7 @@
 // the UI should request a render, or call controller.history.settle()).
 // Fast repeated writes to the same board fold into one undo step.
 
+import { CLOCK_CHOICES, DEFAULT_CLOCK_HZ } from '../mcu/clock';
 import { boardLabel, boardLabelWithId, defaultBoardLabel } from '../parts';
 import { compareBoardIds } from './boardidparse';
 import { normalizeBoardName } from './boardname';
@@ -104,6 +105,25 @@ export function renameBoardPath(project: Project, boardId: string, from: string,
 
 export function deleteBoardPath(project: Project, boardId: string, path: string): FileOpResult {
   return change(project, boardId, (t) => deletePath(t, path));
+}
+
+/**
+ * Set a board's emulated clock (hertz, one of CLOCK_CHOICES); the default clock is stored as no value.
+ * The chip takes it at the next start (Run from stopped, Reset). One undo step once the history settles.
+ */
+export function setBoardClock(project: Project, partId: number, hz: number): FileOpResult {
+  const part = project.scene.parts.find((p) => p.boardId !== undefined && p.id === partId);
+  if (!part) return { ok: false, error: 'This board is no longer in the project.' };
+  if (!CLOCK_CHOICES.includes(hz)) return { ok: false, error: `${hz} Hz is not one of the clock choices.` };
+  const next = hz === DEFAULT_CLOCK_HZ ? null : hz;
+  if ((part.state?.clockHz ?? null) === next) return { ok: true };
+  const state = { ...part.state };
+  if (next === null) delete state.clockHz;
+  else state.clockHz = next;
+  if (Object.keys(state).length > 0) part.state = state;
+  else delete part.state;
+  project.checkForChanges();
+  return { ok: true };
 }
 
 /**

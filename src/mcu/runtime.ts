@@ -89,7 +89,8 @@ export class BoardRuntimes {
    * default; with the simulation in a Worker the Simulation sets a stand-in
    * (RemoteEmulator, src/sim/worker/client.ts) and the real one runs there.
    */
-  createEmulator: (spec: BoardSpec, flash: Uint8Array, partId: number) => BoardEmulator = (spec, flash) => spec.create(flash);
+  createEmulator: (spec: BoardSpec, flash: Uint8Array, partId: number, clockHz?: number) => BoardEmulator = (spec, flash, _partId, clockHz) =>
+    spec.create(flash, { clockHz });
   private readonly byId = new Map<number, BoardRuntime>();
   private readonly listeners: (() => void)[] = [];
 
@@ -289,6 +290,7 @@ export class BoardRuntimes {
     rt.building = true;
     rt.buildOnly = false;
     this.changed();
+    const clockHz = this.source(rt.partId)?.clockHz; // the board's clock as of this start (a change reaches the chip at the next one)
     const result = await this.buildLogged(rt, generation);
     if (result === null) return null;
     rt.building = false;
@@ -304,7 +306,7 @@ export class BoardRuntimes {
       rt.messages = [...result.messages];
       rt.firmwareName = result.name;
       try {
-        rt.emulator = this.createEmulator(rt.spec, parseIntelHex(result.hex, rt.spec.flashBytes).bytes, rt.partId);
+        rt.emulator = this.createEmulator(rt.spec, parseIntelHex(result.hex, rt.spec.flashBytes).bytes, rt.partId, clockHz);
         rt.error = null;
       } catch (e) {
         rt.error = `${result.name} is not a valid program. ${e instanceof HexError ? e.message : String(e)}`;

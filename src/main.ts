@@ -22,7 +22,7 @@ import { registerBrowserCompilers } from './build/wasm/worker/register';
 import { boundsOf, footprint } from './model';
 import { makeDraggable } from './draggablebar';
 import { createPalette } from './palette';
-import { renameBoard } from './project/boardfiles';
+import { renameBoard, setBoardClock } from './project/boardfiles';
 import { ProjectController } from './project/controller';
 import { Project } from './project/project';
 import { openSimWorker } from './sim/worker/client';
@@ -188,6 +188,7 @@ makeDraggable({ id: 'transport', bar: transport.element, area: editorArea, label
 // The toolbar's rename button: the project keeps the name (circuit data, so one undo step and a redraw: the
 // grid label, File explorer, Serial console and status chip all follow).
 editor.onRenameBoard = (partId, input) => renameBoard(project, partId, input);
+editor.onSetBoardClock = (partId, hz) => setBoardClock(project, partId, hz);
 // The toolbar's console button: open (or bring forward) the Serial console on that board.
 editor.onOpenConsole = (partId) => {
   layout.open(SERIAL_CONSOLE_ID);

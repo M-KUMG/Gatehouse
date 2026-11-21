@@ -73,6 +73,24 @@
   color: var(--gh-text-muted);
 }
 
+/* The clock button is text ("16 MHz"), not an icon. */
+.selection-toolbar .tool-button.tool-text-button {
+  width: auto;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.selection-toolbar .clock-note {
+  max-width: 280px;
+  margin-top: 6px;
+  color: var(--gh-text-muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
 /* The board buttons sit in a group with a thin divider after them. */
 .selection-toolbar .tool-group {
   gap: 4px;

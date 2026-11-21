@@ -2,6 +2,7 @@
 // ProjectFile or throws a ProjectError that says what is wrong and where.
 
 import { MAX_ZOOM, MIN_ZOOM } from '../camera';
+import { CLOCK_CHOICES } from '../mcu/clock';
 import {
   endKey, isPinEnd, sameEnd, type GridPoint, type Junction, type PinRef, type PlacedPart, type Rotation, type Wire, type WireEnd,
 } from '../model';
@@ -77,7 +78,7 @@ const MAX_BURN_REASON = 200;
 function partState(v: unknown, typeId: string, where: string): PartState {
   const o = obj(v, where);
   // v4: a board's program is a .hex file in its folder, no longer part state.
-  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'burnedBy', 'name', 'vcc', 'lux', 'wave', 'amp', 'offset', 'duty', 'limit'], where);
+  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'burnedBy', 'name', 'clockHz', 'vcc', 'lux', 'wave', 'amp', 'offset', 'duty', 'limit'], where);
   const state: PartState = {};
   for (const key of Object.keys(o)) {
     if (key === 'closed' || key === 'burned') {
@@ -89,6 +90,11 @@ function partState(v: unknown, typeId: string, where: string): PartState {
       state.burnedBy = reason;
     } else if (key === 'name') {
       state.name = boardName(str(o, key, where), typeId, `${where}.name`);
+    } else if (key === 'clockHz') {
+      if (!isBoardType(typeId)) fail(`${where}.clockHz is only allowed on boards, but a ${typeId} part is not a board.`);
+      const hz = num(o, key, where);
+      if (!CLOCK_CHOICES.includes(hz)) fail(`${where}.clockHz must be one of ${CLOCK_CHOICES.join(', ')} Hz (got ${hz}).`);
+      state.clockHz = hz;
     } else if (key === 'position') {
       const p = num(o, key, where);
       if (p < 0 || p > 1) fail(`${where}.position must be between 0 and 1 (got ${p}).`);
