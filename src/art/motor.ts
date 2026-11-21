@@ -36,20 +36,44 @@ ${burned ? '<rect x="24" y="8" width="58" height="44" rx="6" fill="#000" fill-op
 export const MOTOR_ART: PartArt = { cols: MOTOR_COLS, rows: MOTOR_ROWS, svg: motorSvg() };
 
 // The fan's drawn angle per placed motor (a stateless part has no stable state object to key on, so the part id is the key).
-const phases = new Map<number, { t: number; phase: number }>();
+const phases = new Map<number, { t: number; phase: number; turns: number }>();
+
+/** Time constant (s) of the drawn fan speed: it winds up and coasts down smoothly, like a real rotor with a fan. */
+const FAN_EASE_SECONDS = 0.45;
+/** Below this many turns a second the drawn fan counts as stopped. */
+const FAN_STOPPED_TURNS = 0.02;
+
+let driven = true;
+
+/** False while simulated time is not running: the shaft speed in the result is then a frozen number, so the drawn fan lets go. */
+export function setFansDriven(value: boolean): void {
+  driven = value;
+}
+
+/** Whether any drawn fan is still turning (the grid keeps drawing frames until it has coasted to a stop). */
+export function fanSpinning(now = performance.now()): boolean {
+  for (const [key, f] of phases) {
+    if (now - f.t > 1000) phases.delete(key); // not drawn any more (the motor was deleted): forget it
+    else if (Math.abs(f.turns) > FAN_STOPPED_TURNS) return true;
+  }
+  return false;
+}
 
 /**
  * Draws the fan on the shaft, turned by the shaft speed (rad/s). The picture
  * spins at most about 6 turns a second (it would only flicker beyond that)
- * and keeps its angle between frames; the angle is only a drawing, nothing
- * in the simulation depends on it.
+ * and keeps its angle between frames; its speed eases towards the shaft's, so
+ * it coasts to a stop after the power goes. The angle is only a drawing,
+ * nothing in the simulation depends on it.
  */
 export function drawMotorFan(ctx: CanvasRenderingContext2D, key: number, omega: number, now = performance.now()): void {
-  const last = phases.get(key) ?? { t: now, phase: 0 };
+  const last = phases.get(key) ?? { t: now, phase: 0, turns: 0 };
   const dt = Math.min(0.1, Math.max(0, (now - last.t) / 1000));
-  const turns = Math.sign(omega) * Math.min(6, Math.abs(omega) / (2 * Math.PI) / 20); // 8000 rpm shows as 6 turns/s
+  const target = driven ? Math.sign(omega) * Math.min(6, Math.abs(omega) / (2 * Math.PI) / 20) : 0; // 8000 rpm shows as 6 turns/s
+  let turns = last.turns + (target - last.turns) * (1 - Math.exp(-dt / FAN_EASE_SECONDS));
+  if (target === 0 && Math.abs(turns) < FAN_STOPPED_TURNS) turns = 0;
   const phase = (last.phase + turns * dt * 2 * Math.PI) % (2 * Math.PI);
-  phases.set(key, { t: now, phase });
+  phases.set(key, { t: now, phase, turns });
   const { x, y } = MOTOR_SHAFT;
   ctx.save();
   ctx.translate(x, y);

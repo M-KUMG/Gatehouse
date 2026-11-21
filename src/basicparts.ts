@@ -19,6 +19,7 @@ import { formatSI } from './format';
 import type { PartType, PinDef } from './parts';
 import type { ComponentModel, PartResult } from './sim';
 import { ACTIVE_BUZZER, buzzerSounding } from './sim/buzzer';
+import { markBuzzing } from './buzzsound';
 import { VT } from './sim/devices';
 import { ledBrightness } from './sim/inspect';
 import { RED_SEVENSEG, SEVENSEG_SEGMENTS } from './sim/sevenseg';
@@ -119,8 +120,11 @@ export const OUTPUT_SENSOR_PARTS: readonly PartType[] = [
     variant: burnedLook(BUZZER_BURNED_SVG),
     // Sound waves while it sounds (visual only). A sounding buzzer draws more than MIN_FLOW_AMPS
     // through its wires, so the grid keeps animating frames (needsAnimation) while it is on.
-    overlay: (ctx, s, r) => {
-      if (!s.burned && r && buzzerSounding(ACTIVE_BUZZER, r.voltage)) drawBuzzerWaves(ctx, performance.now() / 1000);
+    overlay: (ctx, s, r, id) => {
+      if (!s.burned && r && buzzerSounding(ACTIVE_BUZZER, r.voltage)) {
+        drawBuzzerWaves(ctx, performance.now() / 1000);
+        markBuzzing(id ?? -1); // and the sound itself (buzzsound.ts)
+      }
     },
     sim: () => ACTIVE_BUZZER,
   },

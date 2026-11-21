@@ -70,7 +70,9 @@ export class Toolbar {
   private foldTimer = 0;
   private chipWasOpen = false;
   /** The bar's left edge while an editor is unfolded, else null. */
+  /** While an editor is unfolded: the bar's left edge, as an offset from the selection's right edge (null when closed). */
   private anchorLeft: number | null = null;
+  private lastTargetRight = 0;
   private readonly chip = document.createElement('button');
   private readonly chipTitle = document.createElement('span');
   private readonly chipValue = document.createElement('span');
@@ -157,7 +159,9 @@ export class Toolbar {
     // Prefer the top-right of the selection, else its top-left, then clamp.
     // While an editor is unfolded the bar keeps its left edge (it only shifts left when it would leave the
     // grid), so unfolding never makes it jump to the other side of the part.
-    let left = this.anchorLeft ?? target.right + GAP;
+    // The kept edge is an offset from the selection, so panning and zooming move the bar with the part.
+    this.lastTargetRight = target.right;
+    let left = this.anchorLeft !== null ? target.right + this.anchorLeft : target.right + GAP;
     if (this.anchorLeft === null && left + w > area.right) left = target.left - GAP - w;
     left = Math.max(area.left, Math.min(left, area.right - w));
     const top = Math.max(area.top, Math.min(target.top - 4, area.bottom - h));
@@ -174,7 +178,7 @@ export class Toolbar {
 
   private showFold(content: HTMLElement): void {
     window.clearTimeout(this.foldTimer);
-    if (this.anchorLeft === null) this.anchorLeft = this.el.getBoundingClientRect().left;
+    if (this.anchorLeft === null) this.anchorLeft = this.el.getBoundingClientRect().left - this.lastTargetRight;
     this.foldBody.replaceChildren(content);
     this.foldContent = content;
     // The bar widens to the editor (a width transition needs numbers, so from its own width to the new one).

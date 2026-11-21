@@ -198,6 +198,9 @@ html, body {
 }
 
 .palette-list {
+  /* The water drop (droplight.ts) sits inside this box and must scroll with it. It cannot rely on
+     attachDrop to set this: the list is still detached when the drop is attached. */
+  position: relative;
   display: grid;
   /* Icon-only tiles, two per row; the name shows in a bubble on hover. The
      padding leaves room for the tiles' hover lift inside the clipping box. */

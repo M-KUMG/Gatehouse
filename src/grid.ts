@@ -1,5 +1,6 @@
 import { FlowPhases, frameSeconds, needsAnimation } from './animation';
 import { ART_CELL } from './art/common';
+import { fanSpinning, setFansDriven } from './art/motor';
 import { screenToWorld, worldToScreen, zoomAround, type Camera, type Point } from './camera';
 import { PALETTE } from './canvaspalette';
 import { drawBoardNames } from './gridlabel';
@@ -247,6 +248,7 @@ export class GridView {
 
     for (const part of this.scene.parts) this.drawPart(part, dpr, false);
     this.flow.begin(frameSeconds(this.lastFrame, now));
+    setFansDriven(this.sim?.timeRunning ?? false); // a paused simulation leaves the shaft speed frozen: the drawn fan coasts to a stop
     const maxWireAmps = drawWires(this, ctx, this.scene, this.flow);
     this.flow.end();
 
@@ -269,7 +271,7 @@ export class GridView {
     }
 
     if (this.marquee) this.drawMarquee(this.marquee);
-    return needsAnimation({ maxWireAmps, boardRunning: this.sim?.timeRunning ?? false });
+    return needsAnimation({ maxWireAmps, boardRunning: this.sim?.timeRunning ?? false }) || fanSpinning();
   }
 
   /** Grid lines in device pixels so they stay 1px sharp at any DPR and zoom. */
