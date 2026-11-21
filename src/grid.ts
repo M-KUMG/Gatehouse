@@ -1,6 +1,7 @@
 import { FlowPhases, frameSeconds, needsAnimation } from './animation';
 import { ART_CELL } from './art/common';
 import { screenToWorld, worldToScreen, zoomAround, type Camera, type Point } from './camera';
+import { PALETTE } from './canvaspalette';
 import { drawBoardNames } from './gridlabel';
 import { footprint, type CellBox, type GridPoint, type PinRef, type Placement, type Scene } from './model';
 import { getPart } from './parts';
@@ -12,17 +13,8 @@ export const GRID_SIZE = 20; // world units between minor lines
 const MAJOR_EVERY = 5; // every Nth line is drawn stronger
 const WHEEL_SPEED = 0.0015; // zoom factor exponent per wheel pixel
 
-const COLORS = {
-  // Translucent on purpose: the canvas is cleared first, so the glass backdrop
-  // (glass.css) shows through the grid.
-  background: 'rgba(10, 12, 18, 0.1)',
-  minor: 'rgba(255, 255, 255, 0.06)',
-  major: 'rgba(255, 255, 255, 0.13)',
-  select: '#4ea1ff',
-  selectFill: 'rgba(78, 161, 255, 0.08)',
-  hover: 'rgba(255, 255, 255, 0.28)',
-  marqueeFill: 'rgba(78, 161, 255, 0.12)',
-};
+// All colours of the drawing are in canvaspalette.ts (the canvas is cleared first and the
+// background there is translucent, so the glass backdrop shows through the grid).
 
 /** Screen rectangle in CSS pixels, relative to the viewport. */
 export interface ScreenRect {
@@ -248,7 +240,7 @@ export class GridView {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = COLORS.background;
+    ctx.fillStyle = PALETTE.background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     this.drawGrid(dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -259,10 +251,10 @@ export class GridView {
     this.flow.end();
 
     const hovered = this.scene.find(this.hoverId);
-    if (hovered && !this.selected.has(hovered.id)) this.outline(footprint(hovered), COLORS.hover, 1, 2);
+    if (hovered && !this.selected.has(hovered.id)) this.drawFrame(footprint(hovered), 'hover');
     for (const id of this.selected) {
       const part = this.scene.find(id);
-      if (part) this.outline(footprint(part), COLORS.select, 1.5, 3, COLORS.selectFill);
+      if (part) this.drawFrame(footprint(part), 'select');
     }
 
     drawPins(this, ctx, this.scene);
@@ -273,9 +265,7 @@ export class GridView {
 
     if (this.ghost) {
       this.drawPart(this.ghost, dpr, true);
-      ctx.setLineDash([4, 3]);
-      this.outline(footprint(this.ghost), COLORS.select, 1, 2);
-      ctx.setLineDash([]);
+      this.drawFrame(footprint(this.ghost), 'ghost');
     }
 
     if (this.marquee) this.drawMarquee(this.marquee);
@@ -318,10 +308,24 @@ export class GridView {
     ctx.lineWidth = lineWidth;
     if (minorAlpha > 0) {
       ctx.globalAlpha = minorAlpha;
-      strokeLines(COLORS.minor, false);
+      strokeLines(PALETTE.gridMinor, false);
       ctx.globalAlpha = 1;
     }
-    strokeLines(COLORS.major, true);
+    strokeLines(PALETTE.gridMajor, true);
+
+    // A small bright dot where two major lines cross: gives the grid a finished, jewel-like rhythm.
+    if (step / dpr >= 8) {
+      const dot = Math.max(2, Math.round(1.6 * dpr));
+      ctx.fillStyle = PALETTE.gridDot;
+      for (let col = firstCol; col <= lastCol; col++) {
+        if (col % MAJOR_EVERY !== 0) continue;
+        const x = Math.round(originX + col * step);
+        for (let row = firstRow; row <= lastRow; row++) {
+          if (row % MAJOR_EVERY !== 0) continue;
+          ctx.fillRect(x - Math.floor(dot / 2), Math.round(originY + row * step) - Math.floor(dot / 2), dot, dot);
+        }
+      }
+    }
   }
 
   private drawPart(p: Placement & { id?: number }, dpr: number, ghost: boolean): void {
@@ -378,27 +382,71 @@ export class GridView {
     ctx.restore();
   }
 
-  private outline(box: CellBox, color: string, lineWidth: number, pad: number, fill?: string): void {
+  /**
+   * A rounded glass frame around a part: `select` is a bright blue outline with a soft glow and a thin
+   * light line just inside it, `hover` a faint white one, `ghost` a dashed blue one for the part being
+   * dragged in.
+   */
+  private drawFrame(box: CellBox, kind: 'select' | 'hover' | 'ghost'): void {
     const { ctx } = this;
     const r = this.boxToCanvas(box);
-    ctx.beginPath();
-    ctx.roundRect(r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad, 4);
-    if (fill) {
-      ctx.fillStyle = fill;
+    const pad = kind === 'select' ? 3 : 2;
+    const radius = Math.min(12, Math.max(5, this.cellPx * 0.4));
+    const dpr = window.devicePixelRatio || 1;
+    const path = (inset: number): void => {
+      ctx.beginPath();
+      ctx.roundRect(r.x - pad + inset, r.y - pad + inset, r.w + 2 * pad - 2 * inset, r.h + 2 * pad - 2 * inset, Math.max(2, radius - inset));
+    };
+
+    ctx.save();
+    path(0);
+    if (kind === 'select') {
+      ctx.fillStyle = PALETTE.accentFill;
       ctx.fill();
+      ctx.shadowColor = PALETTE.accentGlow; // blur is in device pixels, so it is scaled with the pixel ratio
+      ctx.shadowBlur = 14 * dpr;
+      ctx.strokeStyle = PALETTE.accentBright;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.shadowColor = 'transparent';
+      path(2);
+      ctx.strokeStyle = PALETTE.selectInner;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    } else if (kind === 'hover') {
+      ctx.fillStyle = PALETTE.hoverFill;
+      ctx.fill();
+      ctx.strokeStyle = PALETTE.hoverEdge;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = PALETTE.ghostFill;
+      ctx.fill();
+      ctx.shadowColor = PALETTE.accentGlow;
+      ctx.shadowBlur = 8 * dpr;
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = PALETTE.accentBright;
+      ctx.lineWidth = 1.25;
+      ctx.stroke();
     }
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth;
-    ctx.stroke();
+    ctx.restore();
   }
 
+  /** The selection box while dragging: a rounded, faintly glowing blue glass rectangle. */
   private drawMarquee(box: CellBox): void {
     const { ctx } = this;
     const r = this.boxToCanvas(box);
-    ctx.fillStyle = COLORS.marqueeFill;
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.strokeStyle = COLORS.select;
+    if (r.w < 1 || r.h < 1) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(Math.round(r.x) + 0.5, Math.round(r.y) + 0.5, Math.round(r.w), Math.round(r.h), Math.min(8, r.w / 2, r.h / 2));
+    ctx.fillStyle = PALETTE.accentFill;
+    ctx.fill();
+    ctx.shadowColor = PALETTE.accentGlow;
+    ctx.shadowBlur = 8 * (window.devicePixelRatio || 1);
+    ctx.strokeStyle = PALETTE.accentBright;
     ctx.lineWidth = 1;
-    ctx.strokeRect(Math.round(r.x) + 0.5, Math.round(r.y) + 0.5, Math.round(r.w), Math.round(r.h));
+    ctx.stroke();
+    ctx.restore();
   }
 }

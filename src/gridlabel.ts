@@ -8,6 +8,7 @@
 // The geometry and the shortening of the text are plain functions (tested
 // without a canvas); drawBoardNames is the thin canvas part.
 
+import { PALETTE } from './canvaspalette';
 import { footprint, type CellBox, type PlacedPart } from './model';
 import { customBoardName } from './parts';
 
@@ -29,7 +30,7 @@ export const LABEL_MIN_BOARD_PX = 60;
 /** The pill is at most this wide, and never wider than the board. */
 export const LABEL_MAX_PX = 200;
 
-const COLORS = { fill: 'rgba(24, 26, 30, 0.9)', stroke: 'rgba(255, 255, 255, 0.2)', text: '#e6e8ec' };
+const COLORS = { fill: PALETTE.labelFill, stroke: PALETTE.labelEdge, text: PALETTE.labelText };
 
 /** Where a board's pill goes (its bottom-left corner sits just above the board's top-left corner), or null for no label. */
 export function labelSlot(board: PixelBox, view: { width: number; height: number }): { x: number; y: number; maxWidth: number } | null {

@@ -8,6 +8,7 @@ import type { GridView } from './grid';
 import { anchorPoint, isTap, type Anchor } from './junctions';
 import { endKey, footprint, isPinEnd, samePin, type GridPoint, type Scene, type WireEnd } from './model';
 import { getPart, partWarning } from './parts';
+import { PALETTE, voltageColor } from './canvaspalette';
 import { endPoint, pinsOf, routeFrom, wireRoute, type Pin } from './pins';
 
 /** A wire being drawn: fixed start, corners so far, the end under the cursor and what it would attach to. */
@@ -19,19 +20,20 @@ export interface WireDraft {
   target: Anchor | null;
 }
 
-const SELECT = '#4ea1ff';
-const CASING = 'rgba(12, 13, 15, 0.85)';
-const LOW = [98, 134, 164]; // wire colour at 0 V...
-const HIGH = [240, 124, 70]; // ...and at the highest voltage in the circuit
+// Colours are in canvaspalette.ts (voltageColor too: blue at 0 V, orange at the highest voltage).
 
 function wireWidth(view: GridView): number {
   return Math.min(6, Math.max(1.5, 2.6 * view.camera.zoom));
 }
 
-function voltageColor(volts: number | undefined, max: number): string {
-  const t = volts === undefined || max < 1e-6 ? 0 : Math.min(1, Math.max(0, volts / max));
-  const c = LOW.map((low, i) => Math.round(low + (HIGH[i] - low) * t));
-  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+/** Strokes the current path as a soft glow: wide faint layers under a narrower brighter one. */
+function glow(ctx: CanvasRenderingContext2D, width: number, outer: string, inner: string): void {
+  ctx.strokeStyle = outer;
+  ctx.lineWidth = width + 10;
+  ctx.stroke();
+  ctx.strokeStyle = inner;
+  ctx.lineWidth = width + 5;
+  ctx.stroke();
 }
 
 /** Polyline with rounded corners. */
@@ -53,11 +55,18 @@ function toCanvas(view: GridView, path: readonly GridPoint[]): Point[] {
 
 function junctionDot(view: GridView, ctx: CanvasRenderingContext2D, at: GridPoint, radius: number, color: string): void {
   const p = view.cellToCanvas(at.col, at.row);
+  if (radius > 3) {
+    // A faint light ring around the bigger dots (three or more wires meet here): easy to spot.
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius + 2.5, 0, 2 * Math.PI);
+    ctx.fillStyle = PALETTE.junctionHalo;
+    ctx.fill();
+  }
   ctx.beginPath();
   ctx.arc(p.x, p.y, radius, 0, 2 * Math.PI);
   ctx.fillStyle = color;
   ctx.fill();
-  ctx.strokeStyle = CASING;
+  ctx.strokeStyle = PALETTE.wireCasing;
   ctx.lineWidth = 1;
   ctx.stroke();
 }
@@ -86,31 +95,35 @@ export function drawWires(view: GridView, ctx: CanvasRenderingContext2D, scene: 
     const pts = toCanvas(view, path);
     const color = voltageColor(sim?.pinVoltage(wire.from), maxVolts);
     trace(ctx, pts, radius);
+    const amps = sim?.wireCurrent(wire.id) ?? 0;
+    maxAmps = Math.max(maxAmps, Math.abs(amps));
+    const flowing = Math.abs(amps) >= MIN_FLOW_AMPS;
     if (view.selectedWires.has(wire.id)) {
-      ctx.strokeStyle = 'rgba(78, 161, 255, 0.55)';
-      ctx.lineWidth = width + 7;
-      ctx.stroke();
+      glow(ctx, width, PALETTE.wireSelectGlowOuter, PALETTE.wireSelectGlowInner);
     } else if (highlighted === wire.id) {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+      glow(ctx, width, PALETTE.wireHoverGlowOuter, PALETTE.wireHoverGlowInner);
+    } else if (flowing) {
+      // A wire carrying current glows faintly in its own colour.
+      ctx.globalAlpha = 0.2;
+      ctx.strokeStyle = color;
       ctx.lineWidth = width + 6;
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
-    ctx.strokeStyle = CASING;
+    ctx.strokeStyle = PALETTE.wireCasing;
     ctx.lineWidth = width + 2;
     ctx.stroke();
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
     ctx.stroke();
 
-    const amps = sim?.wireCurrent(wire.id) ?? 0;
-    maxAmps = Math.max(maxAmps, Math.abs(amps));
-    if (Math.abs(amps) >= MIN_FLOW_AMPS) {
+    if (flowing) {
       // Bright dashes drifting the way conventional current flows; faster for more current.
       const period = width * 5.5;
       const shift = flow.phase(wire.id, amps) * period;
       ctx.setLineDash([width * 1.2, period - width * 1.2]);
       ctx.lineDashOffset = amps > 0 ? -shift : shift;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.strokeStyle = PALETTE.flowDash;
       ctx.lineWidth = width * 0.42;
       ctx.stroke();
       ctx.setLineDash([]);
@@ -141,17 +154,26 @@ export function drawWires(view: GridView, ctx: CanvasRenderingContext2D, scene: 
 /** A ring and dot where a wire would attach: `filled` for a target that a release connects to. */
 function attachMark(view: GridView, ctx: CanvasRenderingContext2D, at: GridPoint, filled: boolean): void {
   const p = view.cellToCanvas(at.col, at.row);
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, 7, 0, 2 * Math.PI);
-  ctx.fillStyle = filled ? 'rgba(78, 161, 255, 0.3)' : 'rgba(78, 161, 255, 0.12)';
-  ctx.fill();
-  ctx.strokeStyle = SELECT;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  ringMark(ctx, p, filled);
   ctx.beginPath();
   ctx.arc(p.x, p.y, filled ? 3.2 : 2.4, 0, 2 * Math.PI);
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = PALETTE.pinDotActive;
   ctx.fill();
+}
+
+/** The blue glass ring that marks a pin or point a wire would attach to: soft outer glow, tinted disc, bright edge. */
+function ringMark(ctx: CanvasRenderingContext2D, p: Point, strong: boolean): void {
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 11, 0, 2 * Math.PI);
+  ctx.fillStyle = PALETTE.accentSoft;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 7, 0, 2 * Math.PI);
+  ctx.fillStyle = strong ? PALETTE.accentFillStrong : PALETTE.accentFill;
+  ctx.fill();
+  ctx.strokeStyle = PALETTE.accentBright;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
 }
 
 /** Where pressing and dragging on the hovered wire would start a new wire. */
@@ -161,20 +183,12 @@ export function drawTapHint(view: GridView, ctx: CanvasRenderingContext2D): void
 
 function drawPinDot(view: GridView, ctx: CanvasRenderingContext2D, pin: Pin, highlight: boolean): void {
   const p = view.cellToCanvas(pin.col, pin.row);
-  if (highlight) {
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 7, 0, 2 * Math.PI);
-    ctx.fillStyle = 'rgba(78, 161, 255, 0.3)';
-    ctx.fill();
-    ctx.strokeStyle = SELECT;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
+  if (highlight) ringMark(ctx, p, true);
   ctx.beginPath();
   ctx.arc(p.x, p.y, highlight ? 3.2 : 2.6, 0, 2 * Math.PI);
-  ctx.fillStyle = highlight ? '#fff' : 'rgba(255, 255, 255, 0.8)';
+  ctx.fillStyle = highlight ? PALETTE.pinDotActive : PALETTE.pinDot;
   ctx.fill();
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.65)';
+  ctx.strokeStyle = PALETTE.pinEdge;
   ctx.lineWidth = 1;
   ctx.stroke();
 }
@@ -205,13 +219,14 @@ export function drawDraft(view: GridView, ctx: CanvasRenderingContext2D, scene: 
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   trace(ctx, pts, 0.3 * view.cellPx);
-  ctx.strokeStyle = CASING;
+  glow(ctx, width, PALETTE.wireSelectGlowOuter, PALETTE.wireSelectGlowInner); // the wire being drawn glows blue
+  ctx.strokeStyle = PALETTE.wireCasing;
   ctx.lineWidth = width + 2;
   ctx.stroke();
-  ctx.strokeStyle = SELECT;
+  ctx.strokeStyle = PALETTE.accent;
   ctx.lineWidth = width;
   ctx.stroke();
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = PALETTE.pinDotActive;
   for (const corner of draft.waypoints) {
     const p = view.cellToCanvas(corner.col, corner.row);
     ctx.beginPath();
@@ -232,10 +247,16 @@ export function drawWarnings(view: GridView, ctx: CanvasRenderingContext2D, scen
     const box = footprint(part);
     const p = view.cellToCanvas(box.col + box.cols, box.row);
     const r = Math.min(11, Math.max(6, 8 * view.camera.zoom));
+    ctx.save();
     ctx.beginPath();
     ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
-    ctx.fillStyle = '#e5484d';
+    ctx.shadowColor = PALETTE.warningGlow; // a red glow, so it catches the eye (blur is in device pixels)
+    ctx.shadowBlur = 12 * (window.devicePixelRatio || 1);
+    ctx.fillStyle = PALETTE.warning;
     ctx.fill();
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1.5;
     ctx.stroke();
