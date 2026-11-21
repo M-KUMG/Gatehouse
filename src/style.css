@@ -246,6 +246,81 @@ html, body {
   outline-offset: 1px;
 }
 
+/* Search box above the sections (palette.ts). While it has text, .palette-results
+   replaces the sections. `hidden` needs help here: these boxes set their own display. */
+.palette-cats[hidden] {
+  display: none;
+}
+
+.palette-search {
+  position: relative;
+  flex: none;
+  margin: 0 0 calc(10px * var(--gh-menu-scale));
+}
+
+.palette-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: calc(7px * var(--gh-menu-scale)) calc(30px * var(--gh-menu-scale)) calc(7px * var(--gh-menu-scale)) calc(10px * var(--gh-menu-scale));
+  border: 1px solid var(--gh-border);
+  border-radius: 8px;
+  background: var(--gh-bg-app);
+  color: var(--gh-text);
+  font: calc(13px * var(--gh-menu-scale)) var(--gh-font-ui);
+  outline: none;
+  user-select: text;
+  transition: border-color 150ms ease;
+}
+
+.palette-search-input::placeholder {
+  color: var(--gh-text-dim);
+}
+
+.palette-search-input:focus {
+  border-color: var(--gh-accent);
+}
+
+.palette-search-input::-webkit-search-cancel-button {
+  appearance: none;
+  display: none;
+}
+
+.palette-search-clear {
+  position: absolute;
+  top: 50%;
+  right: calc(6px * var(--gh-menu-scale));
+  width: calc(20px * var(--gh-menu-scale));
+  height: calc(20px * var(--gh-menu-scale));
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--gh-text-muted);
+  font-size: calc(16px * var(--gh-menu-scale));
+  line-height: 1;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.palette-search-clear:hover,
+.palette-search-clear:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--gh-text);
+  outline: none;
+}
+
+.palette-search-clear[hidden] {
+  display: none;
+}
+
+.palette-results-count {
+  margin: calc(2px * var(--gh-menu-scale)) calc(2px * var(--gh-menu-scale)) 0;
+  color: var(--gh-text-dim);
+  font-size: calc(11px * var(--gh-menu-scale));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 /* Movable bars on the grid (draggablebar.ts): a grip at the start of the bar. */
 .file-bar,
 .transport-bar {

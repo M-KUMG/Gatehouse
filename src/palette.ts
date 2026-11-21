@@ -1,5 +1,6 @@
 import { groupParts } from './partcategories';
 import { isNavKey, moveIndex } from './palettenav';
+import { searchNamed, searchParts } from './partsearch';
 import { PARTS, type PartType } from './parts';
 import { partImageUrl } from './sprites';
 import { TipBubble } from './tipbubble';
@@ -51,7 +52,8 @@ function gridColumns(list: HTMLElement): number {
  * panel's row: the grid area beside it takes the rest of the width and its
  * canvas resizes when the menu folds).
  * The parts are sorted into named sections (partcategories.ts); a click on a
- * section's header unfolds or folds it with a smooth height animation. Tiles
+ * section's header unfolds or folds it with a smooth height animation. A
+ * search box above them filters parts and examples (partsearch.ts). Tiles
  * show only the icon, the name shows in a bubble on hover or keyboard focus.
  * With the mouse, pressing on a tile calls `onGrab`, which starts dragging
  * that part onto the grid. With the keyboard, arrow keys move between headers
@@ -89,15 +91,45 @@ export function createPalette(
   live.setAttribute('aria-live', 'polite');
   panel.appendChild(live);
 
+  // Search box: while it holds text, matching parts (and examples) show as one list instead of the sections.
+  const searchBox = document.createElement('div');
+  searchBox.className = 'palette-search';
+  const input = document.createElement('input');
+  input.type = 'search';
+  input.className = 'palette-search-input';
+  input.placeholder = 'Search parts…';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.setAttribute('aria-label', 'Search parts');
+  const clearButton = document.createElement('button');
+  clearButton.type = 'button';
+  clearButton.className = 'palette-search-clear';
+  clearButton.textContent = '×';
+  clearButton.hidden = true;
+  clearButton.setAttribute('aria-label', 'Clear search');
+  clearButton.title = 'Clear search (Esc)';
+  searchBox.append(input, clearButton);
+  panel.appendChild(searchBox);
+
   const cats = document.createElement('div');
   cats.className = 'palette-cats';
   cats.addEventListener('scroll', () => bubble.hide());
   panel.appendChild(cats);
 
+  const results = document.createElement('div');
+  results.className = 'palette-cats palette-results';
+  results.hidden = true;
+  results.setAttribute('role', 'region');
+  results.setAttribute('aria-label', 'Search results');
+  results.addEventListener('scroll', () => bubble.hide());
+  panel.appendChild(results);
+
   const open = loadOpen();
   const headers: HTMLButtonElement[] = [];
+  const categoryOf = new Map(groupParts(PARTS).flatMap((g) => g.parts.map((p) => [p.id, g.name] as const)));
+  let resultTiles: HTMLElement[] = [];
 
-  const makeTile = (part: PartType, tiles: HTMLElement[]): HTMLElement => {
+  const makeTile = (part: PartType, tiles: HTMLElement[], onLeave?: (key: 'ArrowUp' | 'ArrowDown') => void): HTMLElement => {
     const item = document.createElement('div');
     item.className = 'palette-item';
     // Tiles show only the icon; the name shows in a bubble while the mouse is over the tile or it has the keyboard focus.
@@ -141,6 +173,10 @@ export function createPalette(
       const here = tiles.indexOf(item);
       const next = moveIndex(here, e.key, tiles.length, gridColumns(item.parentElement ?? item));
       if (next === null) {
+        if (onLeave) {
+          onLeave(e.key === 'ArrowUp' ? 'ArrowUp' : 'ArrowDown');
+          return;
+        }
         // Out of the grid: up goes to the section header, down to the next header.
         const header = headers.findIndex((h) => h.getAttribute('aria-controls') === item.closest('.palette-cat-body')?.id);
         const target = e.key === 'ArrowUp' ? header : header + 1;
@@ -228,6 +264,7 @@ export function createPalette(
       e.preventDefault();
       const next = moveIndex(here, e.key, headers.length, 1);
       if (next !== null) headers[next]?.focus();
+      else if (e.key === 'ArrowUp') input.focus(); // up from the first header goes back to the search box
     });
 
     if (tiles[0]) tiles[0].tabIndex = 0;
@@ -244,20 +281,91 @@ export function createPalette(
     addSection(group.id, group.name, group.parts.length, list, tiles);
   }
 
+  const makeExampleButton = (example: PaletteAction): HTMLButtonElement => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'palette-example';
+    b.textContent = example.name;
+    b.title = example.hint;
+    b.addEventListener('click', example.run);
+    return b;
+  };
+
   if (examples.length > 0) {
     const list = document.createElement('div');
     list.className = 'palette-examples';
-    for (const example of examples) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'palette-example';
-      b.textContent = example.name;
-      b.title = example.hint;
-      b.addEventListener('click', example.run);
-      list.appendChild(b);
-    }
+    for (const example of examples) list.appendChild(makeExampleButton(example));
     addSection('examples', 'Examples', examples.length, list);
   }
+
+  // ---- Search: matches replace the sections until the box is empty again ----
+  const showResults = (): void => {
+    const query = input.value;
+    const searching = query.trim() !== '';
+    clearButton.hidden = !searching;
+    cats.hidden = searching;
+    results.hidden = !searching;
+    bubble.hide();
+    results.replaceChildren();
+    resultTiles = [];
+    if (!searching) {
+      live.textContent = '';
+      return;
+    }
+
+    const foundParts = searchParts(PARTS, query, (id) => categoryOf.get(id) ?? '');
+    const foundExamples = searchNamed(examples, query);
+    const total = foundParts.length + foundExamples.length;
+    const summary = total === 0 ? 'No results' : `${total} result${total === 1 ? '' : 's'}`;
+
+    const heading = document.createElement('div');
+    heading.className = 'palette-results-count';
+    heading.textContent = total === 0 ? `No parts match “${query.trim()}”` : summary;
+    results.appendChild(heading);
+
+    if (foundParts.length > 0) {
+      const list = document.createElement('div');
+      list.className = 'palette-list';
+      for (const part of foundParts) {
+        list.appendChild(makeTile(part, resultTiles, (key) => {
+          if (key === 'ArrowUp') input.focus();
+        }));
+      }
+      results.appendChild(list);
+      if (resultTiles[0]) resultTiles[0].tabIndex = 0;
+    }
+    if (foundExamples.length > 0) {
+      const label = document.createElement('div');
+      label.className = 'palette-results-count';
+      label.textContent = 'Examples';
+      results.appendChild(label);
+      const list = document.createElement('div');
+      list.className = 'palette-examples';
+      for (const example of foundExamples) list.appendChild(makeExampleButton(example));
+      results.appendChild(list);
+    }
+    live.textContent = summary;
+  };
+
+  input.addEventListener('input', showResults);
+  clearButton.addEventListener('click', () => {
+    input.value = '';
+    showResults();
+    input.focus();
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && input.value !== '') {
+      e.preventDefault();
+      e.stopPropagation();
+      input.value = '';
+      showResults();
+    } else if (e.key === 'ArrowDown' || e.key === 'Enter') {
+      e.preventDefault();
+      if (input.value.trim() === '') headers[0]?.focus();
+      else if (resultTiles[0]) focusTile(resultTiles, 0);
+      else results.querySelector<HTMLElement>('.palette-example')?.focus();
+    }
+  });
 
   const setOpen = (isOpen: boolean): void => {
     panel.classList.toggle('closed', !isOpen);

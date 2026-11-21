@@ -178,6 +178,7 @@ body::before {
 .serial-input,
 .bo-select,
 .fx-input,
+.palette-search-input,
 .value-editor input {
   border-radius: var(--gh-radius-sm);
   border-color: var(--gh-border);
