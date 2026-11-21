@@ -10,7 +10,7 @@ Web and Electron simulator for Arduino and RP2040 boards and circuits. A univers
 
 ## Status
 
-Early but working (version 0.1). You can build circuits on a grid, wire them, write an Arduino sketch, compile it on your own machine and run it on an emulated Uno or Nano that drives the circuit.
+Early but working (version 0.2). You can build circuits on a grid, wire them, write an Arduino sketch, compile it on your own machine and run it on an emulated Uno or Nano that drives the circuit.
 
 - **Works:** grid editor (pan, zoom, select, move, rotate, flip, copy, delete, undo/redo), wires, a DC and time-stepping circuit solver (capacitors, inductors, diodes, LEDs, BJTs, MOSFETs, IGBTs, relays, a DC motor, logic gates, a programmable power supply, a function generator), an Arduino Uno and Nano running real AVR code (UART, I2C, SPI and watchdog are emulated on the chip side), **compiling sketches in the browser or desktop app (WebAssembly, no server, offline once loaded)**, a part inspector / scope and a logic analyzer with a UART decoder, simulation start / pause / reset / speed, projects saved as `.gth` files (and, in the desktop app, as real folders), autosave, and an IDE-style window layout with a Serial console, a File explorer, a Code editor and a Build output window.
 - **Compiler limits:** Uno and Nano profiles only (no Mega yet), no C compiler (`.c` files are compiled as C++), only the bundled libraries (Wire, SPI, SoftwareSerial, EEPROM, Servo, NeoPixel, HC-SR04). Sketches using `Wire` or SPI compile, but there is no way yet to attach I2C/SPI devices, and the buses are not modelled electrically.
@@ -23,7 +23,7 @@ The full roadmap, decisions and honest status are in [`docs/PLAN.md`](docs/PLAN.
 - Install: `npm install`
 - Web (dev): `npm run dev`, then open the address it prints
 - Electron: `npm start` (builds first)
-- Windows installer: `npm run toolchain:fetch`, `npm run toolchain:packs`, then `npm run dist` makes `release/Gatehouse-Setup-<version>.exe` (unsigned: Windows SmartScreen asks for "More info" then "Run anyway"). The compiler packs are inside the installer, so building sketches works offline.
+- Windows installer: `npm run toolchain:fetch`, `npm run toolchain:packs`, then `npm run dist:setup` makes `release/Gatehouse-Setup-<version>.exe`, the installer with Gatehouse's own setup window (`npm run dist` makes the plain NSIS one, `...-classic.exe`). Both are unsigned: Windows SmartScreen asks for "More info" then "Run anyway". The compiler packs are inside the installer, so building sketches works offline.
 - Type check: `npm run typecheck`
 - Tests: `npm test`
 - Build: `npm run build` (output in `dist/`, including `THIRD_PARTY_LICENSES.txt`, `NOTICE` and `licenses/`)

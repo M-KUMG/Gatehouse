@@ -39,12 +39,13 @@ const R_DEFAULT = 1000;
 
 /**
  * True when the circuit has a capacitor or an inductor, or a part with a
- * logic state (a half-bridge driver or a logic gate: input hysteresis and
- * latches need the state of the previous step): it then needs time steps.
+ * logic state (a half-bridge driver, a logic gate, a 555 or an op-amp: input hysteresis,
+ * latches and saturation modes need the state of the previous step): it then needs time steps.
  */
 export function isReactive(input: SimInput): boolean {
   return input.components.some((c) => (
     c.model.kind === 'capacitor' || c.model.kind === 'inductor' || c.model.kind === 'halfdriver' || c.model.kind === 'gate'
+    || c.model.kind === 'timer555' || c.model.kind === 'opamp'
     || c.model.kind === 'signal' || c.model.kind === 'relay' || c.model.kind === 'motor'
   ));
 }

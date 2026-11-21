@@ -125,6 +125,18 @@ export type ComponentModel =
    */
   | { kind: 'halfdriver' }
   /**
+   * 555 timer (NE555-like): the reference divider, two comparators and a
+   * latch, expanded by the solver into resistors switched by the latch (see
+   * timer555.ts). Pins: gnd, trig, out, reset, ctrl, thr, disch, vcc.
+   */
+  | { kind: 'timer555' }
+  /**
+   * Dual op-amp (LM358-like): two amplifiers, each a gain-limited controlled
+   * source that saturates at the rails (see opamp.ts). Pins: o1, n1, p1, gnd,
+   * p2, n2, o2, vcc.
+   */
+  | { kind: 'opamp' }
+  /**
    * Ideal logic gate without supply pins (see gates.ts): inputs against the
    * circuit's 0 V reference, the output a switched source of `vcc` or 0 V
    * behind 25 ohm to that reference. Pins: a, b (2 inputs only), y.

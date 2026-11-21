@@ -1,6 +1,6 @@
 {
   "name": "gatehouse",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Gatehouse: simulator for Arduino and RP2040 boards and circuits",
   "main": "main.js",
   "private": true,
@@ -14,7 +14,8 @@
     "toolchain:fetch": "node scripts/fetch-toolchain.mjs",
     "toolchain:sources": "node scripts/fetch-toolchain-sources.mjs",
     "toolchain:packs": "node scripts/make-packs.mjs",
-    "dist": "npm run build && electron-builder --win nsis"
+    "dist": "npm run build && electron-builder --win nsis",
+    "dist:setup": "npm run build && electron-builder --win portable"
   },
   "devDependencies": {
     "electron": "^33.0.0",
@@ -50,6 +51,7 @@
     "files": [
       "main.js",
       "electron/*.cjs",
+      "electron/installer/*",
       "dist/**/*",
       "package.json",
       "!node_modules/**"
@@ -88,6 +90,9 @@
         }
       ],
       "icon": "public/icon.png",
+      "artifactName": "Gatehouse-Setup-${version}-classic.exe"
+    },
+    "portable": {
       "artifactName": "Gatehouse-Setup-${version}.exe"
     },
     "nsis": {

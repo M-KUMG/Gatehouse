@@ -157,7 +157,7 @@ describe('which parts are mirrorable', () => {
   it('a symmetric part mirrored on its own would equal itself or a half turn (pins by link group)', () => {
     // ICs are left out like the boards: a mirrored DIP is the chip upside down, which no one places.
     // So is the 7-segment display (two pin rows like a DIP).
-    for (const type of PARTS.filter((t) => !canMirror(t) && !t.board && t.id !== 'halfdriver' && t.id !== 'sevenseg')) {
+    for (const type of PARTS.filter((t) => !canMirror(t) && !t.board && t.id !== 'halfdriver' && t.id !== 'timer555' && t.id !== 'opamp' && t.id !== 'sevenseg')) {
       const groups = new Map(type.pins.map((p) => [p.id, type.links?.find((l) => l.includes(p.id))?.[0] ?? p.id]));
       const places = (o: Orientation): string[] =>
         type.pins.map((pin) => {

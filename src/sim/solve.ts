@@ -19,9 +19,17 @@ import {
   DEFAULT_GATE_LOGIC, GATE_INPUT_OHMS, GATE_OUT_OHMS, decideGate, gateOutput, gateResult, isGateLogic, sameGate,
   type GateElement, type GateLogic,
 } from './gates';
+import {
+  DEFAULT_OPAMP_LOGIC, MODE_HIGH, MODE_LINEAR, MODE_LOW, MODE_OFF, OPAMP_CHANNELS, OPAMP_GAIN, OPAMP_HIGH_DROP_VOLTS, OPAMP_INPUT_OHMS,
+  OPAMP_LOW_VOLTS, OPAMP_OFF_OHMS, OPAMP_OUT_OHMS, OPAMP_PINS, OPAMP_QUIESCENT_OHMS, decideOpamp, isOpampLogic, opampResult, sameOpamp,
+  type OpampElement, type OpampLogic,
+} from './opamp';
 import { solveLinear } from './linear';
 import { makeMosfet, mosfetResult, stampMosfet, updateMosfet, type Mosfet } from './mosfet';
 import { buildNets, modelPins } from './nets';
+import {
+  DEFAULT_TIMER_LOGIC, TIMER_PINS, decideTimer, isTimerLogic, sameTimer, timerBranches, timerResult, type TimerElement, type TimerLogic,
+} from './timer555';
 import { companionOf, stampReactive, type Companion, type Reactive, type ReactiveState } from './reactive';
 import { stampInto, type Stamp } from './stamp';
 import type { PartResult, SimInput, SimResult } from './types';
@@ -116,6 +124,12 @@ interface Elements {
   drivers: DriverElement[];
   /** Logic gates: input resistors in `resistors`, the output a Thevenin source in `drives` (both part -1; gates.ts). */
   gates: GateElement[];
+  /** 555 timers: resistors in `resistors` (part -1), switched by the latch (timer555.ts). */
+  timers: TimerElement[];
+  /** Op-amp chips: resistors, pin drives and controlled sources (`vccs`) set by each amplifier's mode (opamp.ts). */
+  opamps: OpampElement[];
+  /** Controlled current sources into `out` from the reference: gm (v[p] - v[n]), with a conductance g from `out` to the reference. */
+  vccs: { out: number; p: number; n: number; gm: number; g: number }[];
   /** `pins`: the model's two pin names (a, b; pos, neg for a polarized capacitor). */
   reactives: (Reactive & { kind: 'capacitor' | 'inductor'; pins: readonly string[] })[];
   drives: Drive[];
@@ -139,7 +153,7 @@ function buildElements(
   logic?: Readonly<LogicState>,
 ): Elements {
   const el: Elements = {
-    resistors: [], sources: [], diodes: [], bjts: [], mosfets: [], igbts: [], drivers: [], gates: [], reactives: [], drives: [],
+    resistors: [], sources: [], diodes: [], bjts: [], mosfets: [], igbts: [], drivers: [], gates: [], timers: [], opamps: [], vccs: [], reactives: [], drives: [],
     nodes: netCount,
   };
   const resistor = (part: number, pinA: string, pinB: string, ohms: number): void => {
@@ -255,6 +269,41 @@ function buildElements(
           el.resistors.push({ part: -1, a: nodes[b.a], b: nodes[b.b], g: 1 / b.ohms, pinA: '', pinB: '' });
         }
         el.drivers.push(d);
+        break;
+      }
+      case 'timer555': {
+        // Resistors only, switched by the latch this solve uses (see timer555.ts and solveSettled).
+        const nodes = Object.fromEntries(TIMER_PINS.map((p) => [p, netOf(id, p)])) as TimerElement['nodes'];
+        const held = logic?.[id];
+        const t: TimerElement = { part: id, nodes, logic: isTimerLogic(held) ? held : DEFAULT_TIMER_LOGIC };
+        for (const b of timerBranches(t.logic)) {
+          el.resistors.push({ part: -1, a: nodes[b.a], b: nodes[b.b], g: 1 / b.ohms, pinA: '', pinB: '' });
+        }
+        el.timers.push(t);
+        break;
+      }
+      case 'opamp': {
+        // Per amplifier by its mode: a gain-limited source, or the output held at a rail (see opamp.ts and solveSettled).
+        const nodes = Object.fromEntries(OPAMP_PINS.map((p) => [p, netOf(id, p)])) as OpampElement['nodes'];
+        const held = logic?.[id];
+        const o: OpampElement = { part: id, nodes, logic: isOpampLogic(held) ? held : DEFAULT_OPAMP_LOGIC };
+        el.resistors.push({ part: -1, a: nodes.vcc, b: nodes.gnd, g: 1 / OPAMP_QUIESCENT_OHMS, pinA: '', pinB: '' });
+        for (const ch of OPAMP_CHANNELS) {
+          el.resistors.push({ part: -1, a: nodes[ch.p], b: 0, g: 1 / OPAMP_INPUT_OHMS, pinA: '', pinB: '' });
+          el.resistors.push({ part: -1, a: nodes[ch.n], b: 0, g: 1 / OPAMP_INPUT_OHMS, pinA: '', pinB: '' });
+          const out = nodes[ch.out];
+          const mode = o.logic[ch.key];
+          if (mode === MODE_LINEAR) {
+            el.vccs.push({ out, p: nodes[ch.p], n: nodes[ch.n], gm: OPAMP_GAIN / OPAMP_OUT_OHMS, g: 1 / OPAMP_OUT_OHMS });
+          } else if (mode === MODE_HIGH) {
+            el.drives.push({ part: -1, node: out, ref: nodes.vcc, g: 1 / OPAMP_OUT_OHMS, volts: -OPAMP_HIGH_DROP_VOLTS });
+          } else if (mode === MODE_LOW) {
+            el.drives.push({ part: -1, node: out, ref: nodes.gnd, g: 1 / OPAMP_OUT_OHMS, volts: OPAMP_LOW_VOLTS });
+          } else if (mode === MODE_OFF) {
+            el.resistors.push({ part: -1, a: out, b: nodes.gnd, g: 1 / OPAMP_OFF_OHMS, pinA: '', pinB: '' });
+          }
+        }
+        el.opamps.push(o);
         break;
       }
       case 'gate': {
@@ -373,7 +422,7 @@ class Workspace {
 
 /** The part of the system that stays the same for one easing. */
 function stampLinear(el: Elements, a: Float64Array[], z: Float64Array, stamp: Stamp, ease: Easing): void {
-  const { addG, addI } = stamp;
+  const { addG, addI, addGm } = stamp;
   const { gshunt, scale } = ease;
 
   for (let n = 1; n < el.nodes; n++) a[n - 1][n - 1] += GMIN;
@@ -393,6 +442,11 @@ function stampLinear(el: Elements, a: Float64Array[], z: Float64Array, stamp: St
   for (const d of el.drives) {
     addG(d.node, d.ref, d.g);
     addI(d.ref, d.node, d.g * d.volts * scale);
+  }
+  for (const v of el.vccs) {
+    // out = gain x (p - n) behind g: a conductance to the reference and a current gm (v[p] - v[n]) into out.
+    addG(v.out, 0, v.g);
+    addGm(0, v.out, v.p, v.n, v.gm);
   }
 
   for (const s of el.sources) {
@@ -759,7 +813,7 @@ function solveCore(
 }
 
 /** Logic state of one part with one: a half-bridge driver (driver.ts) or a logic gate (gates.ts). */
-export type PartLogic = DriverLogic | GateLogic | RelayLogic | MotorLogic;
+export type PartLogic = DriverLogic | GateLogic | RelayLogic | MotorLogic | TimerLogic | OpampLogic;
 
 /** Logic state of every logic part by component id (kept in TransientState.logic). */
 export type LogicState = Record<number, PartLogic>;
@@ -774,6 +828,8 @@ export type LogicState = Record<number, PartLogic>;
 interface LogicRule {
   id: number;
   gate: boolean;
+  /** Decide against the state of the current round (a latch keeps what it just took) instead of the last accepted one. */
+  current?: boolean;
   initial(stored: unknown): PartLogic;
   decide(prev: PartLogic, volts: (pin: string) => number, result: SimResult, dt: number): PartLogic;
   same(a: PartLogic, b: PartLogic): boolean;
@@ -808,6 +864,24 @@ function logicRules(input: SimInput): LogicRule[] {
         initial: (s) => (isRelayLogic(s) ? s : DEFAULT_RELAY_LOGIC),
         decide: (p, _v, r) => decideRelay(p as RelayLogic, r.parts[id]?.current ?? 0, m),
         same: (a, b) => (a as RelayLogic).on === (b as RelayLogic).on,
+        fallback: (_last, next) => next,
+      });
+    } else if (m.kind === 'timer555') {
+      // The latch decides against its current round's state (see timer555.ts), so a flip does not flip back inside one step.
+      rules.push({
+        id, gate: false, current: true,
+        initial: (s) => (isTimerLogic(s) ? s : DEFAULT_TIMER_LOGIC),
+        decide: (p, v) => decideTimer(p as TimerLogic, (pin) => v(pin)),
+        same: (a, b) => sameTimer(a as TimerLogic, b as TimerLogic),
+        fallback: (_last, next) => next,
+      });
+    } else if (m.kind === 'opamp') {
+      // The modes follow from the solution alone (no memory), so the rounds settle by themselves.
+      rules.push({
+        id, gate: false, current: true,
+        initial: (s) => (isOpampLogic(s) ? s : DEFAULT_OPAMP_LOGIC),
+        decide: (_p, v) => decideOpamp((pin) => v(pin)),
+        same: (a, b) => sameOpamp(a as OpampLogic, b as OpampLogic),
         fallback: (_last, next) => next,
       });
     } else if (m.kind === 'gate') {
@@ -865,7 +939,7 @@ export function solveSettled(
     const next: LogicState = {};
     const changed: LogicRule[] = [];
     for (const p of rules) {
-      next[p.id] = p.decide(prevOf(p), (pin) => r.voltages[r.nets[`${p.id}:${pin}`] ?? 0] ?? 0, r, step?.dt ?? 0);
+      next[p.id] = p.decide(p.current ? logic[p.id] : prevOf(p), (pin) => r.voltages[r.nets[`${p.id}:${pin}`] ?? 0] ?? 0, r, step?.dt ?? 0);
       if (!p.same(next[p.id], logic[p.id])) changed.push(p);
     }
     first ??= { ...next };
@@ -952,6 +1026,8 @@ function collectResults(
   for (const q of el.igbts) parts[q.part] = igbtResult(q, volt);
   for (const d of el.drivers) parts[d.part] = driverResult(d, volt);
   for (const g of el.gates) parts[g.part] = gateResult(g, volt);
+  for (const t of el.timers) parts[t.part] = timerResult(t, volt);
+  for (const o of el.opamps) parts[o.part] = opampResult(o, volt);
   for (const r of el.reactives) {
     const i = r.g * (volt(r.inner) - volt(r.b)) + r.ieq;
     const v = volt(r.a) - volt(r.b);

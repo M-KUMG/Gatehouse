@@ -307,6 +307,93 @@ export const EXAMPLES: readonly Example[] = [
     },
   },
   {
+    // Astable 555: R1 from +9 V to DISCH, R2 from DISCH to THR, C from THR to ground, TRIG tied to THR, RESET to +9 V.
+    // High 0.693 (R1 + R2) C = 0.33 s, low 0.693 R2 C = 0.33 s: about 1.5 Hz. OUT drives 470 ohm + LED to ground.
+    name: '555 blinker',
+    hint: 'A 555 timer in astable mode blinks the LED about 1.5 times a second: R1 1 kΩ, R2 47 kΩ and C 10 µF set the '
+      + 'rate (f = 1.44 / ((R1 + 2 R2) C)). The capacitor swings between 1/3 and 2/3 of the 9 V supply; TRIG is tied to '
+      + 'THR so it watches the same capacitor, and RESET is tied to +9 V (an open RESET holds the chip off). '
+      + 'Press Start (top right) and watch the LED; change R2 or C with a click on the part.',
+    state: {
+      version: 4,
+      parts: [
+        part(1, 'battery9v', 0, 6),
+        part(2, 'ground', 4, 9),
+        part(3, 'timer555', 12, 10),
+        part(4, 'resistor', 13, 4, 90, { value: 1000 }),
+        part(5, 'resistor', 14, 7, 0, { value: 47_000 }),
+        part(6, 'ecap', 17, 8, 90, { value: 10e-6 }),
+        part(7, 'ground', 17, 13),
+        part(8, 'ground', 10, 15),
+        part(9, 'resistor', 15, 15, 0, { value: 470 }),
+        part(10, 'led', 18, 16, 180),
+        part(11, 'ground', 21, 17),
+      ],
+      wires: [
+        // +9 V: battery -> R1 top and the chip's VCC; RESET joins it around the right end.
+        wire(21, '1.pos', '4.a', [[7, 7], [7, 4]]),
+        wire(22, '1.pos', '3.vcc', [[7, 7], [7, 10]]),
+        wire(23, '3.reset', '4.a', [[28, 14], [28, 3], [14, 3]]),
+        // Timing network: R1 -> DISCH -> R2 -> THR / capacitor, TRIG tied to the same node.
+        wire(24, '3.disch', '4.b'),
+        wire(25, '3.thr', '5.b', [[15, 9], [18, 9]]),
+        wire(26, '3.trig', '6.pos', [[14, 22], [26, 22], [26, 8]]),
+        // Grounds.
+        wire(27, '1.neg', '2.gnd'),
+        wire(28, '6.neg', '7.gnd'),
+        wire(29, '3.gnd', '8.gnd', [[13, 15]]),
+        // Output: OUT -> 470 ohm -> LED (its anode touches the resistor) -> ground.
+        wire(30, '3.out', '9.a'),
+        wire(32, '10.cathode', '11.gnd', [[22, 16]]),
+      ],
+      junctions: [],
+    },
+  },
+  {
+    // LM358 as a comparator: IN1+ from a divider (10 k to +9 V, LDR to ground), IN1- from a 1.5 V cell.
+    // IN1+ = 9 V R_ldr / (10 k + R_ldr) crosses 1.5 V at R_ldr = 2 kOhm = 100 lx. The LDR starts at 1000 lx (LED off).
+    name: 'Op-amp night light',
+    hint: 'An LM358 op-amp used as a comparator: a 10 kΩ resistor and the photoresistor make a divider that feeds IN+, '
+      + 'a 1.5 V cell is the reference on IN−. When it gets darker than about 100 lx the divider rises above 1.5 V, '
+      + 'the output swings to the top rail and the LED lights. Click the photoresistor and lower its Light value '
+      + '(it starts at 1000 lx).',
+    state: {
+      version: 4,
+      parts: [
+        part(1, 'battery9v', 0, 2),
+        part(2, 'ground', 4, 5),
+        part(3, 'opamp', 12, 10, 180),
+        part(4, 'battery', 14, 0, 90),
+        part(5, 'ground', 17, 0),
+        part(6, 'resistor', 6, 3, 90, { value: 10_000 }),
+        part(7, 'ldr', 6, 7, 90, { lux: 1000 }),
+        part(8, 'ground', 6, 12),
+        part(9, 'ground', 12, 8),
+        part(10, 'resistor', 22, 8, 0, { value: 470 }),
+        part(11, 'led', 25, 9, 180),
+        part(12, 'ground', 29, 10),
+      ],
+      wires: [
+        // +9 V: battery -> divider top, and around to the chip's V+.
+        wire(21, '1.pos', '6.a'),
+        wire(22, '6.a', '3.vcc', [[9, 3], [9, 16], [16, 16]]),
+        wire(23, '1.neg', '2.gnd'),
+        // Divider: resistor -> node -> LDR -> ground; the node feeds IN1+.
+        wire(24, '7.a', '3.p1', [[14, 7]]),
+        wire(25, '7.b', '8.gnd'),
+        // Reference: the 1.5 V cell's + to IN1-, its - to ground.
+        wire(26, '4.pos', '3.n1'),
+        wire(27, '4.neg', '5.gnd'),
+        // The chip's ground pin.
+        wire(28, '3.gnd', '9.gnd'),
+        // Output: OUT1 -> 470 ohm -> LED -> ground.
+        wire(29, '3.o1', '10.a', [[16, 9], [22, 9]]),
+        wire(31, '11.cathode', '12.gnd', [[30, 9]]),
+      ],
+      junctions: [],
+    },
+  },
+  {
     name: 'Uno blink',
     hint: 'Arduino Uno with the Blink program: pin 13 → 220 Ω → LED → GND. Select the board and press Run.',
     state: {

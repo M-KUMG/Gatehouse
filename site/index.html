@@ -12,7 +12,7 @@
   <script>
     window.GATEHOUSE = {
       appUrl: 'app/', // the web app, next to this page
-      downloadUrl: 'https://github.com/M-KUMG/Gatehouse/releases/latest', // the newest installer
+      downloadUrl: 'downloads/', // the downloads page, next to this page (our server and GitHub)
       repoUrl: 'https://github.com/M-KUMG/Gatehouse',
     };
   </script>
@@ -219,6 +219,12 @@
       text-underline-offset: 3px;
     }
 
+    .privacy {
+      max-width: 62ch;
+      margin: 10px auto 0;
+      font-size: 0.8rem;
+    }
+
     @keyframes rise {
       from {
         opacity: 0;
@@ -289,6 +295,10 @@
 
   <footer>
     Open source (MIT) · <a id="repo" href="#">GitHub</a> · A university project, built with Claude
+    <p class="privacy">
+      Privacy: no cookies and no tracking. Your settings and circuits stay in your own browser. The server may keep
+      standard access logs (including IP addresses) for security.
+    </p>
   </footer>
 
   <script>

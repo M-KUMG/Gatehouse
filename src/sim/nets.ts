@@ -1,5 +1,7 @@
 // Groups terminals into nets (electrical nodes) with union-find.
 
+import { OPAMP_PINS } from './opamp';
+import { TIMER_PINS } from './timer555';
 import type { ComponentModel, Reference, SimInput, Terminal } from './types';
 
 /** Pin names of each fixed-pin model, in a fixed order. */
@@ -22,6 +24,8 @@ export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readon
   mosfet: ['g', 'd', 's'],
   igbt: ['g', 'c', 'e'],
   halfdriver: ['vcc', 'in', 'sd', 'com', 'lo', 'vs', 'ho', 'vb'],
+  timer555: TIMER_PINS,
+  opamp: OPAMP_PINS,
   gate: ['a', 'b', 'y'], // a 1-input gate: a, y (GATE1_PINS)
   capacitor: ['a', 'b'],
   inductor: ['a', 'b'],

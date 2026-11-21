@@ -5,6 +5,11 @@ const { SCHEME, ORIGIN, createHandler, isAppUrl } = require('./electron/staticse
 const W = require('./electron/windowstate.cjs');
 const { registerFolderIpc } = require('./electron/folderipc.cjs');
 const { CHANNEL: CLOSE, createCloseFlow } = require('./electron/closeflow.cjs');
+const { detectMode } = require('./electron/setupmode.cjs');
+const { startSetup } = require('./electron/installerwindow.cjs');
+
+const SETUP_MODE = detectMode(process.argv, process.env, process.execPath); // 'install' | 'uninstall' | null (the app)
+const realUserData = app.getPath('userData'); // read before setup mode moves it
 
 // The product name for the window (src/app.ts holds the same name for the page; this file cannot import TypeScript).
 const APP_NAME = 'Gatehouse';
@@ -139,9 +144,15 @@ function createWindow() {
   return win;
 }
 
-// One window of the app at a time: a second start focuses the first (two copies would fight over the
-// browser-side autosave of the project).
-if (!app.requestSingleInstanceLock()) {
+// The same exe is also the installer and the uninstaller (electron/setupmode.cjs says which start this is). Those
+// modes show their own window and nothing of the app; their Chromium files go to a temp folder, so setup leaves
+// nothing in the app's real settings folder.
+if (SETUP_MODE) {
+  app.setPath('userData', path.join(app.getPath('temp'), 'gatehouse-setup'));
+  app.whenReady().then(() => startSetup({ electron: require('electron'), mode: SETUP_MODE, realUserData }));
+} else if (!app.requestSingleInstanceLock()) {
+  // One window of the app at a time: a second start focuses the first (two copies would fight over the
+  // browser-side autosave of the project).
   app.quit();
 } else {
   app.on('second-instance', () => {

@@ -20,6 +20,7 @@ import { BATTERY_9V_ART } from './art/battery9v';
 import { DIODE_ART } from './art/diode';
 import { GROUND_ART } from './art/ground';
 import { LED_ART, LED_BURNED_SVG, drawLedGlow, ledColorSvg } from './art/led';
+import { IC_PARTS } from './icparts';
 import { isLedColor, ledColorOf, ledModelOf } from './ledcolor';
 import { POT_ART, POT_KNOB, drawPotPointer } from './art/pot';
 import { PUSH_BUTTON_ART, PUSH_BUTTON_PRESSED_SVG } from './art/pushbutton';
@@ -315,7 +316,7 @@ const TO220_PINS: readonly PinDef[] = [
 // Not mirrorable: battery, ground, resistor, capacitor, ecap, inductor, diode,
 // switch, button (pins on the box's centre line, or the button's linked
 // pairs, so a mirror equals a 180-degree turn or nothing), the boards (a
-// mirrored board does not exist) and ICs such as the DIP-8 halfdriver (its
+// mirrored board does not exist) and ICs such as the DIP-8 halfdriver, 555 and op-amp (its
 // mirror image is the chip upside down, which nobody places).
 //   gate-and, -nand, -or, -nor,     - inputs A, B above and below the centre
 //   -xor, -xnor                       line: a vertical mirror swaps them, no
@@ -568,6 +569,8 @@ export const PARTS: readonly PartType[] = [
     variant: (s) => (s.burned ? { key: 'burned', svg: DRIVER_BURNED_SVG } : null),
     sim: (s) => (s.burned ? { kind: 'open' } : { kind: 'halfdriver' }),
   },
+  // 555 timer and dual op-amp: see icparts.ts.
+  ...IC_PARTS,
   // Ideal logic gates (no supply pins): gate-not ... gate-xnor, see gateparts.ts.
   ...GATE_PARTS,
   {

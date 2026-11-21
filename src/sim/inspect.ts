@@ -43,6 +43,7 @@
 //     100 mA rating."). Potentiometer: the power of each half of the track.
 
 import { driverQuantities } from './driverinspect';
+import { opampQuantities, timerQuantities } from './icinspect';
 import { buzzerQuantities, rgbledQuantities, sevensegQuantities, zenerQuantities } from './partinspect';
 import { gateQuantities } from './gateinspect';
 import { level1 } from './mosfet';
@@ -253,6 +254,10 @@ function mainQuantities(
       return igbt(model, r, node);
     case 'halfdriver':
       return driverQuantities(r);
+    case 'timer555':
+      return timerQuantities(r);
+    case 'opamp':
+      return opampQuantities(r);
     case 'gate':
       return gateQuantities(model, r);
     case 'switch':
@@ -398,6 +403,10 @@ export function defaultPlot(model: ComponentModel): string[] {
       return ['vge', 'vce', 'ic'];
     case 'halfdriver':
       return ['vcc', 'vbs'];
+    case 'timer555':
+      return ['vthr', 'vout'];
+    case 'opamp':
+      return ['vo1', 'vd1'];
     case 'gate':
       return ['va', 'vy'];
     case 'diode':
