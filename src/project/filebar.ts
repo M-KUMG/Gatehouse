@@ -3,7 +3,7 @@
 // Export: see filecommands.ts), the Windows menu (added by main.ts), Undo,
 // Redo, and the project name with a dot while there are unsaved changes.
 
-import { setBarMenuOpen } from '../barmenu';
+import { closeWhenPointerLeaves, setBarMenuOpen } from '../barmenu';
 import { attachDrop } from '../droplight';
 import { fileMenu, type FileCommand } from './filecommands';
 
@@ -80,7 +80,9 @@ function createFileMenu(run: (command: FileCommand) => void, folders: boolean): 
   menu.setAttribute('role', 'menu');
   menu.hidden = true;
 
+  let cancelLeave = (): void => {};
   const setOpen = (open: boolean): void => {
+    cancelLeave();
     menu.hidden = !open;
     trigger.classList.toggle('active', open);
     trigger.setAttribute('aria-expanded', String(open));
@@ -133,6 +135,7 @@ function createFileMenu(run: (command: FileCommand) => void, folders: boolean): 
 
   attachDrop(menu, '.windows-menu-item');
   trigger.addEventListener('click', () => setOpen(menu.hidden));
+  cancelLeave = closeWhenPointerLeaves(wrap, () => !menu.hidden, () => setOpen(false)); // like Windows and Graphics
   wrap.append(trigger, menu);
   return wrap;
 }

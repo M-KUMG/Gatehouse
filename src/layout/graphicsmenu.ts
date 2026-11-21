@@ -2,7 +2,7 @@
 // is drawn (graphics.ts: Glass or Solid). The current look is ticked; a choice
 // applies at once and closes the menu.
 
-import { setBarMenuOpen } from '../barmenu';
+import { closeWhenPointerLeaves, setBarMenuOpen } from '../barmenu';
 import { attachDrop } from '../droplight';
 import { GRAPHICS_MODES, graphicsMode, onGraphicsChange, setGraphics } from '../graphics';
 
@@ -48,7 +48,9 @@ export function createGraphicsMenu(): HTMLElement {
   onGraphicsChange(refresh);
   refresh();
 
+  let cancelLeave = (): void => {};
   const setOpen = (open: boolean): void => {
+    cancelLeave();
     menu.hidden = !open;
     button.classList.toggle('active', open);
     button.setAttribute('aria-expanded', String(open));
@@ -71,6 +73,7 @@ export function createGraphicsMenu(): HTMLElement {
     button.focus();
   };
   button.addEventListener('click', () => setOpen(menu.hidden));
+  cancelLeave = closeWhenPointerLeaves(wrap, () => !menu.hidden, () => setOpen(false)); // like File and Windows
 
   wrap.append(button, menu);
   return wrap;

@@ -2,7 +2,7 @@
 // dockable window, and to reset the layout. The Circuit panel is listed too,
 // always open: choosing it brings it to the front (it can not be closed).
 
-import { setBarMenuOpen } from '../barmenu';
+import { closeWhenPointerLeaves, setBarMenuOpen } from '../barmenu';
 import { attachDrop } from '../droplight';
 import type { DockLayout } from './dock';
 import { EDITOR_ID, WINDOWS, isClosable } from './panels';
@@ -48,7 +48,9 @@ export function createWindowsMenu(layout: DockLayout): HTMLElement {
   layout.onChange(refresh);
   refresh();
 
+  let cancelLeave = (): void => {};
   const setOpen = (open: boolean): void => {
+    cancelLeave(); // a pending "mouse left" close must not fire after a later open or close
     menu.hidden = !open;
     button.classList.toggle('active', open);
     setBarMenuOpen(wrap, menu, open);
@@ -71,14 +73,8 @@ export function createWindowsMenu(layout: DockLayout): HTMLElement {
   };
   button.addEventListener('click', () => setOpen(menu.hidden));
   // Choosing an entry keeps the menu open (to toggle several windows in a
-  // row); it closes when the mouse leaves it (after a short grace period so a
-  // small gap between button and list does not close it), or on Escape / an outside press.
-  let leaveTimer = 0;
-  wrap.addEventListener('pointerenter', () => window.clearTimeout(leaveTimer));
-  wrap.addEventListener('pointerleave', () => {
-    window.clearTimeout(leaveTimer);
-    if (!menu.hidden) leaveTimer = window.setTimeout(() => setOpen(false), 250);
-  });
+  // row); it closes when the mouse leaves it (barmenu.ts), or on Escape / an outside press.
+  cancelLeave = closeWhenPointerLeaves(wrap, () => !menu.hidden, () => setOpen(false));
 
   wrap.append(button, menu);
   return wrap;
