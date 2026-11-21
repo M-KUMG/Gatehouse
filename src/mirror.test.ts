@@ -147,7 +147,7 @@ describe('which parts are mirrorable', () => {
   it('is data on the part types: the asymmetric parts only, never a board', () => {
     expect(PARTS.filter(canMirror).map((t) => t.id).sort()).toEqual([
       'battery9v', 'bjt', 'gate-and', 'gate-nand', 'gate-nor', 'gate-or', 'gate-xnor', 'gate-xor', 'igbt',
-      'led', 'motor', 'nmos', 'pigbt', 'pmos', 'pnp', 'pot', 'psu', 'relay', 'siggen',
+      'led', 'motor', 'nmos', 'pigbt', 'pmos', 'pnp', 'pot', 'psu', 'relay', 'rgbled', 'siggen',
     ]);
     for (const type of PARTS) if (type.board) expect(canMirror(type), type.id).toBe(false);
     expect(isMirrorable('uno')).toBe(false);

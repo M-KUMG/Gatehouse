@@ -19,7 +19,8 @@ import { BATTERY_ART } from './art/battery';
 import { BATTERY_9V_ART } from './art/battery9v';
 import { DIODE_ART } from './art/diode';
 import { GROUND_ART } from './art/ground';
-import { LED_ART, LED_BURNED_SVG, drawLedGlow } from './art/led';
+import { LED_ART, LED_BURNED_SVG, drawLedGlow, ledColorSvg } from './art/led';
+import { isLedColor, ledColorOf, ledModelOf } from './ledcolor';
 import { POT_ART, POT_KNOB, drawPotPointer } from './art/pot';
 import { PUSH_BUTTON_ART, PUSH_BUTTON_PRESSED_SVG } from './art/pushbutton';
 import { RESISTOR_ART, resistorArt } from './art/resistor';
@@ -43,7 +44,7 @@ import { ledBrightness } from './sim/inspect';
 import { dielectricVolts, igbtStress, polarizedCapStress, type Stress } from './sim/ratings';
 import { partSpec, specStress } from './sim/specs';
 import {
-  BC547, BC557, D1N4148, GENERIC_IGBT, GENERIC_PIGBT, LOGIC_NMOS, POWER_PMOS, RED_LED, type ComponentModel, type PartResult,
+  BC547, BC557, D1N4148, GENERIC_IGBT, GENERIC_PIGBT, LOGIC_NMOS, POWER_PMOS, type ComponentModel, type PartResult,
 } from './sim';
 
 /** What a placed part remembers besides its position. Plain serializable data. */
@@ -66,6 +67,10 @@ export interface PartState {
   vcc?: number;
   /** LDR only: the light falling on it in lux, LDR_MIN_LUX..LDR_MAX_LUX (see ldrOhms in basicparts.ts). */
   lux?: number;
+  /** Normal LED only: its color as "#rrggbb" (see ledcolor.ts); without it the LED is red. */
+  color?: string;
+  /** NTC thermistor only: its temperature in degrees Celsius, NTC_MIN_C..NTC_MAX_C (see ntcOhms in basicparts.ts). */
+  temp?: number;
   /** Function generator only: waveform, amplitude (peak, V), offset (V) and square duty (0..1); `value` is its frequency in Hz. */
   wave?: SignalWave;
   /** Power supply only: the current limit in amps (`value` is its voltage). */
@@ -110,7 +115,9 @@ export interface PartType {
    * The editable `state.value` (or `state[key]`). With `options` only those
    * values are allowed (the popup offers a choice list).
    */
-  value?: { label: string; unit: string; min: number; max: number; key?: 'value' | 'vcc' | 'lux'; options?: readonly number[] };
+  value?: { label: string; unit: string; min: number; max: number; key?: 'value' | 'vcc' | 'lux' | 'temp'; options?: readonly number[] };
+  /** The part's color can be chosen (a color wheel unfolds the bar instead of the value editor): state.color. */
+  colorable?: boolean;
   /** More fields in the same popup (the popup then stays open after each change; see valueedit.ts). */
   fields?: readonly ExtraField[];
   /** Mouse behavior: closed while held, flips on click, or has a knob to turn. */
@@ -300,8 +307,9 @@ const TO220_PINS: readonly PinDef[] = [
 // Which parts can be mirrored (`mirrorable: true`): only those whose mirror
 // image cannot be had by rotating, judged by where the pins are:
 //   led, bjt, pnp, nmos, pmos, pot, - pins in a row along one edge; a mirror
-//   igbt, pigbt                       swaps the outer legs (anode/cathode, C/E,
-//                                     G/S, G/E or G/C, the pot's ends).
+//   igbt, pigbt, rgbled               swaps the outer legs (anode/cathode, C/E,
+//                                     G/S, G/E or G/C, the pot's ends, the RGB
+//                                     LED's red and blue).
 //   battery9v                       - both terminals on the right edge; a
 //                                     mirror puts + below -, no turn does that.
 // Not mirrorable: battery, ground, resistor, capacitor, ecap, inductor, diode,
@@ -313,7 +321,7 @@ const TO220_PINS: readonly PinDef[] = [
 //   -xor, -xnor                       line: a vertical mirror swaps them, no
 //                                     turn does (gateparts.ts). NOT / BUFFER
 //                                     have theirs on the centre line: not mirrorable.
-// Not mirrorable either: zener, schottky, ldr, buzzer (two pins on the centre
+// Not mirrorable either: zener, schottky, ldr, ntc, buzzer (two pins on the centre
 // line) and the 7-segment display (two pin rows like a DIP); see basicparts.ts.
 // A new polarized part with an asymmetric pin
 // layout sets `mirrorable: true`. In a mixed group flip the others only move
@@ -448,11 +456,16 @@ export const PARTS: readonly PartType[] = [
     pins: [{ id: 'cathode', name: 'Cathode (−)', x: 1, y: 4 }, { id: 'anode', name: 'Anode (+)', x: 2, y: 4 }],
     warnAbove: LED_WARN_AMPS,
     burnAbove: 0.1,
-    variant: (s) => (s.burned ? { key: 'burned', svg: LED_BURNED_SVG } : null),
-    overlay: (ctx, s, r) => {
-      if (!s.burned && r) drawLedGlow(ctx, ledBrightness(r.current));
+    colorable: true,
+    variant: (s) => {
+      if (s.burned) return { key: 'burned', svg: LED_BURNED_SVG };
+      const hs = isLedColor(s.color) ? ledColorOf(s.color) : null;
+      return hs ? { key: `color:${s.color}`, svg: ledColorSvg(hs) } : null;
     },
-    sim: (s) => (s.burned ? { kind: 'open' } : RED_LED),
+    overlay: (ctx, s, r) => {
+      if (!s.burned && r) drawLedGlow(ctx, ledBrightness(r.current), isLedColor(s.color) ? ledColorOf(s.color) : undefined);
+    },
+    sim: (s) => (s.burned ? { kind: 'open' } : ledModelOf(s.color)),
   },
   // Photoresistor, active buzzer, 7-segment display: see basicparts.ts.
   ...OUTPUT_SENSOR_PARTS,

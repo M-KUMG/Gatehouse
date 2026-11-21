@@ -22,6 +22,7 @@ import {
 } from './model';
 import { NameEditor } from './nameedit';
 import { ClockEditor } from './clockedit';
+import { ColorEditor } from './coloredit';
 import { boardClockHz, formatClock } from './mcu/clock';
 import { boardLabel, defaultBoardLabel, getPart } from './parts';
 import { findPin, pinAt, wirePointAt, wireRoute } from './pins';
@@ -112,6 +113,7 @@ export class Editor {
   private readonly valueEditor = new ValueEditor();
   private readonly nameEditor = new NameEditor();
   private readonly clockEditor = new ClockEditor();
+  private readonly colorEditor = new ColorEditor();
   private readonly updateZoomReadout: () => void;
   private readonly cameraTween: CameraTween;
   private readonly contextMenu = new ContextMenu();
@@ -187,6 +189,7 @@ export class Editor {
     this.valueEditor.setHost(() => this.toolbar.foldHost);
     this.nameEditor.setHost(() => this.toolbar.foldHost);
     this.clockEditor.setHost(() => this.toolbar.foldHost);
+    this.colorEditor.setHost(() => this.toolbar.foldHost);
     this.statusChip = new BoardStatusChip(canvas);
     this.statusChip.onClick = () => {
       const board = selectedBoard(this.selection.parts());
@@ -332,7 +335,7 @@ export class Editor {
 
   /** A gesture is half done (dragging, drawing a wire, placing a part, typing a value). */
   get busy(): boolean {
-    return this.placer.active || this.wiring.active || this.drag !== null || this.valueEditor.isOpen || this.nameEditor.isOpen || this.clockEditor.isOpen;
+    return this.placer.active || this.wiring.active || this.drag !== null || this.valueEditor.isOpen || this.nameEditor.isOpen || this.clockEditor.isOpen || this.colorEditor.isOpen;
   }
 
   /** Drop the gesture in progress, putting back what a drag changed (e.g. before undo). */
@@ -732,9 +735,24 @@ export class Editor {
 
   /** Open the value popup for a part that has an editable value. */
   private editValue(part: PlacedPart | undefined): void {
-    if (!part || !getPart(part.typeId)?.value || this.drag) return;
+    const type = part ? getPart(part.typeId) : undefined;
+    if (!part || !type || (!type.value && !type.colorable) || this.drag) return;
     this.selection.set([part.id]);
     this.positionOverlays(); // the bar must show this part before the editor unfolds it
+    if (type.colorable) {
+      this.closePopups();
+      this.colorEditor.open(
+        part.state?.color,
+        this.view.toScreen(footprint(part)),
+        this.view.canvas.getBoundingClientRect(),
+        (color) => {
+          const { color: _old, ...rest } = part.state ?? {};
+          part.state = color === null ? rest : { ...rest, color };
+        },
+        this.view.requestRender, // the render also records the undo step (repeated changes coalesce)
+      );
+      return;
+    }
     this.valueEditor.open(part, this.view.toScreen(footprint(part)), this.view.canvas.getBoundingClientRect(), this.view.requestRender);
   }
 
@@ -771,11 +789,12 @@ export class Editor {
     );
   }
 
-  /** Close the value, name and clock popups. */
+  /** Close the value, name, clock and color popups. */
   private closePopups(): void {
     this.valueEditor.close();
     this.nameEditor.close();
     this.clockEditor.close();
+    this.colorEditor.close();
   }
 
   private onKeyDown = (e: KeyboardEvent): void => {
@@ -855,7 +874,7 @@ export class Editor {
     );
 
     const p = this.pointer;
-    const text = p && !this.placer.active && !dragging && !this.valueEditor.isOpen && !this.nameEditor.isOpen && !this.clockEditor.isOpen ? this.hoverText() : null;
+    const text = p && !this.placer.active && !dragging && !this.valueEditor.isOpen && !this.nameEditor.isOpen && !this.clockEditor.isOpen && !this.colorEditor.isOpen ? this.hoverText() : null;
     this.readout.show(text, p?.x, p?.y);
   };
 

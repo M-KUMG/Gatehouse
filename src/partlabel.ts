@@ -2,6 +2,7 @@
 // value, that value ("Resistor" + "330 Ω"). Pure.
 
 import { formatSI } from './format';
+import { ledColorName } from './ledcolor';
 import type { PlacedPart } from './model';
 import { getPart } from './parts';
 
@@ -19,6 +20,7 @@ export function selectionLabel(parts: readonly PlacedPart[], boardName?: string)
   if (boardName) return { title: boardName, value: '' };
   const type = getPart(part.typeId);
   if (!type) return { title: 'Part', value: '' };
+  if (type.colorable) return { title: type.name, value: ledColorName(part.state?.color) };
   const key = type.value?.key ?? 'value';
   const raw = part.state?.[key] ?? type.defaults?.[key];
   const value = type.value && typeof raw === 'number' ? formatSI(raw, type.value.unit) : '';

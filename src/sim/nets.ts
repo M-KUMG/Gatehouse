@@ -16,6 +16,7 @@ export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readon
   diode: ['anode', 'cathode'],
   buzzer: ['pos', 'neg'],
   sevenseg: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'dp', 'com'],
+  rgbled: ['r', 'g', 'b', 'com'],
   npn: ['c', 'b', 'e'],
   pnp: ['c', 'b', 'e'],
   mosfet: ['g', 'd', 's'],

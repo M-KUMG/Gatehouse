@@ -6,6 +6,7 @@ import type { PartResult } from './sim';
 import { ACTIVE_BUZZER } from './sim/buzzer';
 import { ledBrightness } from './sim/inspect';
 import { buzzerState, zenerRegion } from './sim/partinspect';
+import { RGB_CHANNELS } from './sim/rgbled';
 import { SEVENSEG_SEGMENTS } from './sim/sevenseg';
 
 /** Signal diode: forward drop and current, or the reverse voltage it blocks. */
@@ -31,6 +32,13 @@ export function buzzerReadout(r: PartResult): string[] {
 export function sevensegReadout(r: PartResult): string[] {
   const lit = SEVENSEG_SEGMENTS.filter((s) => ledBrightness(r.pins[s] ?? 0) > 0);
   return [`Lit: ${lit.length ? lit.join(' ') : 'none'}`, `I com ${formatSI(-(r.pins.com ?? 0), 'A')} out · ${formatSI(r.power, 'W')}`];
+}
+
+/** RGB LED: which colours are lit, and the common current. */
+export function rgbledReadout(r: PartResult): string[] {
+  const names = { r: 'red', g: 'green', b: 'blue' } as const;
+  const lit = RGB_CHANNELS.filter((c) => ledBrightness(r.pins[c] ?? 0) > 0).map((c) => names[c]);
+  return [`Lit: ${lit.length ? lit.join(' + ') : 'none'}`, `I com ${formatSI(-(r.pins.com ?? 0), 'A')} out · ${formatSI(r.power, 'W')}`];
 }
 
 /** PNP: conventional currents flow out of the collector and base, so they are shown as positive outflows. */

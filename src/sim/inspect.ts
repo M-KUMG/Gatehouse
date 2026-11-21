@@ -43,7 +43,7 @@
 //     100 mA rating."). Potentiometer: the power of each half of the track.
 
 import { driverQuantities } from './driverinspect';
-import { buzzerQuantities, sevensegQuantities, zenerQuantities } from './partinspect';
+import { buzzerQuantities, rgbledQuantities, sevensegQuantities, zenerQuantities } from './partinspect';
 import { gateQuantities } from './gateinspect';
 import { level1 } from './mosfet';
 import { modelPins, terminalKey } from './nets';
@@ -194,6 +194,8 @@ function mainQuantities(
       const out = [volts('v', 'V', r.voltage), amps('i', 'I', r.current), watts('p', 'P', r.power), num('r', 'R', 'resistance', 'Ω', model.ohms)];
       // An LDR: the light level its resistance comes from.
       if (model.lux !== undefined) out.push(num('lux', 'Light', 'ratio', 'lx', model.lux));
+      // An NTC thermistor: the temperature its resistance comes from.
+      if (model.temp !== undefined) out.push(num('temp', 'Temperature', 'ratio', '°C', model.temp));
       return out;
     }
     case 'capacitor':
@@ -240,6 +242,8 @@ function mainQuantities(
       return buzzerQuantities(model, r);
     case 'sevenseg':
       return sevensegQuantities(model, r);
+    case 'rgbled':
+      return rgbledQuantities(model, r);
     case 'npn':
     case 'pnp':
       return bjt(model, r, node);
@@ -401,6 +405,7 @@ export function defaultPlot(model: ComponentModel): string[] {
     case 'buzzer':
       return ['v', 'i'];
     case 'sevenseg':
+    case 'rgbled':
       return ['i'];
     case 'pot':
       return ['vw', 'iaw'];

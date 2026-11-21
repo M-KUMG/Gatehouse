@@ -112,7 +112,7 @@ export function toolbarButtons(
     flipH: flip,
     flipV: flip,
     duplicate: selected.length > 0,
-    edit: selected.length === 1 && getPart(selected[0].typeId)?.value !== undefined,
+    edit: selected.length === 1 && (getPart(selected[0].typeId)?.value !== undefined || getPart(selected[0].typeId)?.colorable === true),
     board: board ? boardToolbar(stateOf(board.id), buildFailed(board.id)) : null,
   };
 }

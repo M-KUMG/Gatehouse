@@ -5,9 +5,11 @@
 
 import { describe, expect, it } from 'vitest';
 import { ART_CELL } from './art/common';
-import { LDR_DEFAULT_LUX, SCHOTTKY_1N5819, ldrOhms, zenerVolts } from './basicparts';
+import { LDR_DEFAULT_LUX, NTC_DEFAULT_C, SCHOTTKY_1N5819, ldrOhms, ntcOhms, zenerVolts } from './basicparts';
 import { clickPart } from './controls';
-import { buzzerReadout, sevensegReadout, zenerReadout } from './devicereadouts';
+import { buzzerReadout, rgbledReadout, sevensegReadout, zenerReadout } from './devicereadouts';
+import { formatSI, parseSI } from './format';
+import { groupParts } from './partcategories';
 import { EXAMPLES } from './examples';
 import type { PartState } from './model';
 import { PARTS, burnReason, canMirror, getPart, partWarning } from './parts';
@@ -22,7 +24,7 @@ import {
 } from './sim';
 import { ACTIVE_BUZZER, buzzerCurve } from './sim/buzzer';
 import { VT } from './sim/devices';
-import { inspect } from './sim/inspect';
+import { inspect, ledBrightness } from './sim/inspect';
 import { zenerNominal } from './sim/partinspect';
 import { ZENER_REF_AMPS, ZENER_RS, zenerModel } from './sim/zener';
 import { Simulation } from './simulation';
@@ -541,5 +543,208 @@ describe('Seven-segment example', () => {
     }
     expect(seg.state?.burned).toBeUndefined();
     expect(partWarning(getPart('sevenseg')!, r, seg.state ?? {})).toBeNull();
+  });
+});
+
+describe('NTC thermistor', () => {
+  it('follows R = 10 k exp(3950 (1/T - 1/298.15)) within -40 .. 125 C', () => {
+    expect(ntcOhms(25)).toBeCloseTo(10_000, 6);
+    expect(ntcOhms(0)).toBeCloseTo(33_621, -1);
+    expect(ntcOhms(50)).toBeCloseTo(3_588, 0);
+    expect(ntcOhms(100)).toBeCloseTo(697.5, 0);
+    expect(ntcOhms(125)).toBeCloseTo(359, 0);
+    expect(ntcOhms(-40)).toBeCloseTo(402_000, -3);
+    expect(ntcOhms(200)).toBe(ntcOhms(125)); // clamped to the range
+    expect(ntcOhms(-100)).toBe(ntcOhms(-40));
+    expect(ntcOhms(NaN)).toBeCloseTo(10_000, 6);
+    // Hotter is always lower (a negative temperature coefficient).
+    for (let t = -40; t < 125; t += 5) expect(ntcOhms(t + 5)).toBeLessThan(ntcOhms(t));
+  });
+
+  it('is a resistor model with the temperature as data; default 25 C, popup edits state.temp', () => {
+    const t = getPart('ntc')!;
+    expect(t.defaults).toEqual({ temp: NTC_DEFAULT_C });
+    expect(t.value).toMatchObject({ key: 'temp', unit: '°C', min: -40, max: 125 });
+    expect(t.sim!({ temp: 50 })).toEqual({ kind: 'resistor', ohms: ntcOhms(50), temp: 50 });
+    expect(t.sim!({})).toEqual({ kind: 'resistor', ohms: 10_000, temp: 25 });
+    expect(canMirror(t)).toBe(false);
+  });
+
+  it('divides like its resistance, shows the temperature and R in the inspector, R in the readout', () => {
+    const { sim, part } = across('ntc', ['a', 'b'], { temp: 25 }, { series: 10_000 });
+    const r = sim.partResult(part.id)!;
+    expect(r.voltage).toBeCloseTo(9 * 10_000 / 20_001.5, 4);
+    const q = new Map(inspect(getPart('ntc')!.sim!({ temp: 25 }), sim.result!, { id: part.id, type: 'ntc' }).map((x) => [x.id, x]));
+    expect(q.get('temp')?.value).toBe(25);
+    expect(q.get('r')?.value).toBeCloseTo(10_000, 6);
+    expect(q.get('rating')?.text).toBe('ok');
+    const text = describePart(part, sim)!;
+    expect(text.title).toBe('Thermistor (NTC 10 kΩ) · 25 °C');
+    expect(text.lines[0]).toBe('R 10 kΩ');
+    // Warmer: less resistance, so less of the 9 V stays across it.
+    const warm = across('ntc', ['a', 'b'], { temp: 80 }, { series: 10_000 });
+    expect(warm.sim.partResult(warm.part.id)!.voltage).toBeLessThan(r.voltage / 3);
+  });
+
+  it('validates and saves temp (negative too); a change is an edit (an undo step)', () => {
+    const p = new Project();
+    const ntc = p.scene.add({ typeId: 'ntc', col: 0, row: 0, rotation: 0, state: { temp: -12.5 } });
+    const first = p.serialize();
+    const b = new Project();
+    b.load(readProject(stringifyProject(first)));
+    expect(b.serialize()).toEqual(first);
+    expect(b.scene.parts[0].state).toEqual({ temp: -12.5 });
+    const before = editKey(p.circuit());
+    p.scene.find(ntc.id)!.state = { temp: 60 };
+    expect(editKey(p.circuit())).not.toBe(before);
+    const bad = (state: object, typeId = 'ntc') => {
+      const doc = JSON.parse(stringifyProject(first));
+      doc.parts[0].state = state;
+      doc.parts[0].typeId = typeId;
+      return () => readProject(JSON.stringify(doc));
+    };
+    expect(bad({ temp: -41 })).toThrow(/temp/);
+    expect(bad({ temp: 126 })).toThrow(/temp/);
+    expect(bad({ temp: 'hot' })).toThrow(/temp/);
+    expect(bad({ temp: 20 }, 'resistor')).toThrow(/temp/);
+    expect(bad({ temp: 20 }, 'ldr')).toThrow(/temp/);
+    expect(bad({ temp: -40 })).not.toThrow();
+    expect(bad({ temp: 125 })).not.toThrow();
+  });
+
+  it('is typed and read as a temperature: no SI prefix, a minus sign, a degree sign', () => {
+    expect(formatSI(0.5, '°C')).toBe('0.5 °C');
+    expect(formatSI(-12.5, '°C')).toBe('-12.5 °C');
+    expect(formatSI(25, '°C')).toBe('25 °C');
+    expect(parseSI('-5')).toBe(-5);
+    expect(parseSI('-12.5')).toBe(-12.5);
+    expect(parseSI('25 °C')).toBe(25);
+    expect(parseSI('-40°C')).toBe(-40);
+    expect(parseSI('-')).toBeNull();
+    expect(parseSI('4.7k')).toBeCloseTo(4700, 9); // unchanged
+  });
+});
+
+describe('RGB LED (common cathode)', () => {
+  const rgb = () => getPart('rgbled')!;
+  /** `volts` through `ohms` into one colour (anode pin `ch`) of the LED, com to ground; the LED is part 3. */
+  const lit = (ch: 'r' | 'g' | 'b', ohms: number, volts = 5): PartResult => {
+    const input = circuit(
+      [battery(volts, 0), resistor(ohms), rgb().sim!({}), GROUND],
+      [['1.neg', '4.gnd'], ['1.pos', '2.a'], ['2.b', `3.${ch}`], ['3.com', '4.gnd']],
+    );
+    const r = solveCircuit(input);
+    expect(r.converged).toBe(true);
+    return r.parts[3];
+  };
+
+  it('registers: four pins on grid points in a row (R, common, G, B), mirrorable, in the lights category', () => {
+    const t = rgb();
+    expect(PARTS.filter((p) => p.id === 'rgbled')).toHaveLength(1);
+    expect(t.pins.map((p) => p.id)).toEqual(['r', 'com', 'g', 'b']);
+    expect(t.pins.every((p) => Number.isInteger(p.x) && Number.isInteger(p.y) && p.y === 4)).toBe(true);
+    expect(new Set(t.pins.map((p) => p.x)).size).toBe(4);
+    expect(t.svg).toContain(`viewBox="0 0 ${t.cols * ART_CELL} ${t.rows * ART_CELL}"`);
+    expect(modelPins(t.sim!({}))).toEqual(['r', 'g', 'b', 'com']);
+    expect(canMirror(t)).toBe(true);
+    expect(t.sim!({ burned: true })).toEqual({ kind: 'open' });
+    expect(t.variant!({ burned: true })?.key).toBe('burned');
+    expect(groupParts(PARTS).find((g) => g.id === 'outputs')!.parts.map((p) => p.id)).toContain('rgbled');
+  });
+
+  it('red lights from 5 V through 150 ohm at about 20 mA, green and blue stay dark', () => {
+    const part = lit('r', 150);
+    const ir = part.pins.r;
+    expect(ir).toBeGreaterThan(0.019);
+    expect(ir).toBeLessThan(0.022);
+    expect(Math.abs(part.pins.g)).toBeLessThan(1e-9);
+    expect(Math.abs(part.pins.b)).toBeLessThan(1e-9);
+    expect(part.pins.com).toBeCloseTo(-ir, 9);
+  });
+
+  it('green and blue need about 3 V: 18-20 mA on 5 V / 100 ohm, dark on 2.5 V where red still lights', () => {
+    const g = lit('g', 100);
+    expect(g.pins.g).toBeGreaterThan(0.017);
+    expect(g.pins.g).toBeLessThan(0.021);
+    expect(g.voltage).toBeGreaterThan(3.0);
+    const b = lit('b', 100);
+    expect(b.pins.b).toBeGreaterThan(0.015);
+    expect(b.pins.b).toBeLessThan(g.pins.g); // blue's knee is a little higher
+    expect(lit('r', 100, 2.5).pins.r).toBeGreaterThan(0.003);
+    expect(ledBrightness(lit('b', 100, 2.5).pins.b)).toBe(0);
+    expect(ledBrightness(lit('g', 100, 2.5).pins.g)).toBe(0);
+  });
+
+  it('all three colours at once add up on the common pin', () => {
+    const input = circuit(
+      [battery(5, 0), resistor(150), resistor(100), resistor(100), rgb().sim!({}), GROUND],
+      [
+        ['1.neg', '6.gnd'], ['1.pos', '2.a'], ['1.pos', '3.a'], ['1.pos', '4.a'],
+        ['2.b', '5.r'], ['3.b', '5.g'], ['4.b', '5.b'], ['5.com', '6.gnd'],
+      ],
+    );
+    const r = solveCircuit(input);
+    expect(r.converged).toBe(true);
+    const p = r.parts[5];
+    expect(p.pins.r + p.pins.g + p.pins.b).toBeCloseTo(-p.pins.com, 9);
+    expect(rgbledReadout(p)[0]).toBe('Lit: red + green + blue');
+    const q = new Map(inspect(rgb().sim!({}), r, { id: 5, type: 'rgbled' }).map((x) => [x.id, x]));
+    expect(q.get('i:g')?.value).toBeCloseTo(p.pins.g, 12);
+    expect(q.get('lit')?.text).toBe('r g b');
+    expect(q.get('rating')?.text).toBe('ok');
+  });
+
+  it('the readout names the lit colours; none when dark', () => {
+    expect(rgbledReadout(lit('g', 100))[0]).toBe('Lit: green');
+    expect(rgbledReadout(lit('r', 1e9))[0]).toBe('Lit: none');
+  });
+
+  it('rates each colour like the LED: 30 mA warns, 100 mA burns', () => {
+    const t = rgb();
+    const ch = (amps: number) => result(3, amps, { pins: { r: 0.01, g: amps, com: -amps - 0.01 } });
+    expect(partWarning(t, ch(0.025), {})).toBeNull();
+    expect(partWarning(t, ch(0.035), {})).toBe('If 35 mA exceeds its 30 mA rating.');
+    expect(burnReason(t, ch(0.09), {})).toBeNull();
+    expect(burnReason(t, ch(0.12), {})).toMatch(/^too much colour current \(If 120 mA/);
+  });
+
+  it('a colour straight on 9 V burns the LED; it saves and loads, a click replaces it', () => {
+    const { p, part } = across('rgbled', ['b', 'com']);
+    expect(part.state?.burned).toBe(true);
+    expect(part.state?.burnedBy).toMatch(/colour current/);
+    const b = new Project();
+    b.load(readProject(stringifyProject(p.serialize())));
+    const loaded = b.scene.parts.find((x) => x.typeId === 'rgbled')!;
+    expect(loaded.state).toMatchObject({ burned: true });
+    clickPart(loaded);
+    expect(loaded.state?.burned).toBe(false);
+  });
+
+  it('round-trips turned and mirrored with a wire', () => {
+    const a = new Project();
+    const led = a.scene.add({ typeId: 'rgbled', col: 4, row: 4, rotation: 90, mirrorX: true });
+    const gnd = a.scene.add({ typeId: 'ground', col: 0, row: 10, rotation: 0 });
+    expect(a.scene.addWire({ partId: led.id, pinId: 'com' }, { partId: gnd.id, pinId: 'gnd' })).not.toBeNull();
+    const first = a.serialize();
+    const b = new Project();
+    b.load(readProject(stringifyProject(first)));
+    expect(b.serialize()).toEqual(first);
+  });
+});
+
+describe('LED polarity marks', () => {
+  it('the LED art has a "+" badge on the anode leg and a "-" badge on the cathode leg, also burned', () => {
+    const t = getPart('led')!;
+    const cathode = t.pins.find((p) => p.id === 'cathode')!;
+    const anode = t.pins.find((p) => p.id === 'anode')!;
+    const mark = (svg: string) => {
+      // Badges sit on the legs: circles centred on the pins' x, "+" has a vertical stroke, "-" has none.
+      expect(svg).toContain(`<circle cx="${cathode.x * ART_CELL}"`);
+      expect(svg).toContain(`<circle cx="${anode.x * ART_CELL}"`);
+      expect(svg).toContain(`M${anode.x * ART_CELL - 3} 64H${anode.x * ART_CELL + 3}M${anode.x * ART_CELL} 61V67`);
+      expect(svg).toContain(`M${cathode.x * ART_CELL - 3} 64H${cathode.x * ART_CELL + 3}"`);
+    };
+    mark(t.svg);
+    mark(t.variant!({ burned: true })!.svg);
   });
 });

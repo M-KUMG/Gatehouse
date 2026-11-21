@@ -10,6 +10,13 @@ export interface Terminal {
   pin: string;
 }
 
+/** The diode parameters of one LED die (Shockley with a series resistance). */
+export interface LedJunction {
+  is: number;
+  n: number;
+  rs: number;
+}
+
 /**
  * Electrical model of one component. The pin names each model uses are
  * listed in MODEL_PINS (nets.ts).
@@ -27,8 +34,12 @@ export type ComponentModel =
   | { kind: 'relay'; coilVolts: number; coilOhms: number; coilHenries: number; pullAmps: number; dropAmps: number }
   /** Function generator: a voltage source whose value follows `wave` over time (src/sim/signal.ts). Pins: pos, neg. */
   | { kind: 'signal'; wave: 'sine' | 'square' | 'triangle' | 'sawtooth'; freq: number; amp: number; offset: number; duty: number; rOut: number }
-  /** Pins: a, b. `lux`: data only, the light level an LDR's ohms were computed from (the part inspector shows it). */
-  | { kind: 'resistor'; ohms: number; lux?: number }
+  /**
+   * Pins: a, b. `lux` / `temp`: data only, the light level (an LDR) or the
+   * temperature in degrees Celsius (an NTC thermistor) the ohms were computed
+   * from (the part inspector shows it).
+   */
+  | { kind: 'resistor'; ohms: number; lux?: number; temp?: number }
   /** Tiny resistance when closed, huge when open. Pins: a, b. */
   | { kind: 'switch'; closed: boolean }
   /** Track of `ohms` between a and b; the wiper w sits at `position` (0 = at a, 1 = at b). */
@@ -51,6 +62,12 @@ export type ComponentModel =
    * rs), one from each segment pin to com. Pins: a, b, c, d, e, f, g, dp, com.
    */
   | { kind: 'sevenseg'; is: number; n: number; rs: number }
+  /**
+   * Common-cathode RGB LED (see rgbled.ts): three LEDs with their own diode
+   * parameters (a red one needs about 2 V, green and blue about 3 V), one
+   * from each of r, g, b to com. Pins: r, g, b, com.
+   */
+  | { kind: 'rgbled'; r: LedJunction; g: LedJunction; b: LedJunction }
   /**
    * Ebers-Moll NPN transistor. Pins: c, b, e. Optional non-idealities (see
    * bjt.ts; absent = ideal, exactly the plain model): rb / rc / re series

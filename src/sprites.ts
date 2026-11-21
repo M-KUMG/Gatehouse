@@ -8,6 +8,8 @@ const MAX_RASTERS = 96; // zooming creates many sizes; keep the most recent ones
 const urls = new Map<string, string>();
 const images = new Map<string, HTMLImageElement>();
 const rasters = new Map<string, HTMLCanvasElement>();
+/** The last bitmap drawn of each part type: shown while the next look of that part (a new LED color) is still loading, so it does not blink. */
+const lastDrawn = new Map<string, HTMLCanvasElement>();
 
 /** data: URL of the part's SVG, usable as an <img> src. */
 export function partImageUrl(type: PartType): string {
@@ -54,15 +56,20 @@ export function getSprite(type: PartType, look: PartLook, pxPerCell: number, onL
     // Re-insert so the map's order stays least-recently-used first.
     rasters.delete(key);
     rasters.set(key, cached);
+    lastDrawn.set(type.id, cached);
     return cached;
   }
   const img = loadedImage(look, onLoad);
-  if (!img) return null;
+  if (!img) {
+    const stale = lastDrawn.get(type.id);
+    return stale && stale.width === Math.max(1, Math.round(type.cols * pxPerCell)) ? stale : null;
+  }
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(type.cols * pxPerCell));
   canvas.height = Math.max(1, Math.round(type.rows * pxPerCell));
   canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height);
   rasters.set(key, canvas);
+  lastDrawn.set(type.id, canvas);
   if (rasters.size > MAX_RASTERS) {
     const oldest = rasters.keys().next().value;
     if (oldest !== undefined) rasters.delete(oldest);

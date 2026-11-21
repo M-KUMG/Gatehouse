@@ -74,7 +74,13 @@ export class Toolbar {
   /** The bar's left edge while an editor is unfolded, else null. */
   /** While an editor is unfolded: the bar's left edge, as an offset from the selection's right edge (null when closed). */
   private anchorLeft: number | null = null;
+  /**
+   * While an editor is unfolded and the bar sits to the LEFT of the selection: the bar's right edge as an offset
+   * from the selection's left edge (the bar then grows to the left, so it never covers the part it edits), else null.
+   */
+  private anchorRight: number | null = null;
   private lastTargetRight = 0;
+  private lastTargetLeft = 0;
   private readonly chip = document.createElement('button');
   private readonly chipTitle = document.createElement('span');
   private readonly chipValue = document.createElement('span');
@@ -170,12 +176,23 @@ export class Toolbar {
     // grid), so unfolding never makes it jump to the other side of the part.
     // The kept edge is an offset from the selection, so panning and zooming move the bar with the part.
     this.lastTargetRight = target.right;
+    this.lastTargetLeft = target.left;
+    const top = Math.max(area.top, Math.min(target.top - 4, area.bottom - h));
+    el.style.top = `${top}px`;
+    if (this.anchorLeft !== null && this.anchorRight !== null) {
+      // Left of the part with an editor open: pin the right edge, the bar widens leftward (width is animating, so
+      // the final width keeps the left edge inside the grid).
+      const finalW = Math.max(w, parseFloat(el.style.width) || 0);
+      const right = Math.min(area.right, Math.max(area.left + finalW, target.left + this.anchorRight));
+      el.style.left = 'auto';
+      el.style.right = `${document.documentElement.clientWidth - right}px`;
+      return;
+    }
     let left = this.anchorLeft !== null ? target.right + this.anchorLeft : target.right + GAP;
     if (this.anchorLeft === null && left + w > area.right) left = target.left - GAP - w;
     left = Math.max(area.left, Math.min(left, area.right - w));
-    const top = Math.max(area.top, Math.min(target.top - 4, area.bottom - h));
+    el.style.right = '';
     el.style.left = `${left}px`;
-    el.style.top = `${top}px`;
   }
 
   /** Lets the value and name editors unfold the bar instead of opening a popup (barfold.ts). */
@@ -187,7 +204,11 @@ export class Toolbar {
 
   private showFold(content: HTMLElement): void {
     window.clearTimeout(this.foldTimer);
-    if (this.anchorLeft === null) this.anchorLeft = this.el.getBoundingClientRect().left - this.lastTargetRight;
+    if (this.anchorLeft === null) {
+      const r = this.el.getBoundingClientRect();
+      this.anchorLeft = r.left - this.lastTargetRight;
+      this.anchorRight = r.right <= this.lastTargetLeft + 1 ? r.right - this.lastTargetLeft : null;
+    }
     this.foldBody.replaceChildren(content);
     this.foldContent = content;
     // The bar widens to the editor (a width transition needs numbers, so from its own width to the new one).
@@ -210,6 +231,7 @@ export class Toolbar {
       if (this.foldContent !== null) return;
       this.foldBody.replaceChildren();
       this.anchorLeft = null;
+      this.anchorRight = null;
       this.el.style.width = ''; // the bar is as wide as its row again, whatever the chip says next
     }, FOLD_MS);
   }

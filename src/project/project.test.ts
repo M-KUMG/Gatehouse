@@ -97,7 +97,7 @@ describe('project files', () => {
     expect(errorOf(variant((d) => (d.parts[1].row = 1.5)))).toMatch(/parts\[1\]\.row must be a whole number/);
     expect(errorOf(variant((d) => (d.parts[0].rotation = 45)))).toMatch(/rotation must be 0, 90, 180 or 270/);
     expect(errorOf(variant((d) => (d.parts[4].state.position = 2)))).toMatch(/position must be between 0 and 1/);
-    expect(errorOf(variant((d) => (d.parts[2].state.color = 'red')))).toMatch(/unknown field "color"/);
+    expect(errorOf(variant((d) => (d.parts[2].state.flavor = 'red')))).toMatch(/unknown field "flavor"/);
     expect(errorOf(variant((d) => (d.parts[1].id = 1)))).toMatch(/id 1 is used more than once/);
     expect(errorOf(variant((d) => delete d.version))).toMatch(/no valid "version"/);
     expect(errorOf(variant((d) => (d.camera.zoom = 0)))).toMatch(/camera\.zoom/);

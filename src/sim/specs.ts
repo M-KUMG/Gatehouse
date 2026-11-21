@@ -165,6 +165,18 @@ export const PART_SPECS: Readonly<Record<string, PartSpec>> = {
     source: 'GL55-series CdS photoresistor: 100 mW; burns at about 2 x that',
     limits: [{ label: 'P', what: 'too much power', unit: 'W', rated: 0.1, warnAbove: 0.1, burnAbove: 0.2, measure: (r) => Math.abs(r.power) }],
   },
+  ntc: {
+    source: '10 k NTC thermistor (MF52-type, B 3950): 0.5 W maximum power; burns at about 2 x that',
+    limits: [{ label: 'P', what: 'too much power', unit: 'W', rated: 0.5, warnAbove: 0.5, burnAbove: 1, measure: (r) => Math.abs(r.power) }],
+  },
+  rgbled: {
+    // Per colour, like the single red LED (30 mA warns, 100 mA burns).
+    source: '5 mm RGB LED: IF 20..30 mA per colour (IFP 100 mA)',
+    limits: [{
+      label: 'If', what: 'too much colour current', unit: 'A', rated: 0.03, warnAbove: 0.03, burnAbove: 0.1,
+      measure: (r) => Math.max(0, ...['r', 'g', 'b'].map((c) => r.pins[c] ?? 0)),
+    }],
+  },
   buzzer: {
     source: '5 V active buzzer: operating 3..6.5 V (warned above), destroyed above 15 V, or above 12 V reversed',
     limits: [

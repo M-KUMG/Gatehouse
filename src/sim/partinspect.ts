@@ -12,6 +12,7 @@
 import { VT } from './devices';
 import { buzzerSounding, type BuzzerModel } from './buzzer';
 import { DIODE_ON_AMPS, DIODE_REVERSE_VOLTS, ledBrightness, type Quantity } from './inspect';
+import { RGB_CHANNELS } from './rgbled';
 import { SEVENSEG_SEGMENTS } from './sevenseg';
 import type { ComponentModel, PartResult } from './types';
 import { ZENER_REF_AMPS, type DiodeModel } from './zener';
@@ -55,6 +56,18 @@ export function buzzerQuantities(m: BuzzerModel, r: PartResult): Quantity[] {
     num('v', 'V', 'voltage', 'V', r.voltage), num('i', 'I', 'current', 'A', r.current), num('p', 'P', 'power', 'W', r.power),
     text('state', 'State', buzzerState(m, r.voltage)),
   ];
+}
+
+/** The common-cathode RGB LED: the current into each colour, the total out of com, P, and which colours are lit. */
+export function rgbledQuantities(_m: Extract<ComponentModel, { kind: 'rgbled' }>, r: PartResult): Quantity[] {
+  const out = RGB_CHANNELS.map((c) => num(`i:${c}`, `I ${c}`, 'current', 'A', r.pins[c] ?? 0));
+  const lit = RGB_CHANNELS.filter((c) => ledBrightness(r.pins[c] ?? 0) > 0);
+  out.push(
+    num('i', 'I com (out)', 'current', 'A', -(r.pins.com ?? 0)),
+    num('p', 'P', 'power', 'W', r.power),
+    text('lit', 'Lit', lit.length ? lit.join(' ') : 'none'),
+  );
+  return out;
 }
 
 export function sevensegQuantities(_m: Extract<ComponentModel, { kind: 'sevenseg' }>, r: PartResult): Quantity[] {

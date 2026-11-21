@@ -17,7 +17,7 @@ describe('selectionLabel', () => {
     expect(plain?.value).toMatch(/Ω$/);
   });
   it('shows a part without a value by its name only, and a board by its own name', () => {
-    expect(selectionLabel([part('led')])?.value).toBe('');
+    expect(selectionLabel([part('ground')])?.value).toBe('');
     expect(selectionLabel([part('uno')], 'Robot')).toEqual({ title: 'Robot', value: '' });
   });
 });

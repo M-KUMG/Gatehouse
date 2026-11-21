@@ -26,6 +26,7 @@ import { companionOf, stampReactive, type Companion, type Reactive, type Reactiv
 import { stampInto, type Stamp } from './stamp';
 import type { PartResult, SimInput, SimResult } from './types';
 import { buzzerCurve } from './buzzer';
+import { RGB_CHANNELS } from './rgbled';
 import { SEVENSEG_SEGMENTS } from './sevenseg';
 import { resolveSignals } from './signal';
 import { expandSupplies, limiterCurve, supplyResults } from './supply';
@@ -180,6 +181,18 @@ function buildElements(
           const anode = netOf(id, seg);
           const inner = seriesNode(el, anode, m.rs);
           el.diodes.push({ part: id, anode, cathode: com, inner, is: m.is, nvt, vCrit: criticalVoltage(m.is, nvt), v: 0, pins: [seg, 'com'] });
+        }
+        break;
+      }
+      case 'rgbled': {
+        // Three LEDs, colour pin -> com, each with its own curve and behind its own rs.
+        const com = netOf(id, 'com');
+        for (const ch of RGB_CHANNELS) {
+          const die = m[ch];
+          const nvt = die.n * VT;
+          const anode = netOf(id, ch);
+          const inner = seriesNode(el, anode, die.rs);
+          el.diodes.push({ part: id, anode, cathode: com, inner, is: die.is, nvt, vCrit: criticalVoltage(die.is, nvt), v: 0, pins: [ch, 'com'] });
         }
         break;
       }

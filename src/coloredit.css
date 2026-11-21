@@ -1,0 +1,142 @@
+/* The LED color picker (coloredit.ts): a round wheel with the depth of a glass lens, and a glass bubble
+   on the chosen color. Hue is the angle (0 at the top, clockwise), saturation grows from the white middle:
+   the white overlay fades out linearly, so the color under the bubble is exactly the color the LED gets. */
+
+.color-editor {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.color-editor .color-wheel {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  width: 132px;
+  height: 132px;
+  margin: 4px 2px 6px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle closest-side, #fff, rgba(255, 255, 255, 0)),
+    conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3),
+    inset 0 8px 14px rgba(255, 255, 255, 0.42),
+    inset 0 -12px 18px rgba(0, 0, 0, 0.34),
+    inset 0 0 20px rgba(255, 255, 255, 0.16),
+    0 10px 22px rgba(0, 0, 0, 0.42),
+    0 2px 5px rgba(0, 0, 0, 0.3);
+  cursor: crosshair;
+  touch-action: none;
+  outline: none;
+}
+
+/* The gloss on the upper left, like light on the edge of a lens. */
+.color-editor .color-wheel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 62% 38% at 36% 13%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(circle closest-side at 50% 50%, rgba(255, 255, 255, 0) 80%, rgba(255, 255, 255, 0.14) 100%);
+}
+
+.color-editor .color-wheel:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--gh-accent, #7aa8ff),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3),
+    inset 0 8px 14px rgba(255, 255, 255, 0.42),
+    inset 0 -12px 18px rgba(0, 0, 0, 0.34),
+    0 10px 22px rgba(0, 0, 0, 0.42);
+}
+
+/* The bubble: a clear glass bead that shows the wheel through it. */
+.color-editor .color-bubble {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  box-sizing: border-box;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.16) 46%, rgba(255, 255, 255, 0.04) 72%);
+  box-shadow:
+    inset 0 3px 5px rgba(255, 255, 255, 0.45),
+    inset 0 -3px 6px rgba(255, 255, 255, 0.26),
+    0 3px 9px rgba(0, 0, 0, 0.38);
+  -webkit-backdrop-filter: blur(1.5px);
+  backdrop-filter: blur(1.5px);
+  pointer-events: none;
+  transform: translate(var(--x, 0px), var(--y, 0px));
+  z-index: 1;
+}
+
+.color-editor .color-bubble.glide {
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.color-editor .color-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.color-editor .color-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-editor .color-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45), 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.color-editor .color-name {
+  color: var(--gh-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.color-editor .color-hex {
+  color: var(--gh-text-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.color-editor .color-reset {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--gh-border);
+  border-radius: var(--gh-radius-pill);
+  background: transparent;
+  color: var(--gh-text-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.color-editor .color-reset:hover:not(:disabled),
+.color-editor .color-reset:focus-visible {
+  color: var(--gh-text);
+  border-color: var(--gh-glass-edge);
+}
+
+.color-editor .color-reset:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .color-editor .color-bubble.glide {
+    transition: none;
+  }
+}

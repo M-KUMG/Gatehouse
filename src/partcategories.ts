@@ -17,12 +17,12 @@ export interface PartCategory {
 export const CATEGORIES: readonly PartCategory[] = [
   { id: 'boards', name: 'Arduino boards', ids: ['uno', 'nano'] },
   { id: 'power', name: 'Power & sources', ids: ['battery', 'battery9v', 'psu', 'siggen', 'ground'] },
-  { id: 'passive', name: 'Passive parts', ids: ['resistor', 'capacitor', 'ecap', 'inductor', 'pot', 'ldr'] },
+  { id: 'passive', name: 'Passive parts', ids: ['resistor', 'capacitor', 'ecap', 'inductor', 'pot', 'ldr', 'ntc'] },
   { id: 'diodes', name: 'Diodes', ids: ['diode', 'zener', 'schottky'] },
   { id: 'transistors', name: 'Transistors', ids: ['bjt', 'pnp', 'nmos', 'pmos', 'igbt', 'pigbt', 'halfdriver'] },
   { id: 'logic', name: 'Logic gates', prefix: 'gate-' },
   { id: 'switches', name: 'Switches & relays', ids: ['switch', 'button', 'relay'] },
-  { id: 'outputs', name: 'Lights, sound & motion', ids: ['led', 'buzzer', 'sevenseg', 'motor'] },
+  { id: 'outputs', name: 'Lights, sound & motion', ids: ['led', 'rgbled', 'buzzer', 'sevenseg', 'motor'] },
 ];
 
 export const OTHER_CATEGORY: PartCategory = { id: 'other', name: 'Other' };

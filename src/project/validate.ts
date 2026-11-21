@@ -2,6 +2,7 @@
 // ProjectFile or throws a ProjectError that says what is wrong and where.
 
 import { MAX_ZOOM, MIN_ZOOM } from '../camera';
+import { isLedColor } from '../ledcolor';
 import { CLOCK_CHOICES } from '../mcu/clock';
 import {
   endKey, isPinEnd, sameEnd, type GridPoint, type Junction, type PinRef, type PlacedPart, type Rotation, type Wire, type WireEnd,
@@ -78,7 +79,7 @@ const MAX_BURN_REASON = 200;
 function partState(v: unknown, typeId: string, where: string): PartState {
   const o = obj(v, where);
   // v4: a board's program is a .hex file in its folder, no longer part state.
-  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'burnedBy', 'name', 'clockHz', 'vcc', 'lux', 'wave', 'amp', 'offset', 'duty', 'limit'], where);
+  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'burnedBy', 'name', 'clockHz', 'vcc', 'lux', 'temp', 'color', 'wave', 'amp', 'offset', 'duty', 'limit'], where);
   const state: PartState = {};
   for (const key of Object.keys(o)) {
     if (key === 'closed' || key === 'burned') {
@@ -119,6 +120,19 @@ function partState(v: unknown, typeId: string, where: string): PartState {
       if (spec?.key !== 'lux') fail(`${where}.lux is only allowed on light-dependent resistors, but a ${typeId} part has no light level.`);
       if (lux < spec.min || lux > spec.max) fail(`${where}.lux must be between ${spec.min} and ${spec.max} lx (got ${lux}).`);
       state.lux = lux;
+    } else if (key === 'color') {
+      // A normal LED's color: "#rrggbb" in lower case, only on parts whose bar offers a color wheel.
+      const color = str(o, key, where);
+      if (!getPart(typeId)?.colorable) fail(`${where}.color is only allowed on LEDs, but a ${typeId} part has no color.`);
+      if (!isLedColor(color)) fail(`${where}.color must be a color like "#3da5ff" (got ${JSON.stringify(color)}).`);
+      state.color = color;
+    } else if (key === 'temp') {
+      // A thermistor's temperature: only on parts whose value popup edits it, within its range.
+      const temp = num(o, key, where);
+      const spec = getPart(typeId)?.value;
+      if (spec?.key !== 'temp') fail(`${where}.temp is only allowed on thermistors, but a ${typeId} part has no temperature.`);
+      if (temp < spec.min || temp > spec.max) fail(`${where}.temp must be between ${spec.min} and ${spec.max} °C (got ${temp}).`);
+      state.temp = temp;
     } else if (key === 'vcc') {
       // A logic gate's supply level: only on parts whose value popup edits it, one of its choices.
       const v = num(o, key, where);

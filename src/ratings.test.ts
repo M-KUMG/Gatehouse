@@ -53,6 +53,8 @@ const STRESS: Record<string, (v: number) => PartResult> = {
   'buzzer:V': (v) => result({ voltage: v }),
   'buzzer:Vr': (v) => result({ voltage: -v }),
   'sevenseg:If': (v) => result({ pins: { a: v, com: -v } }),
+  'ntc:P': (v) => result({ power: v }),
+  'rgbled:If': (v) => result({ pins: { g: v, com: -v } }),
 };
 
 describe('rating table', () => {

@@ -9,12 +9,16 @@
 //   buzzer          - + and - on the centre line: a mirror equals a half turn.
 //   sevenseg        - a mirrored display would be the part upside down
 //                     (pins on two rows like a DIP; turns cover every real placement).
+//   ntc             - symmetric two-pin part, like the LDR.
+//   rgbled (true)   - four legs in a row: a mirror swaps red and blue, which no turn does.
 
 import { SCHOTTKY_ART, SCHOTTKY_BURNED_SVG, ZENER_ART, ZENER_BURNED_SVG } from './art/axial';
 import { BUZZER_ART, BUZZER_BURNED_SVG, drawBuzzerWaves } from './art/buzzer';
 import { LDR_ART, LDR_BURNED_SVG } from './art/ldr';
+import { NTC_ART, NTC_BURNED_SVG } from './art/ntc';
+import { RGBLED_ART, RGBLED_BURNED_SVG, drawRgbGlow } from './art/rgbled';
 import { SEVENSEG_ART, SEVENSEG_BURNED_SVG, drawSevensegGlow } from './art/sevenseg';
-import { buzzerReadout, diodeReadout, sevensegReadout, zenerReadout } from './devicereadouts';
+import { buzzerReadout, diodeReadout, rgbledReadout, sevensegReadout, zenerReadout } from './devicereadouts';
 import { formatSI } from './format';
 import type { PartType, PinDef } from './parts';
 import type { ComponentModel, PartResult } from './sim';
@@ -22,6 +26,7 @@ import { ACTIVE_BUZZER, buzzerSounding } from './sim/buzzer';
 import { markBuzzing } from './buzzsound';
 import { VT } from './sim/devices';
 import { ledBrightness } from './sim/inspect';
+import { RGB_LED } from './sim/rgbled';
 import { RED_SEVENSEG, SEVENSEG_SEGMENTS } from './sim/sevenseg';
 import { ZENER_DEFAULT_VOLTS, ZENER_MAX_VOLTS, ZENER_MIN_VOLTS, zenerModel } from './sim/zener';
 
@@ -65,6 +70,27 @@ export const LDR_MAX_OHMS = 2e6;
 export function ldrOhms(lux: number): number {
   const l = Math.min(LDR_MAX_LUX, Math.max(LDR_MIN_LUX, Number.isFinite(lux) ? lux : LDR_DEFAULT_LUX));
   return Math.min(LDR_MAX_OHMS, Math.max(LDR_MIN_OHMS, 10_000 * (10 / l) ** 0.7));
+}
+
+export const NTC_MIN_C = -40;
+export const NTC_MAX_C = 125;
+export const NTC_DEFAULT_C = 25;
+/** The 10 k NTC thermistor: 10 kOhm at 25 C, beta 3950 K (the common MF52 type). */
+const NTC_R25 = 10_000;
+const NTC_BETA = 3950;
+const KELVIN = 273.15;
+
+/**
+ * Resistance of the NTC thermistor at `celsius`, by the beta equation
+ * R = R25 exp(B (1/T - 1/T25)) (T in kelvin), kept to its -40..125 C range.
+ *   -40 C 402 kOhm | 0 C 33.6 kOhm | 25 C 10 kOhm | 50 C 3.6 kOhm
+ *   100 C 697 Ohm | 125 C 359 Ohm
+ * Steady state only: the real bead's thermal time constant (seconds) and its
+ * self-heating are not modelled.
+ */
+export function ntcOhms(celsius: number): number {
+  const c = Math.min(NTC_MAX_C, Math.max(NTC_MIN_C, Number.isFinite(celsius) ? celsius : NTC_DEFAULT_C));
+  return NTC_R25 * Math.exp(NTC_BETA * (1 / (c + KELVIN) - 1 / (NTC_DEFAULT_C + KELVIN)));
 }
 
 function ldrReadout(r: PartResult): string[] {
@@ -144,5 +170,33 @@ export const OUTPUT_SENSOR_PARTS: readonly PartType[] = [
       drawSevensegGlow(ctx, Object.fromEntries(SEVENSEG_SEGMENTS.map((seg) => [seg, ledBrightness(r.pins[seg] ?? 0)])));
     },
     sim: () => RED_SEVENSEG,
+  },
+  {
+    // Through the plain resistor model like the LDR: its ohms come from the temperature (ntcOhms), `temp` is data for the inspector.
+    id: 'ntc', name: 'Thermistor (NTC 10 kΩ)', ...NTC_ART,
+    pins: [{ id: 'a', name: '1', x: 0, y: 1 }, { id: 'b', name: '2', x: 4, y: 1 }],
+    defaults: { temp: NTC_DEFAULT_C },
+    value: { label: 'Temperature', unit: '°C', min: NTC_MIN_C, max: NTC_MAX_C, key: 'temp' },
+    readout: ldrReadout,
+    variant: burnedLook(NTC_BURNED_SVG),
+    sim: (s) => {
+      const temp = s.temp ?? NTC_DEFAULT_C;
+      return { kind: 'resistor', ohms: ntcOhms(temp), temp };
+    },
+  },
+  {
+    // Common cathode: r, g, b are the three anodes. Red needs about 2 V, green and blue about 3 V.
+    id: 'rgbled', name: 'RGB LED (common cathode)', ...RGBLED_ART, mirrorable: true,
+    pins: [
+      { id: 'r', name: 'Red (anode)', x: 1, y: 4 }, { id: 'com', name: 'Common cathode (−)', x: 2, y: 4 },
+      { id: 'g', name: 'Green (anode)', x: 3, y: 4 }, { id: 'b', name: 'Blue (anode)', x: 4, y: 4 },
+    ],
+    readout: rgbledReadout,
+    variant: burnedLook(RGBLED_BURNED_SVG),
+    overlay: (ctx, s, r) => {
+      if (s.burned || !r) return;
+      drawRgbGlow(ctx, { r: ledBrightness(r.pins.r ?? 0), g: ledBrightness(r.pins.g ?? 0), b: ledBrightness(r.pins.b ?? 0) });
+    },
+    sim: () => RGB_LED,
   },
 ];
