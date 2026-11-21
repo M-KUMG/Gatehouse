@@ -12,6 +12,8 @@ Read this before touching the UI. `docs/PLAN.md` is the project's memory (status
 
 **Parts menu:** `src/palette.ts` builds foldable sections from `src/partcategories.ts`. A NEW PART must be added to a category there (the test `partcategories.test.ts` fails otherwise). Folding is pure CSS (`.palette-cat.open` switches the body's `grid-template-rows` between 0fr and 1fr); do not animate `height` by measuring.
 
+**Menu size:** the right-hand parts menu is sized from `--gh-menu-scale` (tokens.css). Write new sizes inside it as `calc(Npx * var(--gh-menu-scale))`, never plain px, so the menu keeps scaling as one piece.
+
 **Keyboard:** everything reachable with the mouse in the parts menu must also work with the keyboard (headers are buttons, tiles use a roving tabindex, Enter/Space on a tile calls `Editor.placeAtCentre`). New menu items follow the same pattern; arrow-key maths goes in `palettenav.ts`. A focusable element inside the Circuit panel that is not a native button needs `role="button"` so the grid's Space shortcut (start/pause) leaves it alone. Dock tabs are glass pills styled in `glass.css` with selectors that repeat dockview's own (loaded later, so they win).
 
 **Hover names:** use `TipBubble` (`src/tipbubble.ts`) for name bubbles instead of the native `title` tooltip: it matches the glass look and animates. Hover animations use the spring easing `cubic-bezier(0.2, 0.9, 0.3, 1.35)` and must be switched off under `prefers-reduced-motion`.

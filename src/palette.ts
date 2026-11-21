@@ -34,6 +34,13 @@ function saveOpen(open: ReadonlySet<string>): void {
   }
 }
 
+/** Size factor of the whole menu, from the `--gh-menu-scale` token in tokens.css (1 when it is missing). */
+function menuScale(): number {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--gh-menu-scale');
+  const scale = parseFloat(raw);
+  return Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
 /** Columns of a CSS grid as it is laid out right now (the tiles are two per row today). */
 function gridColumns(list: HTMLElement): number {
   return Math.max(1, getComputedStyle(list).gridTemplateColumns.split(' ').filter(Boolean).length);
@@ -100,7 +107,8 @@ export function createPalette(
 
     const icon = document.createElement('img');
     icon.src = partImageUrl(part);
-    const cell = Math.min(ICON_CELL, ICON_BOX.w / part.cols, ICON_BOX.h / part.rows);
+    const scale = menuScale(); // icons grow with the menu (the box in style.css does too)
+    const cell = Math.min(ICON_CELL * scale, (ICON_BOX.w * scale) / part.cols, (ICON_BOX.h * scale) / part.rows);
     icon.width = Math.round(part.cols * cell);
     icon.height = Math.round(part.rows * cell);
     icon.alt = '';

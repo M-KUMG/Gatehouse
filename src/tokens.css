@@ -30,6 +30,10 @@
   --gh-glass-drop: 0 12px 34px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.25);
   --gh-glass-hover: rgba(255, 255, 255, 0.16);
 
+  /* Size of the whole right-hand parts menu (width, text, tiles, icons) as a
+     factor of its base size. 1.15 = 15% bigger. palette.ts reads it too (icon sizes). */
+  --gh-menu-scale: 1.15;
+
   /* Shape */
   --gh-radius-sm: 8px;
   --gh-radius-md: 12px;
