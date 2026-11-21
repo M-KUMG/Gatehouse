@@ -15,7 +15,22 @@ const CHANNEL = {
   write: 'gatehouse:project-folder:write',
 };
 
+const CLOSE = {
+  request: 'gatehouse:close:request',
+  ack: 'gatehouse:close:ack',
+  answer: 'gatehouse:close:answer',
+};
+
 contextBridge.exposeInMainWorld('gatehouseHost', {
+  /** The window is being closed with unsaved changes: `callback` shows the page's "Save changes?" popup and then calls answerClose. */
+  onCloseRequest: (callback) => {
+    ipcRenderer.on(CLOSE.request, () => {
+      ipcRenderer.send(CLOSE.ack); // tells main the page is on it, so the system dialog is not shown
+      callback();
+    });
+  },
+  /** 'close' closes the window now; anything else keeps it open. */
+  answerClose: (action) => ipcRenderer.send(CLOSE.answer, action === 'close' ? 'close' : 'stay'),
   /**
    * Native folder dialog. 'open': an existing project folder -> { dir, name, kind };
    * 'parent': the folder a new project goes in (Browse in the Save popup) -> { dir, name };

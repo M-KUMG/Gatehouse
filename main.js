@@ -4,6 +4,7 @@ const path = require('path');
 const { SCHEME, ORIGIN, createHandler, isAppUrl } = require('./electron/staticserve.cjs');
 const W = require('./electron/windowstate.cjs');
 const { registerFolderIpc } = require('./electron/folderipc.cjs');
+const { CHANNEL: CLOSE, createCloseFlow } = require('./electron/closeflow.cjs');
 
 // The product name for the window (src/app.ts holds the same name for the page; this file cannot import TypeScript).
 const APP_NAME = 'Gatehouse';
@@ -86,13 +87,17 @@ function createWindow() {
 
   const remember = () => W.saveState(stateFile(), { bounds: win.getNormalBounds(), maximized: win.isMaximized() }, fs);
 
-  // The page cannot cancel closing in Electron, so unsaved changes are asked about here. The page marks them
-  // with a dot in front of its title (controller.ts), which is all this needs to know.
+  // The page cannot cancel closing in Electron, so a close with unsaved changes is blocked here and the page is
+  // asked: it shows its own "Save changes?" popup (Save / Don't save / Cancel) and answers (electron/closeflow.cjs).
+  // The page marks unsaved changes with a dot in front of its title (controller.ts), which is all this needs to
+  // know. If the page does not answer in time, the plain system dialog below asks instead.
   let closeConfirmed = false;
-  win.on('close', (event) => {
-    remember();
-    if (closeConfirmed || !W.isDirtyTitle(win.getTitle())) return;
-    event.preventDefault();
+  const forceClose = () => {
+    if (win.isDestroyed()) return;
+    closeConfirmed = true;
+    win.close();
+  };
+  const systemDialog = () => {
     const name = W.projectNameFromTitle(win.getTitle()) || 'This project';
     dialog
       .showMessageBox(win, {
@@ -106,11 +111,28 @@ function createWindow() {
         noLink: true,
       })
       .then(({ response }) => {
-        if (response === 1 && !win.isDestroyed()) {
-          closeConfirmed = true;
-          win.close();
-        }
+        if (response === 1) forceClose();
       });
+  };
+  const closeFlow = createCloseFlow({
+    send: () => win.webContents.send(CLOSE.request),
+    fallback: systemDialog,
+    forceClose,
+  });
+  const fromThisPage = (event) => event.sender === win.webContents;
+  const onAck = (event) => fromThisPage(event) && closeFlow.ack();
+  const onAnswer = (event, action) => fromThisPage(event) && closeFlow.answer(action);
+  ipcMain.on(CLOSE.ack, onAck);
+  ipcMain.on(CLOSE.answer, onAnswer);
+  win.on('closed', () => {
+    ipcMain.removeListener(CLOSE.ack, onAck);
+    ipcMain.removeListener(CLOSE.answer, onAnswer);
+  });
+  win.on('close', (event) => {
+    remember();
+    if (closeConfirmed || !W.isDirtyTitle(win.getTitle())) return;
+    event.preventDefault();
+    closeFlow.request();
   });
 
   win.loadURL(`${ORIGIN}/index.html`);

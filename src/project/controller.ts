@@ -6,6 +6,7 @@
 
 import { APP_NAME } from '../app';
 import { ask, toast } from './dialog';
+import { closeAnswer, closeHost } from './closehost';
 import { commandForKey, type FileCommand } from './filecommands';
 import { createFileBar, type FileBar } from './filebar';
 import { folderHost, type FolderHost } from './folderhost';
@@ -74,6 +75,14 @@ export class ProjectController {
       }
     });
     window.addEventListener('keydown', this.onKeyDown);
+    // Electron: closing the window with unsaved changes is held back and asked about here (the page's own popup).
+    const closer = closeHost();
+    closer?.onCloseRequest(() => {
+      void this.confirmClose().then(
+        (action) => closer.answerClose(action),
+        () => closer.answerClose('stay'), // something went wrong: never close on a failure
+      );
+    });
 
     if (recovered && recovered.file.parts.length > 0 && project.empty) void this.offerRestore(recovered.file, recovered.dirty);
   }
@@ -170,6 +179,30 @@ export class ProjectController {
       this.project.markSaved(folder.name);
       toast(`Saved to folder "${folder.name}"`);
     });
+  }
+
+  /**
+   * "Save changes?" before the window closes: Save / Don't save / Cancel. Resolves 'close' when the window
+   * may close (nothing unsaved, "Don't save", or the save went through) and 'stay' otherwise (Cancel, or the
+   * save was cancelled or failed, so the changes are not lost).
+   */
+  async confirmClose(): Promise<'close' | 'stay'> {
+    if (!this.project.dirty) return 'close';
+    const choice = await ask<'cancel' | 'discard' | 'save'>(
+      'Save changes?',
+      `"${this.project.name}" has changes that are not saved.`,
+      [
+        { label: 'Cancel', value: 'cancel' },
+        { label: "Don't save", value: 'discard' },
+        { label: 'Save', value: 'save', primary: true },
+      ],
+      'cancel',
+    );
+    if (choice === 'save') {
+      // Electron: into the project's folder (the Save popup asks for one first if it has none yet).
+      await (this.host ? this.saveFolder(false) : this.save(false));
+    }
+    return closeAnswer(choice, this.project.dirty);
   }
 
   /** Writing into a folder that already holds something: say what will happen. */
