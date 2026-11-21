@@ -59,6 +59,7 @@ body::before {
 .tip-bubble,
 .welcome-card,
 .shortcut-sheet,
+.context-menu,
 .windows-menu-list {
   background: var(--gh-glass-sheen), var(--gh-panel-glass);
   -webkit-backdrop-filter: var(--gh-glass-blur);
@@ -74,6 +75,7 @@ body::before {
 .build-card,
 .toast,
 .shortcut-sheet,
+.context-menu,
 .tip-bubble {
   background: var(--gh-glass-sheen), var(--gh-panel-glass-strong);
 }
@@ -81,6 +83,7 @@ body::before {
 .file-bar,
 .transport-bar,
 .toast,
+.context-menu,
 .windows-menu-list {
   border-radius: var(--gh-radius-lg);
 }
@@ -463,6 +466,7 @@ body::before {
   .welcome-action,
   .shortcut-sheet,
   .shortcut-backdrop,
+  .context-menu,
   .help-button,
   .transport-speed,
   .dialog-button,

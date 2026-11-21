@@ -30,6 +30,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       { label: 'Duplicate', keys: [['Ctrl', 'D']] },
       { label: 'Delete', keys: [['Delete'], ['Backspace']] },
       { label: 'Edit the value of a part', keys: [['Double-click']] },
+      { label: 'Menu of a part or wire', keys: [['Right-click']] },
       { label: 'Clear the selection / cancel', keys: [['Esc']] },
       { label: 'Undo', keys: [['Ctrl', 'Z']] },
       { label: 'Redo', keys: [['Ctrl', 'Y'], ['Ctrl', 'Shift', 'Z']] },

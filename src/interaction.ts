@@ -7,6 +7,8 @@
 // (boardcontrols.ts).
 
 import { isOnReset, selectedBoard, toolbarButtons } from './boardcontrols';
+import { ContextMenu } from './contextmenu';
+import { menuTitle, partMenu, wireMenu, type MenuItemId } from './contextmenumodel';
 import { BoardStatusChip } from './boardstatus';
 import { clickPart, isOnKnob, knobPosition, knobPositionAt, setKnob, setPressed } from './controls';
 import { CameraTween } from './cameratween';
@@ -108,6 +110,7 @@ export class Editor {
   private readonly nameEditor = new NameEditor();
   private readonly updateZoomReadout: () => void;
   private readonly cameraTween: CameraTween;
+  private readonly contextMenu = new ContextMenu();
   private readonly setStatus: (text: string) => void;
   private drag: Moving | Marquee | Turning | Tapping | null = null;
   private pressed: PlacedPart | null = null; // push button held down by the mouse
@@ -143,6 +146,7 @@ export class Editor {
     canvas.addEventListener('pointerup', this.onCanvasUp);
     canvas.addEventListener('pointercancel', this.onCanvasUp);
     canvas.addEventListener('dblclick', this.onDoubleClick);
+    canvas.addEventListener('contextmenu', this.onContextMenu);
     canvas.addEventListener('pointerleave', () => {
       if (this.drag || this.wiring.active) return;
       this.setHover(NO_HOVER);
@@ -207,6 +211,71 @@ export class Editor {
     this.closePopups();
     this.selection.clear();
     this.placer.start(typeId, e);
+  }
+
+  // ---- Right-click menu ----------------------------------------------------
+
+  /**
+   * A plain right click on a part or a wire opens its menu (the part is selected first, unless it is
+   * already part of the selection, so the menu acts on the whole selection). A right-button DRAG pans
+   * the grid instead: the grid has already cancelled the browser event then (grid.ts), which is what
+   * `defaultPrevented` tells us here. Empty grid: nothing of ours, the browser's own menu stays.
+   */
+  private onContextMenu = (e: MouseEvent): void => {
+    if (e.defaultPrevented || this.placer.active || this.wiring.active || this.drag) return;
+    this.closePopups();
+    const cell = this.view.toCell(e.clientX, e.clientY);
+    const part = this.scene.partAt(cell.col, cell.row);
+    if (part) {
+      if (!this.selection.partIds.has(part.id)) this.selection.set([part.id]);
+      const parts = this.selection.parts();
+      const buttons = toolbarButtons(
+        parts,
+        (id) => this.sim.boards.boardRunState(id),
+        (id) => this.sim.boards.buildLog.get(id).status === 'failed',
+      );
+      const single = parts.length === 1 ? parts[0] : undefined;
+      const name = single ? (selectedBoard(parts) ? boardLabel(single) : (getPart(single.typeId)?.name ?? 'Part')) : '';
+      this.contextMenu.show(partMenu(buttons, menuTitle(parts.length, name)), e.clientX, e.clientY, (id) => this.runMenuAction(id));
+    } else {
+      const hit = wirePointAt(this.scene, cell.col, cell.row, wireGrab(this.view));
+      if (!hit) return;
+      if (!this.selection.wireIds.has(hit.wire.id)) this.selection.set([], [hit.wire.id]);
+      this.contextMenu.show(wireMenu(), e.clientX, e.clientY, (id) => this.runMenuAction(id));
+    }
+    e.preventDefault();
+    this.view.requestRender();
+  };
+
+  /** Do what the chosen menu entry says, the same way its toolbar button or shortcut would. */
+  private runMenuAction(id: MenuItemId): void {
+    switch (id) {
+      case 'rotate':
+        return this.rotateSelected();
+      case 'flipH':
+        return this.flipSelected('h');
+      case 'flipV':
+        return this.flipSelected('v');
+      case 'duplicate':
+        return this.duplicateSelected();
+      case 'delete':
+        return this.deleteSelected();
+      case 'edit':
+        return this.editValue(this.selection.parts()[0]);
+      case 'run':
+        return this.toggleRun();
+      case 'build':
+        return this.buildSelectedBoard();
+      case 'reset':
+        return this.resetSelectedBoard();
+      case 'rename':
+        return this.renameSelectedBoard();
+      case 'console': {
+        const board = selectedBoard(this.selection.parts());
+        if (board) this.onOpenConsole?.(board.id);
+        return;
+      }
+    }
   }
 
   // ---- Zoom (buttons, keys): smooth, around the middle of the grid ----
