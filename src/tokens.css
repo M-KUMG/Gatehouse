@@ -3,18 +3,38 @@
    the whole interface follows. Canvas drawing colours live in TypeScript
    (grid.ts, wireview.ts, art/*.ts) and are not covered yet. */
 :root {
-  /* Surfaces, darkest to lightest */
-  --gh-bg-deep: #18191c;
-  --gh-bg-app: #1e1f22;
-  --gh-bg-panel: #25272c;
-  --gh-bg-subtle: #2a2c31;
-  --gh-bg-raised: #2b2e34;
-  --gh-panel-glass: rgba(37, 39, 44, 0.85); /* floating bars over the grid */
+  /* Surfaces, darkest to lightest. All are translucent on purpose: the app is
+     "liquid glass", so what sits behind a surface shows through it (see
+     glass.css for the blur, highlights and the ambient backdrop). */
+  --gh-bg-deep: rgba(12, 14, 20, 0.5); /* window contents (editor, console, explorer) */
+  --gh-bg-app: rgba(6, 8, 12, 0.4); /* wells: inputs, dropdowns, code blocks */
+  --gh-bg-panel: rgba(28, 32, 42, 0.48); /* bars and panels */
+  --gh-bg-subtle: rgba(255, 255, 255, 0.04);
+  --gh-bg-raised: rgba(255, 255, 255, 0.09); /* buttons, selected rows */
+  --gh-panel-glass: rgba(30, 34, 46, 0.4); /* floating bars over the grid */
+  --gh-group-glass: rgba(14, 16, 26, 0.18); /* the big glass of a dock group (kept light so the backdrop shows) */
 
   /* Lines */
-  --gh-border: #3a3d44;
-  --gh-border-strong: #6b7280;
-  --gh-scrollbar: #4a4d55;
+  --gh-border: rgba(255, 255, 255, 0.14);
+  --gh-border-strong: rgba(255, 255, 255, 0.3);
+  --gh-scrollbar: rgba(255, 255, 255, 0.22);
+
+  /* Glass recipe (used by glass.css) */
+  --gh-glass-blur: blur(22px) saturate(180%);
+  --gh-glass-blur-light: blur(12px) saturate(160%);
+  --gh-glass-sheen: linear-gradient(145deg, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.05) 42%, rgba(255, 255, 255, 0.02) 100%);
+  --gh-glass-edge: rgba(255, 255, 255, 0.2);
+  /* Bright rim along the top and left, faint along the bottom: light catching a curved edge. */
+  --gh-glass-rim: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 1px 0 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06), inset 0 0 22px rgba(255, 255, 255, 0.04);
+  --gh-glass-drop: 0 12px 34px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --gh-glass-hover: rgba(255, 255, 255, 0.16);
+
+  /* Shape */
+  --gh-radius-sm: 8px;
+  --gh-radius-md: 12px;
+  --gh-radius-lg: 16px;
+  --gh-radius-pill: 999px;
 
   /* Text, brightest to dimmest */
   --gh-text-bright: #e8eaed;

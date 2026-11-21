@@ -1,0 +1,267 @@
+/* Liquid glass: the look of the whole app.
+
+   Loaded after every other stylesheet (last import in main.ts), so the rules
+   here win over the plain ones at equal specificity. Colours, blur and shape
+   values come from tokens.css; the surface tokens there are translucent, so most
+   panels are already see-through, and this file adds what makes them glass:
+   the ambient backdrop behind everything, the blur, the bright rim and the soft
+   shadow. To change the look, change tokens first. */
+
+/* ---- Ambient backdrop: soft colour behind the glass (static, no animation) ---- */
+
+/* Only <html> carries the base colour: a background on <body> would paint over
+   the backdrop layer below. */
+html {
+  background: #090b11;
+}
+
+body {
+  background: transparent;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 55% at 14% 10%, rgba(78, 161, 255, 0.62), transparent 72%),
+    radial-gradient(50% 50% at 88% 18%, rgba(150, 96, 255, 0.5), transparent 72%),
+    radial-gradient(55% 55% at 72% 98%, rgba(40, 200, 190, 0.4), transparent 72%),
+    radial-gradient(45% 45% at 6% 90%, rgba(255, 110, 150, 0.28), transparent 72%),
+    linear-gradient(160deg, #0c1018, #10131d 55%, #090b11);
+}
+
+/* ---- Floating glass: bars, chips, popups, dialogs, menus ---- */
+
+.file-bar,
+.transport-bar,
+.zoom-readout,
+.status-line,
+.readout,
+.value-editor,
+.toast,
+.board-chip,
+.build-card,
+.dialog,
+.windows-menu-list {
+  background: var(--gh-glass-sheen), var(--gh-panel-glass);
+  -webkit-backdrop-filter: var(--gh-glass-blur);
+  backdrop-filter: var(--gh-glass-blur);
+  border: 1px solid var(--gh-glass-edge);
+  box-shadow: var(--gh-glass-rim), var(--gh-glass-drop);
+}
+
+.file-bar,
+.transport-bar,
+.toast,
+.windows-menu-list {
+  border-radius: var(--gh-radius-lg);
+}
+
+.zoom-readout,
+.status-line,
+.readout,
+.value-editor,
+.board-chip,
+.build-card {
+  border-radius: var(--gh-radius-md);
+}
+
+.dialog {
+  border-radius: calc(var(--gh-radius-lg) + 4px);
+}
+
+.dialog-backdrop {
+  background: rgba(4, 6, 12, 0.35);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+/* The parts menu: a tall glass column along the right edge. */
+#palette {
+  background: var(--gh-glass-sheen), var(--gh-bg-panel);
+  -webkit-backdrop-filter: var(--gh-glass-blur);
+  backdrop-filter: var(--gh-glass-blur);
+  border-left: 1px solid var(--gh-glass-edge);
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.1);
+}
+
+/* ---- Glass controls: buttons and small tiles ---- */
+
+.tool-button,
+#palette-toggle,
+.palette-item,
+.palette-example,
+.transport-speed,
+.dialog-button,
+.serial-button,
+.bo-button {
+  background: var(--gh-glass-sheen), var(--gh-bg-raised);
+  -webkit-backdrop-filter: var(--gh-glass-blur-light);
+  backdrop-filter: var(--gh-glass-blur-light);
+  border-color: var(--gh-glass-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34), 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+#palette-toggle,
+.serial-button,
+.bo-button,
+.transport-speed {
+  border-radius: var(--gh-radius-sm);
+}
+
+.palette-item,
+.palette-example {
+  border-radius: var(--gh-radius-md);
+}
+
+.dialog-button {
+  border-radius: var(--gh-radius-pill);
+  padding-inline: 14px;
+}
+
+.palette-item:hover,
+.palette-example:hover,
+#palette-toggle:hover,
+.serial-button:hover:not(:disabled),
+.bo-button:hover:not(:disabled),
+.dialog-button:hover {
+  background: var(--gh-glass-sheen), var(--gh-glass-hover);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* Round tool buttons light up in the accent colour, still see-through. */
+.tool-button:hover:not(:disabled) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 60%), rgba(78, 161, 255, 0.62);
+  border-color: rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 0 14px rgba(78, 161, 255, 0.45);
+}
+
+.tool-button.danger:hover:not(:disabled) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 60%), rgba(229, 83, 75, 0.7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 0 14px rgba(229, 83, 75, 0.45);
+}
+
+.dialog-button.primary,
+.serial-follow {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 60%), rgba(78, 161, 255, 0.55);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.file-button {
+  border-radius: var(--gh-radius-pill);
+}
+
+.file-button:hover:not(:disabled),
+.file-button.active {
+  background: var(--gh-glass-hover);
+  border-color: var(--gh-glass-edge);
+}
+
+.windows-menu-item {
+  border-radius: var(--gh-radius-sm);
+}
+
+/* Wells: inputs and dropdowns look pressed into the glass. */
+.serial-select,
+.serial-input,
+.bo-select,
+.fx-input,
+.value-editor input {
+  border-radius: var(--gh-radius-sm);
+  border-color: var(--gh-border);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- Docked and floating windows (dockview) ---- */
+
+.gh-dock .dv-groupview {
+  background: var(--gh-glass-sheen), var(--gh-group-glass);
+  -webkit-backdrop-filter: var(--gh-glass-blur);
+  backdrop-filter: var(--gh-glass-blur);
+}
+
+/* A floating window is a rounded glass card; the rim and shadow sit on the card
+   itself (dockview's own rectangular shadow is switched off in dock.css). */
+.gh-dock .dv-resize-container .dv-groupview {
+  border: 1px solid var(--gh-glass-edge);
+  border-radius: var(--gh-radius-lg);
+  box-shadow: var(--gh-glass-rim), var(--gh-glass-drop);
+}
+
+/* Window contents sit directly on the glass of their window. */
+.file-explorer,
+.serial-console,
+.code-editor,
+.scope-window,
+.build-output,
+.gh-window {
+  background: transparent;
+}
+
+.serial-output {
+  background: var(--gh-bg-app);
+}
+
+.fx-toolbar,
+.ce-note {
+  background: var(--gh-bg-panel);
+}
+
+.fx-row:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.fx-tree:focus-within .fx-row.selected {
+  background: rgba(78, 161, 255, 0.3);
+}
+
+/* ---- Fallbacks: no blur support, or the user asked for less transparency ---- */
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --gh-bg-deep: #14161c;
+    --gh-bg-app: #0e1015;
+    --gh-bg-panel: #1c1f27;
+    --gh-panel-glass: #1e222b;
+    --gh-group-glass: #14161c;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --gh-bg-deep: #14161c;
+    --gh-bg-app: #0e1015;
+    --gh-bg-panel: #1c1f27;
+    --gh-panel-glass: #1e222b;
+    --gh-group-glass: #14161c;
+  }
+
+  .file-bar,
+  .transport-bar,
+  .zoom-readout,
+  .status-line,
+  .readout,
+  .value-editor,
+  .toast,
+  .board-chip,
+  .build-card,
+  .dialog,
+  .windows-menu-list,
+  #palette,
+  .tool-button,
+  #palette-toggle,
+  .palette-item,
+  .palette-example,
+  .transport-speed,
+  .dialog-button,
+  .serial-button,
+  .bo-button,
+  .dialog-backdrop,
+  .gh-dock .dv-groupview {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}

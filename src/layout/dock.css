@@ -3,7 +3,8 @@
    "dockview-theme-dark gh-dock" (see dock.ts). */
 
 .dockview-theme-dark.gh-dock {
-  --dv-group-view-background-color: var(--gh-bg-app);
+  /* Groups get their glass fill in glass.css; the dock root stays see-through. */
+  --dv-group-view-background-color: transparent;
   --dv-tabs-and-actions-container-background-color: var(--gh-bg-panel);
   --dv-tabs-and-actions-container-height: 30px;
   --dv-tabs-and-actions-container-font-size: 12px;
@@ -27,8 +28,9 @@
   --dv-icon-hover-background-color: rgba(255, 255, 255, 0.08);
   --dv-tabs-container-scrollbar-color: var(--gh-scrollbar);
   --dv-scrollbar-background-color: var(--gh-scrollbar);
-  --dv-floating-border: 1px solid var(--gh-border);
-  --dv-floating-box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+  /* The rounded glass card draws its own border and shadow (glass.css). */
+  --dv-floating-border: none;
+  --dv-floating-box-shadow: none;
   color: var(--gh-text);
   font: 12px var(--gh-font-ui);
 }

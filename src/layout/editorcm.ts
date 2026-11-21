@@ -75,11 +75,12 @@ const flashField = StateField.define({
 
 // Colours of the app (see dock.css, serialconsole.css, fileexplorer.css).
 const COLOR = {
-  bg: '#18191c',
-  gutter: '#1e1f22',
-  panel: '#25272c',
-  raised: '#2b2e34',
-  border: '#3a3d44',
+  // Translucent so the glass window behind the editor shows through (see glass.css).
+  bg: 'transparent',
+  gutter: 'rgba(255, 255, 255, 0.03)',
+  panel: 'rgba(28, 32, 42, 0.6)',
+  raised: 'rgba(255, 255, 255, 0.1)',
+  border: 'rgba(255, 255, 255, 0.14)',
   text: '#d8dbe0',
   muted: '#7d828c',
   dim: '#9aa0aa',

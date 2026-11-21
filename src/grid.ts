@@ -13,9 +13,11 @@ const MAJOR_EVERY = 5; // every Nth line is drawn stronger
 const WHEEL_SPEED = 0.0015; // zoom factor exponent per wheel pixel
 
 const COLORS = {
-  background: '#1e1f22',
-  minor: '#2e3035',
-  major: '#43464d',
+  // Translucent on purpose: the canvas is cleared first, so the glass backdrop
+  // (glass.css) shows through the grid.
+  background: 'rgba(10, 12, 18, 0.1)',
+  minor: 'rgba(255, 255, 255, 0.06)',
+  major: 'rgba(255, 255, 255, 0.13)',
   select: '#4ea1ff',
   selectFill: 'rgba(78, 161, 255, 0.08)',
   hover: 'rgba(255, 255, 255, 0.28)',
@@ -234,6 +236,7 @@ export class GridView {
     }
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = COLORS.background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     this.drawGrid(dpr);

@@ -27,6 +27,8 @@ import { Project } from './project/project';
 import { openSimWorker } from './sim/worker/client';
 import { Simulation, buildNetlist } from './simulation';
 import { TransportBar } from './transport';
+// Last on purpose: the glass look overrides the plain styles above.
+import './glass.css';
 
 const app = document.getElementById('app');
 const dock = document.getElementById('dock');
