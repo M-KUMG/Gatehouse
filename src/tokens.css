@@ -12,6 +12,7 @@
   --gh-bg-subtle: rgba(255, 255, 255, 0.04);
   --gh-bg-raised: rgba(255, 255, 255, 0.09); /* buttons, selected rows */
   --gh-panel-glass: rgba(30, 34, 46, 0.4); /* floating bars over the grid */
+  --gh-panel-glass-strong: rgba(16, 18, 28, 0.7); /* small info surfaces over the part art: readouts, chips, popups, tooltips */
   --gh-group-glass: rgba(14, 16, 26, 0.18); /* the big glass of a dock group (kept light so the backdrop shows) */
 
   /* Lines */

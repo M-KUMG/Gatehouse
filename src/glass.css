@@ -7,6 +7,17 @@
    the ambient backdrop behind everything, the blur, the bright rim and the soft
    shadow. To change the look, change tokens first. */
 
+/* ---- Dark native controls: scrollbars, dropdown lists, checkboxes, text fields ---- */
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gh-scrollbar) transparent;
+}
+
 /* ---- Ambient backdrop: soft colour behind the glass (static, no animation) ---- */
 
 /* Only <html> carries the base colour: a background on <body> would paint over
@@ -53,6 +64,16 @@ body::before {
   backdrop-filter: var(--gh-glass-blur);
   border: 1px solid var(--gh-glass-edge);
   box-shadow: var(--gh-glass-rim), var(--gh-glass-drop);
+}
+
+/* Small info surfaces sit right over the part art, so they get a darker tint to stay readable. */
+.readout,
+.board-chip,
+.value-editor,
+.build-card,
+.toast,
+.tip-bubble {
+  background: var(--gh-glass-sheen), var(--gh-panel-glass-strong);
 }
 
 .file-bar,
@@ -266,6 +287,87 @@ body::before {
   outline-offset: 1px;
 }
 
+/* The Code editor's own file tabs match the dock tabs: a soft strip with pill tabs. */
+.ce-tabs {
+  align-items: center;
+  gap: 2px;
+  min-height: 36px;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.ce-tab {
+  height: 26px;
+  padding: 0 6px 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--gh-radius-pill);
+  background: transparent;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.ce-tab:hover {
+  background: var(--gh-bg-raised);
+  color: var(--gh-text);
+}
+
+.ce-tab.active {
+  background: var(--gh-glass-sheen), var(--gh-bg-raised);
+  border-color: var(--gh-glass-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  color: var(--gh-text-strong);
+}
+
+.ce-tab:focus-visible {
+  outline: 2px solid var(--gh-accent);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+.ce-tab-close {
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ce-tab {
+    transition: none;
+  }
+}
+
+/* Dockview's own popups: the tab right-click menu (Float, Close) and the dropdown
+   of tabs that do not fit. They get the same glass as the Windows menu. */
+.gh-dock .dv-context-menu,
+.gh-dock .dv-tabs-overflow-container {
+  background: var(--gh-glass-sheen), var(--gh-panel-glass);
+  -webkit-backdrop-filter: var(--gh-glass-blur);
+  backdrop-filter: var(--gh-glass-blur);
+  border: 1px solid var(--gh-glass-edge);
+  border-radius: var(--gh-radius-md);
+  box-shadow: var(--gh-glass-rim), var(--gh-glass-drop);
+  color: var(--gh-text);
+}
+
+.gh-dock .dv-context-menu {
+  padding: 5px;
+}
+
+.gh-dock .dv-context-menu-item {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--gh-radius-sm);
+}
+
+.gh-dock .dv-context-menu-item:hover {
+  background: var(--gh-accent-dim);
+  color: var(--gh-on-accent);
+}
+
+.gh-dock .dv-context-menu-separator {
+  background: var(--gh-border);
+}
+
 /* The close cross is a round glass dot on hover. */
 .gh-dock .dv-default-tab .dv-default-tab-action {
   border-radius: 50%;
@@ -318,6 +420,7 @@ body::before {
     --gh-bg-app: #0e1015;
     --gh-bg-panel: #1c1f27;
     --gh-panel-glass: #1e222b;
+    --gh-panel-glass-strong: #181b24;
     --gh-group-glass: #14161c;
   }
 }
@@ -328,6 +431,7 @@ body::before {
     --gh-bg-app: #0e1015;
     --gh-bg-panel: #1c1f27;
     --gh-panel-glass: #1e222b;
+    --gh-panel-glass-strong: #181b24;
     --gh-group-glass: #14161c;
   }
 
@@ -356,6 +460,8 @@ body::before {
   .serial-button,
   .bo-button,
   .dialog-backdrop,
+  .gh-dock .dv-context-menu,
+  .gh-dock .dv-tabs-overflow-container,
   .gh-dock .dv-groupview {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
