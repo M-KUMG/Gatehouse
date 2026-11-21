@@ -68,6 +68,7 @@
 .has-drop .file-button,
 .has-drop .zoom-button,
 .has-drop .zoom-readout,
+.has-drop .tool-chip,
 .has-drop .tool-button {
   position: relative;
   z-index: 1;

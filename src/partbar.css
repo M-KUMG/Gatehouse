@@ -1,0 +1,167 @@
+/* The bar next to the selection (toolbar.ts): the glass look of the file bar, with a name chip and flat
+   buttons; the water drop (droplight.ts) is the hover effect. The selectors are one level deeper than the
+   round-button rules in style.css and glass.css, so these win whatever the load order. */
+
+.selection-toolbar {
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--gh-glass-edge);
+  border-radius: var(--gh-radius-md);
+  background: var(--gh-glass-sheen), var(--gh-panel-glass);
+  -webkit-backdrop-filter: var(--gh-glass-blur);
+  backdrop-filter: var(--gh-glass-blur);
+  box-shadow: var(--gh-glass-rim), var(--gh-glass-drop);
+  font: 12px var(--gh-font-ui);
+  user-select: none;
+}
+
+.selection-toolbar .tool-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  height: 26px;
+  padding: 0 10px 0 9px;
+  border: 1px solid transparent;
+  border-radius: var(--gh-radius-pill);
+  background: transparent;
+  color: var(--gh-text);
+  font: inherit;
+  font-weight: 600;
+  line-height: 24px;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.selection-toolbar .tool-chip.editable {
+  cursor: pointer;
+}
+
+.selection-toolbar .tool-chip-value {
+  color: var(--gh-text-muted);
+  font-weight: 500;
+}
+
+.selection-toolbar .tool-button {
+  width: 28px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: var(--gh-radius-pill);
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  color: var(--gh-text-muted);
+}
+
+.selection-toolbar .tool-button:hover:not(:disabled),
+.selection-toolbar .tool-button:focus-visible {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--gh-text);
+}
+
+.selection-toolbar .tool-button.danger:hover:not(:disabled) {
+  background: transparent;
+  box-shadow: none;
+  color: var(--gh-danger-soft, #ff8a85);
+}
+
+.selection-toolbar .tool-button:disabled:hover {
+  background: transparent;
+  color: var(--gh-text-muted);
+}
+
+/* The board buttons sit in a group with a thin divider after them. */
+.selection-toolbar .tool-group {
+  gap: 4px;
+  padding-right: 6px;
+  margin-right: 2px;
+  border-right: 1px solid var(--gh-border);
+}
+
+/* The error marker on Run / Build sits on the glass now, not on a round panel. */
+.selection-toolbar .tool-button.has-error::after {
+  top: 1px;
+  right: 3px;
+  border-color: transparent;
+}
+
+/* ---- The bar unfolds to hold the value and name editors (no popups) ---- */
+
+.selection-toolbar {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  box-sizing: border-box;
+  transition: width var(--gh-glide, 380ms) var(--gh-ease-glide, ease);
+}
+
+.selection-toolbar .tool-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: max-content; /* its natural width, even when the bar is wider (an editor is unfolded)*/
+}
+
+.selection-toolbar .tool-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--gh-glide, 380ms) var(--gh-ease-glide, ease);
+}
+
+.selection-toolbar .tool-fold.open {
+  grid-template-rows: 1fr;
+}
+
+.selection-toolbar .tool-fold-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.selection-toolbar .tool-fold-body {
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid var(--gh-border);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.selection-toolbar .tool-fold.open .tool-fold-body {
+  opacity: 1;
+  transition-delay: 120ms;
+}
+
+/* An editor inside the bar is not a window of its own: no glass box, no border. */
+.selection-toolbar .value-editor.in-bar {
+  position: static;
+  z-index: auto;
+  padding: 6px 6px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  max-width: none;
+}
+
+.selection-toolbar .name-editor.in-bar input {
+  width: 100%;
+  min-width: 0;
+}
+
+.selection-toolbar .name-editor.in-bar label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selection-toolbar,
+  .selection-toolbar .tool-fold,
+  .selection-toolbar .tool-fold-body {
+    transition: none;
+  }
+}

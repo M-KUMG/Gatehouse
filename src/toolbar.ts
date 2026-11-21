@@ -1,13 +1,19 @@
-// Floating round buttons next to the selection: rotate, flip, duplicate, edit
-// value, delete, and for one selected board Run / Pause, Build, Reset, the Serial
-// console and Rename. Also the small readouts along the bottom edge.
+// The bar next to the selection (same glass look as the file bar): a chip with
+// the name and value of what is selected (a click edits the value), then rotate,
+// flip, duplicate, delete, and for one selected board Run / Pause, Build, Reset,
+// the Serial console and Rename. Also the zoom controls and small readouts.
 
 import type { BoardToolbar, ToolbarButtons } from './boardcontrols';
+import './partbar.css';
+import type { FoldHost } from './barfold';
 import { attachDrop } from './droplight';
+import type { SelectionLabel } from './partlabel';
 import { MAX_ZOOM, MIN_ZOOM } from './camera';
 import type { ScreenRect } from './grid';
 
 const GAP = 8; // between the selection and the toolbar
+const FOLD_WIDTH = 300; // the bar's width while an editor is unfolded
+const FOLD_MS = 420; // a little over the fold transition (partbar.css)
 const MARGIN = 6; // to the edges of the visible grid
 
 const svg = (body: string): string =>
@@ -20,7 +26,6 @@ const ICONS = {
   flipH: svg('<path d="M12 3v18" stroke-dasharray="2 2.5"/><path d="M9 6L3 18h6z" fill="currentColor"/><path d="M15 6l6 12h-6z"/>'),
   flipV: svg('<path d="M3 12h18" stroke-dasharray="2 2.5"/><path d="M6 9L18 3v6z" fill="currentColor"/><path d="M6 15l12 6v-6z"/>'),
   duplicate: svg('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>'),
-  edit: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
   run: svg('<path d="M8 5.5v13l11-6.5z" fill="currentColor"/>'),
   pause: svg('<path d="M8.5 5.5v13M15.5 5.5v13" stroke-width="3"/>'),
   build: svg('<rect x="10" y="6" width="11" height="5" rx="1" transform="rotate(45 15.5 8.5)"/><path d="M4.5 19.5L14 10"/>'),
@@ -52,11 +57,23 @@ export interface ToolbarActions {
 
 const NO_BUTTONS: ToolbarButtons = { rotate: true, flipH: true, flipV: true, duplicate: true, edit: false, board: null };
 
-const SIMPLE_BUTTONS = ['rotate', 'flipH', 'flipV', 'duplicate', 'edit'] as const;
+const SIMPLE_BUTTONS = ['rotate', 'flipH', 'flipV', 'duplicate'] as const;
 
 export class Toolbar {
   private readonly el: HTMLDivElement;
   private readonly buttons: Record<(typeof SIMPLE_BUTTONS)[number], HTMLButtonElement>;
+  /** The first row: the chip and the buttons. The fold below it holds the value and name editors. */
+  private readonly row = document.createElement('div');
+  private readonly fold = document.createElement('div');
+  private readonly foldBody = document.createElement('div');
+  private foldContent: HTMLElement | null = null;
+  private foldTimer = 0;
+  private chipWasOpen = false;
+  /** The bar's left edge while an editor is unfolded, else null. */
+  private anchorLeft: number | null = null;
+  private readonly chip = document.createElement('button');
+  private readonly chipTitle = document.createElement('span');
+  private readonly chipValue = document.createElement('span');
   private readonly runButton: HTMLButtonElement;
   private readonly buildButton: HTMLButtonElement;
   private readonly resetButton: HTMLButtonElement;
@@ -73,13 +90,25 @@ export class Toolbar {
   ) {
     this.el = document.createElement('div');
     this.el.className = 'selection-toolbar';
-    attachDrop(this.el, '.tool-button');
+    attachDrop(this.el, '.tool-button, .tool-chip.editable');
+    this.chip.type = 'button';
+    this.chip.className = 'tool-chip';
+    this.chipTitle.className = 'tool-chip-title';
+    this.chipValue.className = 'tool-chip-value';
+    this.chip.append(this.chipTitle, this.chipValue);
+    // A press on the chip first takes the focus away from an open editor, which closes it: the click then
+    // must not open it again (so the chip works as a toggle).
+    this.chip.addEventListener('pointerdown', () => {
+      this.chipWasOpen = this.foldContent !== null;
+    });
+    this.chip.addEventListener('click', () => {
+      if (this.chip.classList.contains('editable') && !this.chipWasOpen) actions.edit();
+    });
     this.buttons = {
       rotate: button('Rotate 90° clockwise (R)', ICONS.rotate, actions.rotate),
       flipH: button('Flip horizontal (H)', ICONS.flipH, actions.flipH),
       flipV: button('Flip vertical (V)', ICONS.flipV, actions.flipV),
       duplicate: button('Duplicate (Ctrl+D)', ICONS.duplicate, actions.duplicate),
-      edit: button('Edit value (double-click)', ICONS.edit, actions.edit),
     };
     this.runButton = button('Run', ICONS.run, actions.run, 'run');
     this.buildButton = button('Build (compile only)', ICONS.build, actions.build, 'build');
@@ -88,18 +117,30 @@ export class Toolbar {
     this.renameButton = button('Rename board (display name only)', ICONS.rename, actions.rename);
     this.boardGroup.className = 'tool-group';
     this.boardGroup.append(this.runButton, this.buildButton, this.resetButton, this.consoleButton, this.renameButton);
-    this.el.append(
+    this.row.className = 'tool-row';
+    this.row.append(
+      this.chip,
       this.boardGroup,
       ...SIMPLE_BUTTONS.map((name) => this.buttons[name]),
       button('Delete (Del)', ICONS.delete, actions.delete, 'danger'),
     );
+    // The fold: grows from 0 to its content's height (a grid-rows transition, no measuring) under the row.
+    this.fold.className = 'tool-fold';
+    this.fold.inert = true;
+    const inner = document.createElement('div');
+    inner.className = 'tool-fold-inner';
+    this.foldBody.className = 'tool-fold-body';
+    inner.append(this.foldBody);
+    this.fold.append(inner);
+    this.el.append(this.row, this.fold);
     document.body.appendChild(this.el);
     this.show(null);
   }
 
   /** Show the toolbar beside a viewport rectangle, or hide it with null. */
-  show(target: ScreenRect | null, buttons: ToolbarButtons = NO_BUTTONS): void {
+  show(target: ScreenRect | null, buttons: ToolbarButtons = NO_BUTTONS, label: SelectionLabel | null = null): void {
     const el = this.el;
+    this.showChip(label, buttons.edit);
     for (const name of SIMPLE_BUTTONS) {
       this.buttons[name].style.display = buttons[name] ? '' : 'none';
     }
@@ -114,12 +155,61 @@ export class Toolbar {
     const h = el.offsetHeight;
 
     // Prefer the top-right of the selection, else its top-left, then clamp.
-    let left = target.right + GAP;
-    if (left + w > area.right) left = target.left - GAP - w;
+    // While an editor is unfolded the bar keeps its left edge (it only shifts left when it would leave the
+    // grid), so unfolding never makes it jump to the other side of the part.
+    let left = this.anchorLeft ?? target.right + GAP;
+    if (this.anchorLeft === null && left + w > area.right) left = target.left - GAP - w;
     left = Math.max(area.left, Math.min(left, area.right - w));
     const top = Math.max(area.top, Math.min(target.top - 4, area.bottom - h));
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
+  }
+
+  /** Lets the value and name editors unfold the bar instead of opening a popup (barfold.ts). */
+  readonly foldHost: FoldHost = {
+    available: () => this.el.style.display !== 'none',
+    show: (content) => this.showFold(content),
+    hide: (content) => this.hideFold(content),
+  };
+
+  private showFold(content: HTMLElement): void {
+    window.clearTimeout(this.foldTimer);
+    if (this.anchorLeft === null) this.anchorLeft = this.el.getBoundingClientRect().left;
+    this.foldBody.replaceChildren(content);
+    this.foldContent = content;
+    // The bar widens to the editor (a width transition needs numbers, so from its own width to the new one).
+    const closed = this.row.offsetWidth + 8; // padding and border of the bar
+    if (!this.fold.classList.contains('open')) this.el.style.width = `${this.el.offsetWidth}px`;
+    void this.el.offsetWidth;
+    this.el.style.width = `${Math.max(closed, FOLD_WIDTH)}px`;
+    this.fold.inert = false;
+    this.fold.classList.add('open');
+  }
+
+  private hideFold(content: HTMLElement): void {
+    if (this.foldContent !== content) return; // another editor has taken the fold meanwhile
+    this.foldContent = null;
+    this.fold.inert = true;
+    this.fold.classList.remove('open');
+    this.el.style.width = `${this.row.offsetWidth + 8}px`;
+    window.clearTimeout(this.foldTimer);
+    this.foldTimer = window.setTimeout(() => {
+      if (this.foldContent !== null) return;
+      this.foldBody.replaceChildren();
+      this.anchorLeft = null;
+      this.el.style.width = ''; // the bar is as wide as its row again, whatever the chip says next
+    }, FOLD_MS);
+  }
+
+  /** The name chip: what is selected and its value; a click edits the value when the part has one. Touched only when it changes. */
+  private showChip(label: SelectionLabel | null, editable: boolean): void {
+    this.chip.style.display = label ? '' : 'none';
+    if (!label) return;
+    if (this.chipTitle.textContent !== label.title) this.chipTitle.textContent = label.title;
+    if (this.chipValue.textContent !== label.value) this.chipValue.textContent = label.value;
+    this.chipValue.style.display = label.value ? '' : 'none';
+    this.chip.classList.toggle('editable', editable);
+    this.chip.title = editable ? 'Edit the value (or double-click the part)' : label.title;
   }
 
   /** The toolbar's viewport rectangle while it is shown, else null (popups open next to it). */

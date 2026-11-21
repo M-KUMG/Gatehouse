@@ -9,6 +9,7 @@
 import { isOnReset, selectedBoard, toolbarButtons } from './boardcontrols';
 import { ContextMenu } from './contextmenu';
 import { menuTitle, partMenu, wireMenu, type MenuItemId } from './contextmenumodel';
+import { selectionLabel } from './partlabel';
 import { BoardStatusChip } from './boardstatus';
 import { clickPart, isOnKnob, knobPosition, knobPositionAt, setKnob, setPressed } from './controls';
 import { CameraTween } from './cameratween';
@@ -177,6 +178,8 @@ export class Editor {
       },
       rename: () => this.renameSelectedBoard(),
     });
+    this.valueEditor.setHost(() => this.toolbar.foldHost);
+    this.nameEditor.setHost(() => this.toolbar.foldHost);
     this.statusChip = new BoardStatusChip(canvas);
     this.statusChip.onClick = () => {
       const board = selectedBoard(this.selection.parts());
@@ -724,6 +727,7 @@ export class Editor {
   private editValue(part: PlacedPart | undefined): void {
     if (!part || !getPart(part.typeId)?.value || this.drag) return;
     this.selection.set([part.id]);
+    this.positionOverlays(); // the bar must show this part before the editor unfolds it
     this.valueEditor.open(part, this.view.toScreen(footprint(part)), this.view.canvas.getBoundingClientRect(), this.view.requestRender);
   }
 
@@ -815,6 +819,7 @@ export class Editor {
     this.toolbar.show(
       box && !busy ? this.view.toScreen(box) : null,
       toolbarButtons(parts, (id) => this.sim.boards.boardRunState(id), (id) => this.sim.boards.buildLog.get(id).status === 'failed'),
+      selectionLabel(parts, selectedBoard(parts) ? boardLabel(selectedBoard(parts)!) : undefined),
     );
     const board = selectedBoard(parts);
     this.statusChip.show(

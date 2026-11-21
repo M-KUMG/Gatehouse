@@ -7,11 +7,6 @@ import { attachDrop } from '../droplight';
 import type { DockLayout } from './dock';
 import { EDITOR_ID, WINDOWS, isClosable } from './panels';
 
-const ICON =
-  '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" ' +
-  'stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/>' +
-  '<path d="M9 4v16M9 13h12"/></svg>';
-
 /** Builds the button with its menu; the caller puts it in the file bar. */
 export function createWindowsMenu(layout: DockLayout): HTMLElement {
   const wrap = document.createElement('div');
@@ -19,11 +14,11 @@ export function createWindowsMenu(layout: DockLayout): HTMLElement {
 
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'file-button';
+  button.className = 'file-button file-menu-button'; // a text button like File: an icon did not say what it does
   button.title = 'Windows (circuit, serial console, build output, code editor, file explorer, scope, logic analyzer)';
   button.setAttribute('aria-label', button.title);
   button.setAttribute('aria-haspopup', 'menu');
-  button.innerHTML = ICON;
+  button.textContent = 'Windows';
 
   const menu = document.createElement('div');
   menu.className = 'windows-menu-list';

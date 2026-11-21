@@ -6,6 +6,7 @@
 // change and closes when the focus leaves it.
 
 import { leave } from './leave';
+import type { FoldHost, FoldHostProvider } from './barfold';
 import { formatSI, parseSI } from './format';
 import type { ScreenRect } from './grid';
 import type { PlacedPart } from './model';
@@ -13,6 +14,14 @@ import { getPart, type ExtraField } from './parts';
 
 export class ValueEditor {
   private el: HTMLDivElement | null = null;
+  private provider: FoldHostProvider | null = null;
+  /** The bar fold this editor is in, or null when it is a popup. */
+  private hostedBy: FoldHost | null = null;
+
+  /** Where editors go: the part bar's fold (they fall back to a popup when it is not available). */
+  setHost(provider: FoldHostProvider): void {
+    this.provider = provider;
+  }
 
   get isOpen(): boolean {
     return this.el !== null;
@@ -113,11 +122,18 @@ export class ValueEditor {
     el.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') this.close();
     });
-    document.body.appendChild(el);
+    const host = this.provider?.() ?? null;
     this.el = el;
-
-    el.style.left = `${Math.max(bounds.left + 8, Math.min(anchor.left, bounds.right - el.offsetWidth - 8))}px`;
-    el.style.top = `${Math.max(bounds.top + 8, Math.min(anchor.bottom + 8, bounds.bottom - el.offsetHeight - 8))}px`;
+    if (host?.available()) {
+      el.classList.add('in-bar'); // no popup: the bar unfolds to hold it
+      this.hostedBy = host;
+      host.show(el);
+    } else {
+      this.hostedBy = null;
+      document.body.appendChild(el);
+      el.style.left = `${Math.max(bounds.left + 8, Math.min(anchor.left, bounds.right - el.offsetWidth - 8))}px`;
+      el.style.top = `${Math.max(bounds.top + 8, Math.min(anchor.bottom + 8, bounds.bottom - el.offsetHeight - 8))}px`;
+    }
 
     // Closes when the focus leaves the popup altogether (moving between its rows keeps it open).
     el.addEventListener('focusout', (e) => {
@@ -132,6 +148,10 @@ export class ValueEditor {
   close(): void {
     const el = this.el;
     this.el = null;
-    if (el) leave(el); // a focused input that goes away fires focusout, which finds el already cleared
+    if (!el) return;
+    const host = this.hostedBy;
+    this.hostedBy = null;
+    if (host) host.hide(el);
+    else leave(el); // a focused input that goes away fires focusout, which finds el already cleared
   }
 }

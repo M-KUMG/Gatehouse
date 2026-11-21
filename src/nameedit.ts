@@ -3,6 +3,7 @@
 // commits, Escape or clicking away cancels, a refused name stays open with the
 // reason under the field. An empty name restores the default.
 
+import type { FoldHost, FoldHostProvider } from './barfold';
 import type { ScreenRect } from './grid';
 import { leave } from './leave';
 import type { FileOpResult } from './project/boardfiles';
@@ -11,6 +12,13 @@ const GAP = 8;
 
 export class NameEditor {
   private el: HTMLDivElement | null = null;
+  private provider: FoldHostProvider | null = null;
+  private hostedBy: FoldHost | null = null;
+
+  /** Where the editor goes: the part bar's fold (a popup when it is not available). */
+  setHost(provider: FoldHostProvider): void {
+    this.provider = provider;
+  }
 
   get isOpen(): boolean {
     return this.el !== null;
@@ -48,10 +56,20 @@ export class NameEditor {
     error.setAttribute('role', 'alert');
     error.hidden = true;
     el.append(label, error);
-    document.body.appendChild(el);
+    const host = this.provider?.() ?? null;
     this.el = el;
+    const hosted = Boolean(host?.available());
+    if (host && hosted) {
+      el.classList.add('in-bar');
+      this.hostedBy = host;
+      host.show(el);
+    } else {
+      this.hostedBy = null;
+      document.body.appendChild(el);
+    }
 
     const place = (): void => {
+      if (hosted) return;
       el.style.left = `${Math.max(bounds.left + 8, Math.min(anchor.left, bounds.right - el.offsetWidth - 8))}px`;
       el.style.top = `${Math.max(bounds.top + 8, Math.min(anchor.bottom + GAP, bounds.bottom - el.offsetHeight - 8))}px`;
     };
@@ -88,6 +106,10 @@ export class NameEditor {
   close(): void {
     const el = this.el;
     this.el = null;
-    if (el) leave(el); // a focused input that goes away fires blur, which finds el already cleared
+    if (!el) return;
+    const host = this.hostedBy;
+    this.hostedBy = null;
+    if (host) host.hide(el);
+    else leave(el); // a focused input that goes away fires blur, which finds el already cleared
   }
 }
