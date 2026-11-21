@@ -246,6 +246,69 @@ html, body {
   outline-offset: 1px;
 }
 
+/* Movable bars on the grid (draggablebar.ts): a grip at the start of the bar. */
+.file-bar,
+.transport-bar {
+  cursor: grab;
+  transition:
+    transform 160ms cubic-bezier(0.2, 0.9, 0.3, 1.35),
+    box-shadow 160ms ease;
+}
+
+.bar-grip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 24px;
+  border-radius: 8px;
+  color: var(--gh-text-dim);
+  cursor: grab;
+  touch-action: none;
+}
+
+.bar-grip:hover {
+  color: var(--gh-text);
+}
+
+.bar-grip:focus-visible {
+  outline: 2px solid var(--gh-accent);
+  outline-offset: 1px;
+}
+
+.gh-dragging-bar,
+.gh-dragging-bar * {
+  user-select: none;
+  cursor: grabbing !important;
+}
+
+/* While it is being dragged the bar lifts a little. */
+.file-bar.dragging,
+.transport-bar.dragging {
+  cursor: grabbing;
+  transform: scale(1.03);
+  transition: none;
+}
+
+.file-bar.dragging .bar-grip,
+.transport-bar.dragging .bar-grip {
+  cursor: grabbing;
+  color: var(--gh-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .file-bar,
+  .transport-bar {
+    transition: none;
+  }
+
+  .file-bar.dragging,
+  .transport-bar.dragging {
+    transform: none;
+  }
+}
+
 /* Text for screen readers only (spoken confirmations). */
 .sr-only {
   position: absolute;

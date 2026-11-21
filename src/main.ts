@@ -20,6 +20,7 @@ import { createWindowsMenu } from './layout/windowsmenu';
 import { registerCompiler } from './build/registry';
 import { registerBrowserCompilers } from './build/wasm/worker/register';
 import { boundsOf, footprint } from './model';
+import { makeDraggable } from './draggablebar';
 import { createPalette } from './palette';
 import { renameBoard } from './project/boardfiles';
 import { ProjectController } from './project/controller';
@@ -175,6 +176,9 @@ const controller = new ProjectController(
 );
 const bar = controller.fileBar.element;
 bar.insertBefore(createWindowsMenu(layout), bar.querySelector('.project-name'));
+// The two small bars on the grid can be grabbed and moved (position saved per user, not in the project).
+makeDraggable({ id: 'file', bar, area: editorArea, label: 'file bar' });
+makeDraggable({ id: 'transport', bar: transport.element, area: editorArea, label: 'run controls' });
 // The toolbar's rename button: the project keeps the name (circuit data, so one undo step and a redraw: the
 // grid label, File explorer, Serial console and status chip all follow).
 editor.onRenameBoard = (partId, input) => renameBoard(project, partId, input);

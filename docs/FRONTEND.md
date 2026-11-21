@@ -12,6 +12,8 @@ Read this before touching the UI. `docs/PLAN.md` is the project's memory (status
 
 **Parts menu:** `src/palette.ts` builds foldable sections from `src/partcategories.ts`. A NEW PART must be added to a category there (the test `partcategories.test.ts` fails otherwise). Folding is pure CSS (`.palette-cat.open` switches the body's `grid-template-rows` between 0fr and 1fr); do not animate `height` by measuring.
 
+**Movable bars:** the file bar and transport bar are made draggable with `makeDraggable` (`src/draggablebar.ts`); to make another floating bar movable, give it `position: absolute` inside the grid area and call it with a new id. Their positions are per-user UI state (localStorage), not project data. Do not use pointer capture on the bar (it redirects clicks away from the grip).
+
 **Menu size:** the right-hand parts menu is sized from `--gh-menu-scale` (tokens.css). Write new sizes inside it as `calc(Npx * var(--gh-menu-scale))`, never plain px, so the menu keeps scaling as one piece.
 
 **Keyboard:** everything reachable with the mouse in the parts menu must also work with the keyboard (headers are buttons, tiles use a roving tabindex, Enter/Space on a tile calls `Editor.placeAtCentre`). New menu items follow the same pattern; arrow-key maths goes in `palettenav.ts`. A focusable element inside the Circuit panel that is not a native button needs `role="button"` so the grid's Space shortcut (start/pause) leaves it alone. Dock tabs are glass pills styled in `glass.css` with selectors that repeat dockview's own (loaded later, so they win).
