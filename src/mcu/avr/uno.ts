@@ -14,13 +14,19 @@
 // the end of each frame the receiver takes the byte when RXEN is set and the
 // last byte was read (else it is lost, like on real hardware). d0's pin level
 // is not decoded: d0 stays a plain port pin.
+//
+// I2C and SPI: the byte-level buses (i2c.ts, spi.ts) also put their wires on the
+// pins for a logic analyzer (lineedges.ts): SDA / SCL on a4 / a5 while the TWI is
+// on, SCK / MOSI on d13 / d11 while the SPI master is on, MISO on d12 during a
+// transfer, each edge stamped with its CPU cycle.
 
-import { PinState, usart0Config, type AVRIOPort } from 'avr8js';
+import { PinState, spiConfig, twiConfig, usart0Config, type AVRIOPort } from 'avr8js';
 import type {
   BoardElectrical, BoardEmulator, BoardInputs, BoardSpec, DriveCode, IoPinDef, PinEvent, SerialPortDef, SliceResult,
 } from '../board';
 import { ATMEGA328P_FLASH_BYTES, Atmega328p } from './atmega328p';
 import type { I2cBus } from './i2c';
+import type { LineEdge, LineName } from './lineedges';
 import type { IdleSkipMode, IdleSkipStats } from './idleskip';
 import type { SpiPort } from './spi';
 
@@ -64,6 +70,17 @@ const CODES: Record<PinState, DriveCode> = {
 
 /** Index of d1 (PD1, TXD) in UNO_IO. */
 const TX_INDEX = UNO_IO.findIndex((p) => p.id === 'd1');
+/** Which pin each bus line comes out on (the hardware I2C and SPI pins of the ATmega328P). */
+const LINE_INDEX: Record<LineName, number> = {
+  sda: UNO_IO.findIndex((p) => p.id === 'a4'),
+  scl: UNO_IO.findIndex((p) => p.id === 'a5'),
+  sck: UNO_IO.findIndex((p) => p.id === 'd13'),
+  mosi: UNO_IO.findIndex((p) => p.id === 'd11'),
+  miso: UNO_IO.findIndex((p) => p.id === 'd12'),
+};
+const TWCR_TWEN = 0x04;
+const SPCR_SPE = 0x40;
+const SPCR_MSTR = 0x10;
 const UCSRA_U2X = 0x02;
 const UCSRA_RXC = 0x80;
 const UCSRB_TXB8 = 0x01;
@@ -96,6 +113,9 @@ export class UnoEmulator implements BoardEmulator {
   private txQueue: TxEdge[] = [];
   /** Cycle at which the last scheduled frame ends (the line is free from then on). */
   private txFreeAt = 0;
+  /** I2C / SPI line changes not applied yet, in cycle order, and the levels the bus operations hold on their pins now. */
+  private lineQueue: LineEdge[] = [];
+  private lineLevels = new Map<LineName, boolean>();
   /** Bytes from sendSerial not on the line yet. */
   private rxQueue: number[] = [];
   /** A received frame is on the line (its end is a clock event of the CPU). */
@@ -162,7 +182,7 @@ export class UnoEmulator implements BoardEmulator {
     this.chip.run(cycles);
     const end = this.chip.cycles;
     // TX bits that began by the end of the slice; later ones carry over to the next slice.
-    this.flushTx(end);
+    this.flushLines(end);
     const serial = this.serial.length > 0 ? { [UNO_SERIAL.id]: this.serial } : {};
     const result: SliceResult = { start, end, drives, events: this.events, serial };
     this.events = [];
@@ -231,8 +251,17 @@ export class UnoEmulator implements BoardEmulator {
    * (datasheet: disabling waits for ongoing and pending transmissions).
    */
   private compose(portDrives: string): string {
-    if (!this.txEnabled && this.txQueue.length === 0) return portDrives;
-    return portDrives.slice(0, TX_INDEX) + (this.txHigh ? 'H' : 'L') + portDrives.slice(TX_INDEX + 1);
+    let drives = portDrives;
+    if (this.txEnabled || this.txQueue.length > 0) {
+      drives = drives.slice(0, TX_INDEX) + (this.txHigh ? 'H' : 'L') + drives.slice(TX_INDEX + 1);
+    }
+    // Bus lines: SDA / SCL (a4 / a5) while the TWI is on, SCK / MOSI (d13 / d11) while the SPI master is on, MISO (d12) during a transfer.
+    for (const [line, high] of this.lineLevels) {
+      if (!this.lineActive(line)) continue;
+      const at = LINE_INDEX[line];
+      drives = drives.slice(0, at) + (high ? 'H' : 'L') + drives.slice(at + 1);
+    }
+    return drives;
   }
 
   /** Record the pins as they are now, stamped `cycle`, if they changed. */
@@ -243,22 +272,48 @@ export class UnoEmulator implements BoardEmulator {
     this.events.push({ cycle, drives });
   }
 
-  /** Apply the TX line changes up to and including `cycle`, each at its own cycle. */
-  private flushTx(cycle: number): void {
-    const queue = this.txQueue;
-    let n = 0;
-    while (n < queue.length && queue[n].cycle <= cycle) {
-      const edge = queue[n++];
-      this.txHigh = edge.high;
-      // Empty the queue before the last edge is emitted, so the end of the
-      // last frame hands d1 back to the port when TXEN is already off.
-      if (n === queue.length) {
-        queue.length = 0;
-        n = 0;
+  /**
+   * Apply the line changes up to and including `cycle`, each at its own cycle and in cycle order: the
+   * transmitter's TX line (d1) and the I2C / SPI lines the bus operations put on their pins.
+   */
+  private flushLines(cycle: number): void {
+    for (;;) {
+      const tx = this.txQueue[0];
+      const line = this.lineQueue[0];
+      if (tx !== undefined && tx.cycle <= cycle && (line === undefined || tx.cycle <= line.cycle)) {
+        // Taken off the queue before the edge is emitted, so the end of the last frame hands d1
+        // back to the port when TXEN is already off.
+        this.txQueue.shift();
+        this.txHigh = tx.high;
+        this.emit(tx.cycle);
+      } else if (line !== undefined && line.cycle <= cycle) {
+        this.lineQueue.shift();
+        if (line.high === null) this.lineLevels.delete(line.line);
+        else this.lineLevels.set(line.line, line.high);
+        this.emit(line.cycle);
+      } else {
+        return;
       }
-      this.emit(edge.cycle);
     }
-    if (n > 0) queue.splice(0, n);
+  }
+
+  /** Edges of an I2C / SPI bus operation (from the chip): queued by cycle, those that are due applied now. */
+  private onLineEdges = (edges: LineEdge[]): void => {
+    for (const e of edges) {
+      let i = this.lineQueue.length;
+      while (i > 0 && this.lineQueue[i - 1].cycle > e.cycle) i--;
+      this.lineQueue.splice(i, 0, e);
+    }
+    this.flushLines(this.chip.cycles);
+  };
+
+  /** A bus line is driven by its peripheral only while that is switched on (TWEN; SPE with MSTR). */
+  private lineActive(line: LineName): boolean {
+    const data = this.chip.cpu.data;
+    if (line === 'sda' || line === 'scl') return (data[twiConfig.TWCR] & TWCR_TWEN) !== 0;
+    if (line === 'miso') return true;
+    const spcr = data[spiConfig.SPCR];
+    return (spcr & SPCR_SPE) !== 0 && (spcr & SPCR_MSTR) !== 0;
   }
 
   /** One bit on the line, the figure avr8js uses for UDRE/TXC: (UBRR + 1) * (U2X ? 8 : 16) cycles. */
@@ -285,7 +340,7 @@ export class UnoEmulator implements BoardEmulator {
     const usart = this.chip.usart;
     if (!usart.txEnable) return;
     const now = this.chip.cycles;
-    this.flushTx(now);
+    this.flushLines(now);
     const bits = usart.bitsPerChar;
     const ninth = (this.chip.cpu.data[usart0Config.UCSRB] & UCSRB_TXB8) << 8;
     const data = bits === 9 ? (byte & 0xff) | ninth : byte & ((1 << bits) - 1);
@@ -307,7 +362,7 @@ export class UnoEmulator implements BoardEmulator {
     }
     this.txQueue.push({ cycle: t, high: true, end: true });
     this.txFreeAt = t;
-    this.flushTx(now); // a start bit at `now` shows at once
+    this.flushLines(now); // a start bit at `now` shows at once
   };
 
   /** Listen to the chip's current ports and USART. */
@@ -315,6 +370,7 @@ export class UnoEmulator implements BoardEmulator {
     const chip = this.chip;
     for (const port of [chip.portB, chip.portC, chip.portD]) port.addListener(this.onPortChange);
     chip.usart.onByteTransmit = this.onTxByte;
+    chip.onLineEdges = this.onLineEdges;
     // TXEN changes come through here (baud/frame changes too, harmless).
     chip.usart.onConfigurationChange = this.onPortChange;
     return { B: chip.portB, C: chip.portC, D: chip.portD };
@@ -323,8 +379,10 @@ export class UnoEmulator implements BoardEmulator {
   /** A watchdog reset rebuilt the chip: listen to the new parts, feed them the last inputs, report the pins. */
   private onReset = (): void => {
     // The old transmitter ran until now; the new one starts idle and disabled.
-    this.flushTx(this.chip.cycles);
+    this.flushLines(this.chip.cycles);
     this.txQueue = [];
+    this.lineQueue = [];
+    this.lineLevels.clear();
     this.txHigh = true;
     this.txFreeAt = this.chip.cycles;
     // The received frame's clock event went with the old CPU; queued bytes are dropped.
@@ -339,7 +397,7 @@ export class UnoEmulator implements BoardEmulator {
   private onPortChange = (): void => {
     const now = this.chip.cycles;
     // TX changes before this moment happened with the old setup.
-    this.flushTx(now);
+    this.flushLines(now);
     this.lastPortDrives = this.portDrives();
     this.txEnabled = this.chip.usart.txEnable;
     this.emit(now);

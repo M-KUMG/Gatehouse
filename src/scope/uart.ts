@@ -132,12 +132,11 @@ export function detectBaud(signal: LogicSignal): number | null {
   return baudFromPulse(shortestPulse(signal).pulse);
 }
 
-export const UART_DECODER: ProtocolDecoder<UartLine> = {
+export const UART_DECODER: ProtocolDecoder<UartLine, UartFrame> = {
   id: 'uart',
   name: 'UART',
   lines: ['RX/TX'],
-  implemented: true,
-  decode: (signals, settings, from, to) => decodeUart(signals[0], settings, from, to),
+  decode: (signals, settings, from, to) => decodeUart(signals[0]!, settings, from, to),
 };
 
 /** A byte as shown above the trace: "0x48" or "'H'" (non-printing bytes stay hex). */

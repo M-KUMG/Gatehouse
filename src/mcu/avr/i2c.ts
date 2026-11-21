@@ -9,6 +9,7 @@
 // stop the bus, and the TWI slave (receiver) mode is not supported.
 
 import type { AVRTWI, CPU, TWIEventHandler } from 'avr8js';
+import { I2cWire, type LineEdge } from './lineedges';
 
 /** A device model on the I2C bus. */
 export interface I2cDevice {
@@ -114,41 +115,55 @@ export class I2cBus {
  * a byte plus its ACK), counted in CPU cycles.
  */
 export class TwiBusHandler implements TWIEventHandler {
+  /** The line levels the bus operations put on SDA and SCL (lineedges.ts). */
+  private readonly wire = new I2cWire();
+
+  /** `onEdges`: told the SDA / SCL edges of every operation, stamped with CPU cycles (the analyzer's view of the bus). */
   constructor(
     private readonly cpu: CPU,
     private readonly twi: AVRTWI,
     private readonly bus: I2cBus,
     private readonly clockHz: number,
+    private readonly onEdges: ((edges: LineEdge[]) => void) | null = null,
   ) {}
 
   start(): void {
     this.bus.start();
+    this.onEdges?.(this.wire.start(this.cpu.cycles, this.bitCycles()));
     this.later(1, () => this.twi.completeStart());
   }
 
   stop(): void {
     this.bus.stop();
+    this.onEdges?.(this.wire.stop(this.cpu.cycles, this.bitCycles()));
     this.later(1, () => this.twi.completeStop());
   }
 
   connectToSlave(addr: number, write: boolean): void {
     const ack = this.bus.connect(addr, !write);
+    this.onEdges?.(this.wire.byte(this.cpu.cycles, this.bitCycles(), ((addr & 0x7f) << 1) | (write ? 0 : 1), ack));
     this.later(9, () => this.twi.completeConnect(ack));
   }
 
   writeByte(value: number): void {
     const ack = this.bus.write(value);
+    this.onEdges?.(this.wire.byte(this.cpu.cycles, this.bitCycles(), value & 0xff, ack));
     this.later(9, () => this.twi.completeWrite(ack));
   }
 
-  readByte(): void {
+  /** `ack`: the master answers this byte with ACK (more to read), else NACK (the last one). */
+  readByte(ack = true): void {
     const value = this.bus.read();
+    this.onEdges?.(this.wire.byte(this.cpu.cycles, this.bitCycles(), value, ack));
     this.later(9, () => this.twi.completeRead(value));
   }
 
   /** One SCL period = f_cpu / sclFrequency = 16 + 2 * TWBR * prescaler cycles. */
+  private bitCycles(): number {
+    return Math.max(1, Math.round(this.clockHz / this.twi.sclFrequency));
+  }
+
   private later(bits: number, done: () => void): void {
-    const cyclesPerBit = Math.max(1, Math.round(this.clockHz / this.twi.sclFrequency));
-    this.cpu.addClockEvent(done, bits * cyclesPerBit);
+    this.cpu.addClockEvent(done, bits * this.bitCycles());
   }
 }

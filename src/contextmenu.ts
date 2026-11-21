@@ -34,8 +34,9 @@ export class ContextMenu {
     document.addEventListener('keydown', this.onKeyDown, true);
     window.addEventListener('blur', () => this.close());
     window.addEventListener('resize', () => this.close());
+    // A wheel turn closes it; a scroll event does not (panes that scroll by themselves, like the serial
+    // console while a board prints, would close the menu at once). Pressing a scrollbar is a press outside.
     window.addEventListener('wheel', () => this.close(), { capture: true, passive: true });
-    window.addEventListener('scroll', () => this.close(), true);
   }
 
   get opened(): boolean {

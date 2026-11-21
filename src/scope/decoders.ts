@@ -1,6 +1,5 @@
-// Protocol decoders for the Scope window: the common interface they plug
-// into. DOM-free. UART is in uart.ts; I2C and SPI are stubs (TODO) that show
-// up in the window as "coming later" until they are written.
+// Protocol decoders for the Logic analyzer window: the common interface they
+// plug into. DOM-free. UART is in uart.ts, I2C in i2c.ts, SPI in spi.ts.
 
 import { LOW, isHigh, type DigitalTrace, type Level } from './recorder';
 
@@ -67,7 +66,7 @@ export function highAt(signal: LogicSignal, seconds: number): boolean {
   return i < 0 ? true : signal.high(i);
 }
 
-/** One decoded item (a UART byte, later an I2C address or data byte, an SPI word). */
+/** One decoded item (a UART byte, an I2C address or data byte, an SPI word). */
 export interface Annotation {
   /** Seconds where it starts and ends on the line. */
   start: number;
@@ -78,35 +77,21 @@ export interface Annotation {
 }
 
 /** What every decoder offers. */
-export interface ProtocolDecoder<Settings> {
+export interface ProtocolDecoder<Settings, Item extends Annotation = Annotation> {
   readonly id: string;
   readonly name: string;
   /** Roles of the lines it reads, in order (one channel each), e.g. ['RX/TX'] or ['SDA', 'SCL']. */
   readonly lines: readonly string[];
-  /** False for a stub that decodes nothing yet. */
-  readonly implemented: boolean;
+  /** Lines (by index in `lines`) the decoder works without, like SPI's MISO or chip select. */
+  readonly optional?: readonly number[];
   /**
    * The complete items that START at or after `from` and end by `to`, in
    * order, and the time to continue from next time (so a running trace is
-   * decoded piece by piece: the start of an unfinished item, or `to`).
+   * decoded piece by piece: the start of an unfinished item, or `to`). A
+   * decoder may also return the items of a transaction that is still going
+   * on; those start at or after `next` and are returned again, completed,
+   * by the next call from `next` (BusStream replaces them).
+   * `signals` follows `lines`; a line left out is null.
    */
-  decode(signals: readonly LogicSignal[], settings: Settings, from: number, to: number): { items: Annotation[]; next: number };
+  decode(signals: readonly (LogicSignal | null)[], settings: Settings, from: number, to: number): { items: Item[]; next: number };
 }
-
-/** I2C: TODO, not decoded yet (start/stop conditions, address + R/W, data, ACK/NACK on SDA sampled at SCL rising edges). */
-export const I2C_DECODER: ProtocolDecoder<Record<string, never>> = {
-  id: 'i2c',
-  name: 'I2C',
-  lines: ['SDA', 'SCL'],
-  implemented: false,
-  decode: (_signals, _settings, _from, to) => ({ items: [], next: to }), // TODO
-};
-
-/** SPI: TODO, not decoded yet (MOSI/MISO sampled on the clock edge of the mode, optional chip select, bit order). */
-export const SPI_DECODER: ProtocolDecoder<Record<string, never>> = {
-  id: 'spi',
-  name: 'SPI',
-  lines: ['MOSI', 'MISO', 'SCK', 'CS'],
-  implemented: false,
-  decode: (_signals, _settings, _from, to) => ({ items: [], next: to }), // TODO
-};

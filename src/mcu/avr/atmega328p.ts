@@ -12,6 +12,7 @@ import {
   timer0Config, timer1Config, timer2Config, twiConfig, usart0Config, watchdogConfig,
 } from 'avr8js';
 import { I2cBus, TwiBusHandler } from './i2c';
+import { spiByteEdges, type LineEdge } from './lineedges';
 import { IdleSkipper, SEEK_TIMEOUT, type IdleSkipMode, type IdleSkipStats } from './idleskip';
 import { SpiPort } from './spi';
 
@@ -46,6 +47,8 @@ export class Atmega328p {
    * their listeners to the new ports and USART.
    */
   onReset: (() => void) | null = null;
+  /** Told the SDA / SCL and SCK / MOSI / MISO edges of every bus operation, stamped with CPU cycles (lineedges.ts). */
+  onLineEdges: ((edges: LineEdge[]) => void) | null = null;
   /** Watchdog resets so far. */
   resets = 0;
   private parts: Parts;
@@ -190,11 +193,23 @@ export class Atmega328p {
     const portD = new AVRIOPort(cpu, portDConfig);
     const adc = new AVRADC(cpu, adcConfig);
     const twi = new AVRTWI(cpu, twiConfig, clockHz);
-    twi.eventHandler = new TwiBusHandler(cpu, twi, this.i2c, clockHz);
+    twi.eventHandler = new TwiBusHandler(cpu, twi, this.i2c, clockHz, (edges) => this.onLineEdges?.(edges));
     const spi = new AVRSPI(cpu, spiConfig, clockHz);
+    // What the SPI master has put on SCK / MOSI / MISO so far (lineedges.ts), to emit only real changes.
+    const spiLevels: { sck: boolean | null; mosi: boolean | null; miso: boolean | null } = { sck: null, mosi: null, miso: null };
     spi.onByte = (tx) => {
       const rx = this.spi.transfer(tx);
-      cpu.addClockEvent(() => spi.completeTransfer(rx), spi.transferCycles);
+      const cycles = spi.transferCycles;
+      if (this.onLineEdges && spi.isMaster) {
+        const spcr = cpu.data[spiConfig.SPCR];
+        const edges = spiByteEdges(
+          { t0: cpu.cycles, cycles, tx, rx, cpol: (spcr & 0x08) !== 0, cpha: (spcr & 0x04) !== 0, lsbFirst: (spcr & 0x20) !== 0 },
+          spiLevels,
+        );
+        for (const e of edges) spiLevels[e.line as 'sck' | 'mosi' | 'miso'] = e.high;
+        this.onLineEdges(edges);
+      }
+      cpu.addClockEvent(() => spi.completeTransfer(rx), cycles);
     };
     const watchdog = new AVRWatchdog(cpu, watchdogConfig, clock);
     // avr8js' watchdog calls cpu.reset() on a timeout, which only resets the

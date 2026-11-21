@@ -16,6 +16,7 @@
 
 import './glassselect.css';
 import { attachDrop, type Drop } from './droplight';
+import { scrollMovesAnchor } from './scrollmoves';
 
 export interface ListEntry {
   label: string;
@@ -164,6 +165,9 @@ export function enhanceSelect(select: HTMLSelectElement): void {
   };
   const onScroll = (e: Event): void => {
     if (e.target instanceof Node && list?.contains(e.target)) return;
+    // Only a scroll that can move the button closes the list; panes that scroll by themselves
+    // (the serial console while a board prints) must not.
+    if (!scrollMovesAnchor(e.target, button)) return;
     close();
   };
 

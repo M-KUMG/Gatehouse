@@ -9,6 +9,7 @@
 // keeps working, even while the element is hovered. Touch screens have no hover
 // and are left alone. Positioning is in tipbubble.ts.
 
+import { scrollMovesAnchor } from './scrollmoves';
 import { TipBubble, preferredVerticalSide } from './tipbubble';
 
 const SHOW_DELAY_MS = 350; // pause before the first bubble appears
@@ -118,6 +119,13 @@ export function installTooltips(): void {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') hideBubble();
   });
-  window.addEventListener('scroll', hideBubble, true);
+  // Only a scroll that can move what the tip describes hides it (the serial console scrolls itself while a board prints).
+  window.addEventListener(
+    'scroll',
+    (e) => {
+      if (scrollMovesAnchor(e.target, current)) hideBubble();
+    },
+    true,
+  );
   window.addEventListener('blur', () => leave());
 }

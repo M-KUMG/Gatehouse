@@ -1,6 +1,7 @@
 // The Logic analyzer window (panel id 'logic-analyzer'; it was the first
 // "Scope" window, id 'scope', and saved layouts are migrated, see persist.ts):
-// digital traces of board pins over simulated time, with UART decoding. The
+// digital traces of board pins over simulated time, with UART decoding of a
+// channel and I2C / SPI decoder rows (two to four pins read together). The
 // analog part inspector is now the Scope window (inspector.ts). Probing by
 // clicking a part comes later (docs/PLAN.md step 7b).
 //
@@ -8,7 +9,13 @@
 //   pins, named like on the part). Adding arms the pin in the recorder
 //   (sim.recorder, src/scope/recorder.ts), which records it from then on while
 //   the board runs; removing disarms it. Each row can be renamed and decoded
-//   (UART; I2C and SPI are listed as coming later).
+//   as UART.
+// - Decoders: "Add decoder" with a Board and a type (I2C, SPI) adds a row that
+//   reads several pins together (I2C: SDA, SCL; SPI: MOSI, MISO, SCK and an
+//   optional chip select; pins can be changed in the row, SPI also has its mode
+//   and bit order). It arms the pins it needs; they are disarmed when no
+//   channel and no decoder uses them. Decoded items are drawn as boxes in the
+//   decoder's own row below the channels.
 // - The channel list is session UI state: not saved in the project, no undo
 //   step, no unsaved mark. The samples are never saved either.
 // - Canvas: one row per channel (high / low, high impedance as a mid line,
@@ -27,7 +34,10 @@ import './scope.css';
 import { boardsInOrder } from '../boardcontrols';
 import type { PlacedPart, Scene } from '../model';
 import { boardLabelWithId, getPart } from '../parts';
-import { I2C_DECODER, SPI_DECODER, logicOf } from '../scope/decoders';
+import { BusStream, type BusSource } from '../scope/busstream';
+import { logicOf, type Annotation } from '../scope/decoders';
+import { I2C_DECODER, type I2cItem, type I2cSettings } from '../scope/i2c';
+import { DEFAULT_SPI, SPI_DECODER, type SpiMode, type SpiSettings, type SpiWord } from '../scope/spi';
 import { HIGH, HI_Z, LOW, PULL_UP, channelKey, type DigitalTrace, type Level } from '../scope/recorder';
 import {
   DEFAULT_SPAN, firstEndingAfter, fitAll, followLatest, formatFrequency, formatTime, levelY, panBy, planTrace, tickStep,
@@ -60,13 +70,21 @@ const COLORS = {
   label: '#2f5f99',
   labelText: '#e8f1ff',
   error: '#d0544c',
+  busMark: '#6b6f78',
+  busData: '#2f7f6a',
   cursorA: '#4ea1ff',
   cursorB: '#e0a040',
   hover: 'rgba(255, 255, 255, 0.35)',
   text: '#c3c7ce',
 };
 
-type DecoderId = 'none' | 'uart' | 'i2c' | 'spi';
+type DecoderId = 'none' | 'uart';
+
+/** What a decoder row draws: any decoder's item with its label. */
+type BusBox = Annotation & { text: string; kind?: string };
+
+/** Height of a decoder row's list entry and canvas row (CSS pixels): the pin pickers need room. */
+const BUS_ROW_H = { i2c: 64, spi: 118 } as const;
 
 const FORMATS: readonly Omit<UartSettings, 'baud'>[] = [
   { dataBits: 8, parity: 'none', stopBits: 1 },
@@ -82,6 +100,18 @@ const FORMATS: readonly Omit<UartSettings, 'baud'>[] = [
   { dataBits: 6, parity: 'none', stopBits: 1 },
   { dataBits: 5, parity: 'none', stopBits: 1 },
 ];
+
+/** A decoder row: I2C or SPI reading several pins of one board (session state only). */
+interface BusRow {
+  kind: 'i2c' | 'spi';
+  board: number;
+  name: string;
+  /** One pin id per line of the decoder (SDA, SCL / MOSI, MISO, SCK, CS); null: not connected. */
+  pins: (string | null)[];
+  spi: SpiSettings;
+  i2cStream: BusStream<I2cSettings, I2cItem>;
+  spiStream: BusStream<SpiSettings & { pins: (string | null)[] }, SpiWord>;
+}
 
 /** One row of the window (session state only). */
 interface Channel {
@@ -105,6 +135,8 @@ export class LogicAnalyzerWindow {
   private readonly boardSelect = document.createElement('select');
   private readonly pinSelect = document.createElement('select');
   private readonly addButton = document.createElement('button');
+  private readonly busKind = document.createElement('select');
+  private readonly addBusButton = document.createElement('button');
   private readonly holdButton = document.createElement('button');
   private readonly followButton = document.createElement('button');
   private readonly fitButton = document.createElement('button');
@@ -118,6 +150,7 @@ export class LogicAnalyzerWindow {
   private readonly ctx: CanvasRenderingContext2D | null;
 
   private channels: Channel[] = [];
+  private buses: BusRow[] = [];
   private boardChoice = '';
   private pinChoice = '';
   private boardOptions = '';
@@ -154,6 +187,11 @@ export class LogicAnalyzerWindow {
     this.pinSelect.setAttribute('aria-label', 'Pin');
     this.pinSelect.title = 'Pin to add as a channel';
     button(this.addButton, 'Add channel', 'Record this pin from now on while its board runs');
+    this.busKind.className = 'serial-select';
+    this.busKind.setAttribute('aria-label', 'Decoder type');
+    this.busKind.title = 'Bus to decode on the board above';
+    this.busKind.append(option('i2c', 'I2C (SDA, SCL)'), option('spi', 'SPI (MOSI, MISO, SCK, CS)'));
+    button(this.addBusButton, 'Add decoder', 'Record the bus pins and decode them (the board above; pins can be changed in the row)');
     button(this.holdButton, 'Hold', 'Freeze the display (recording goes on)');
     button(this.followButton, 'Latest', 'Follow the newest time while the simulation runs');
     button(this.fitButton, 'Fit', 'Show everything recorded');
@@ -162,7 +200,8 @@ export class LogicAnalyzerWindow {
     const spacer = document.createElement('span');
     spacer.className = 'serial-spacer';
     bar.append(
-      field('Board', this.boardSelect), field('Pin', this.pinSelect), this.addButton, this.note, spacer,
+      field('Board', this.boardSelect), field('Pin', this.pinSelect), this.addButton,
+      field('Decoder', this.busKind), this.addBusButton, this.note, spacer,
       this.clearCursorsButton, this.fitButton, this.followButton, this.holdButton,
     );
 
@@ -185,6 +224,7 @@ export class LogicAnalyzerWindow {
     });
     this.pinSelect.addEventListener('change', () => (this.pinChoice = this.pinSelect.value));
     this.addButton.addEventListener('click', () => this.addChannel());
+    this.addBusButton.addEventListener('click', () => this.addBus());
     this.holdButton.addEventListener('click', () => {
       this.holdAt = this.holdAt === null ? this.sim.recorder.latest : null;
       this.invalidate();
@@ -237,11 +277,17 @@ export class LogicAnalyzerWindow {
     }
     this.holdButton.classList.toggle('scope-on', this.holdAt !== null);
     this.followButton.classList.toggle('scope-on', this.follow && this.holdAt === null);
-    const dropped = this.channels.some((c) => (this.sim.recorder.trace(c.board, c.pin)?.dropped ?? 0) > 0);
+    this.addBusButton.disabled = boards.length === 0;
+    this.busKind.disabled = boards.length === 0;
+    const dropped =
+      this.channels.some((c) => (this.sim.recorder.trace(c.board, c.pin)?.dropped ?? 0) > 0) ||
+      this.buses.some((b) => b.pins.some((pin) => pin !== null && (this.sim.recorder.trace(b.board, pin)?.dropped ?? 0) > 0));
     const note = dropped ? 'Oldest edges dropped (1,000,000 kept per channel)' : '';
     if (this.note.textContent !== note) this.note.textContent = note;
-    const hint = this.channels.length === 0
-      ? boards.length === 0 ? 'No board in the project' : 'Pick a board and a pin, then Add channel. Pins are recorded while their board runs.'
+    const hint = this.channels.length === 0 && this.buses.length === 0
+      ? boards.length === 0
+        ? 'No board in the project'
+        : 'Pick a board and a pin, then Add channel; or add an I2C / SPI decoder. Pins are recorded while their board runs.'
       : '';
     if (this.hint.textContent !== hint) this.hint.textContent = hint;
     this.hint.hidden = hint === '';
@@ -310,9 +356,63 @@ export class LogicAnalyzerWindow {
 
   private removeChannel(ch: Channel): void {
     this.channels = this.channels.filter((c) => c !== ch);
-    this.sim.recorder.disarm(ch.board, ch.pin);
+    this.releasePin(ch.board, ch.pin);
     this.renderList();
     this.invalidate();
+  }
+
+  /** Whether a channel or a decoder row still uses this pin (the recorder arms a pin once, however many use it). */
+  private pinInUse(board: number, pin: string): boolean {
+    return this.channels.some((c) => c.board === board && c.pin === pin) || this.buses.some((b) => b.board === board && b.pins.includes(pin));
+  }
+
+  /** Stop recording a pin that nothing uses any more. */
+  private releasePin(board: number, pin: string): void {
+    if (!this.pinInUse(board, pin)) this.sim.recorder.disarm(board, pin);
+  }
+
+  private addBus(): void {
+    const part = this.scene.find(Number(this.boardChoice));
+    if (!part) return;
+    const kind = this.busKind.value === 'spi' ? 'spi' : 'i2c';
+    const ids = new Set(pinItems(part).map(([id]) => id));
+    const want = (id: string): string | null => (ids.has(id) ? id : null);
+    // The hardware pins of an Uno / Nano; a chip select is left out until the person picks one (an unused select pin would hide every word).
+    const pins = kind === 'i2c' ? [want('a4'), want('a5')] : [want('d11'), want('d12'), want('d13'), null];
+    const several = boardsInOrder(this.scene.parts).length > 1;
+    const base = kind === 'i2c' ? I2C_DECODER.name : SPI_DECODER.name;
+    const row: BusRow = {
+      kind, board: part.id, name: several ? `${base} ${boardLabelWithId(part)}` : base, pins, spi: { ...DEFAULT_SPI },
+      i2cStream: new BusStream(I2C_DECODER), spiStream: new BusStream(SPI_DECODER),
+    };
+    for (const pin of pins) if (pin) this.sim.recorder.arm(part.id, pin);
+    this.buses.push(row);
+    this.renderList();
+    this.invalidate();
+  }
+
+  private removeBus(row: BusRow): void {
+    this.buses = this.buses.filter((b) => b !== row);
+    for (const pin of row.pins) if (pin) this.releasePin(row.board, pin);
+    this.renderList();
+    this.invalidate();
+  }
+
+  /** The decoder row's items, brought up to date with what the pins recorded. Empty while a needed pin is missing. */
+  private busItems(row: BusRow): readonly BusBox[] {
+    const traces = row.pins.map((pin) => (pin ? this.sim.recorder.trace(row.board, pin) : undefined));
+    const source: BusSource = {
+      signals: traces.map((t) => (t ? logicOf(t) : null)),
+      generation: traces.reduce((sum, t) => sum + (t?.generation ?? 0), 0),
+    };
+    if (row.kind === 'i2c') {
+      if (!source.signals[0] || !source.signals[1]) return [];
+      row.i2cStream.update(source, { pins: row.pins });
+      return row.i2cStream.items;
+    }
+    if (!source.signals[2]) return [];
+    row.spiStream.update(source, { ...row.spi, pins: row.pins });
+    return row.spiStream.items;
   }
 
   /** Rebuild the channel list (only when channels are added or removed, or a decoder changes). */
@@ -321,7 +421,8 @@ export class LogicAnalyzerWindow {
     header.className = 'scope-list-header';
     header.style.height = `${AXIS_H}px`;
     header.textContent = this.channels.length > 0 ? 'Channels' : '';
-    const rows = this.channels.map((ch) => this.channelRow(ch));
+    header.textContent = this.channels.length + this.buses.length > 0 ? 'Channels' : '';
+    const rows = [...this.channels.map((ch) => this.channelRow(ch)), ...this.buses.map((b) => this.busRow(b))];
     this.list.replaceChildren(header, ...rows);
   }
 
@@ -360,11 +461,7 @@ export class LogicAnalyzerWindow {
 
     const decode = document.createElement('div');
     decode.className = 'scope-channel-line';
-    const decoder = select('Decoder', [
-      ['none', 'No decoding'], ['uart', 'UART'],
-      ['i2c', `${I2C_DECODER.name} (coming later)`], ['spi', `${SPI_DECODER.name} (coming later)`],
-    ], ch.decoder);
-    for (const o of decoder.options) o.disabled = o.value === 'i2c' || o.value === 'spi';
+    const decoder = select('Decoder', [['none', 'No decoding'], ['uart', 'UART']], ch.decoder);
     decoder.addEventListener('change', () => {
       ch.decoder = decoder.value as DecoderId;
       this.renderList();
@@ -397,12 +494,89 @@ export class LogicAnalyzerWindow {
     return row;
   }
 
+  /** The list entry of a decoder row: its name, pin pickers and (SPI) mode and bit order. */
+  private busRow(row: BusRow): HTMLElement {
+    const el = document.createElement('div');
+    el.className = 'scope-channel';
+    el.style.height = `${BUS_ROW_H[row.kind]}px`;
+    el.dataset.decoder = row.kind;
+
+    const top = document.createElement('div');
+    top.className = 'scope-channel-line';
+    const name = document.createElement('input');
+    name.type = 'text';
+    name.className = 'scope-name';
+    name.value = row.name;
+    name.spellcheck = false;
+    name.setAttribute('aria-label', 'Decoder name');
+    name.title = 'Rename the decoder';
+    name.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter' || e.key === 'Escape') name.blur();
+    });
+    name.addEventListener('change', () => {
+      row.name = name.value.trim() || (row.kind === 'i2c' ? I2C_DECODER.name : SPI_DECODER.name);
+      name.value = row.name;
+      this.invalidate();
+    });
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'scope-remove';
+    remove.textContent = '×';
+    remove.title = 'Remove the decoder (stops recording pins nothing else uses)';
+    remove.setAttribute('aria-label', 'Remove decoder');
+    remove.addEventListener('click', () => this.removeBus(row));
+    top.append(name, remove);
+    el.append(top);
+
+    const part = this.scene.find(row.board);
+    const pins = part ? pinItems(part) : [];
+    const pinPicker = (index: number, label: string, optional: boolean): HTMLLabelElement => {
+      const items: [string, string][] = [...(optional ? ([['', '–']] as [string, string][]) : []), ...pins];
+      const picker = select(`${label} pin`, items, row.pins[index] ?? '');
+      picker.addEventListener('change', () => {
+        const old = row.pins[index];
+        const chosen = picker.value === '' ? null : picker.value;
+        row.pins[index] = chosen;
+        if (chosen) this.sim.recorder.arm(row.board, chosen);
+        if (old) this.releasePin(row.board, old);
+        this.invalidate();
+      });
+      return field(label, picker);
+    };
+    const line = (...children: HTMLElement[]): HTMLElement => {
+      const l = document.createElement('div');
+      l.className = 'scope-channel-line';
+      l.append(...children);
+      return l;
+    };
+    if (row.kind === 'i2c') {
+      el.append(line(pinPicker(0, 'SDA', false), pinPicker(1, 'SCL', false)));
+      return el;
+    }
+    const mode = select('SPI mode', [['0', 'Mode 0'], ['1', 'Mode 1'], ['2', 'Mode 2'], ['3', 'Mode 3']], String(row.spi.mode));
+    mode.title = 'SPI mode: clock idle level and the edge the data is read on (0: low, rising; 1: low, falling; 2: high, falling; 3: high, rising)';
+    mode.addEventListener('change', () => {
+      row.spi = { ...row.spi, mode: Number(mode.value) as SpiMode };
+      this.invalidate();
+    });
+    const order = select('Bit order', [['msb', 'MSB first'], ['lsb', 'LSB first']], row.spi.lsbFirst ? 'lsb' : 'msb');
+    order.addEventListener('change', () => {
+      row.spi = { ...row.spi, lsbFirst: order.value === 'lsb' };
+      this.invalidate();
+    });
+    el.append(line(mode, order), line(pinPicker(0, 'MOSI', true), pinPicker(1, 'MISO', true)), line(pinPicker(2, 'SCK', false), pinPicker(3, 'CS', true)));
+    return el;
+  }
+
   // ---- Drawing ----
 
   private draw(): void {
     const ctx = this.ctx;
     const width = this.plot.clientWidth;
-    const height = AXIS_H + Math.max(1, this.channels.length) * ROW_H;
+    const busHeight = this.buses.reduce((sum, b) => sum + BUS_ROW_H[b.kind], 0);
+    const channelRows = this.channels.length === 0 && this.buses.length > 0 ? 0 : Math.max(1, this.channels.length);
+    const height = AXIS_H + channelRows * ROW_H + busHeight;
     if (!ctx || !this.element.isConnected || width === 0) return; // hidden: stays dirty, drawn when shown
     this.dirty = false;
     this.width = width;
@@ -446,8 +620,49 @@ export class LogicAnalyzerWindow {
       if (ch.decoder === 'uart') this.drawUart(ctx, ch, trace, top + 1, width, until);
     });
 
+    let busTop = AXIS_H + channelRows * ROW_H;
+    for (const row of this.buses) {
+      const h = BUS_ROW_H[row.kind];
+      ctx.fillStyle = COLORS.rowLine;
+      ctx.fillRect(0, busTop + h - 1, width, 1);
+      this.drawBus(ctx, row, busTop, h, width, until);
+      busTop += h;
+    }
+
     this.drawCursors(ctx, width, height);
     this.updateReadout();
+  }
+
+  /** A decoder row: the decoded items as boxes in a band in the middle of the row (START / STOP as small marks). */
+  private drawBus(ctx: CanvasRenderingContext2D, row: BusRow, top: number, h: number, width: number, until: number): void {
+    const items = this.busItems(row);
+    const view = this.view;
+    const viewEnd = Math.min(view.start + view.span, until);
+    const boxH = LABEL_H + 6;
+    const y = top + Math.round((h - boxH) / 2);
+    let lastX = -Infinity;
+    ctx.textAlign = 'center';
+    for (let i = firstEndingAfter(items, view.start - 1e-9); i < items.length && items[i].start < viewEnd; i++) {
+      const f = items[i];
+      if (f.start > until) break;
+      const mark = f.kind === 'start' || f.kind === 'repeated-start' || f.kind === 'stop';
+      let x0 = Math.max(0, timeToX(view, width, f.start));
+      let x1 = Math.min(width, timeToX(view, width, Math.min(f.end, until)));
+      if (mark) {
+        const centre = (x0 + x1) / 2;
+        x0 = centre - 8;
+        x1 = centre + 8;
+      }
+      if (x1 < lastX + 2) continue; // too dense to tell apart: the next visible one is enough
+      lastX = x1;
+      ctx.fillStyle = f.error ? COLORS.error : mark ? COLORS.busMark : f.kind === 'data' ? COLORS.busData : COLORS.label;
+      ctx.fillRect(x0 + 0.5, y, Math.max(1, x1 - x0 - 1), boxH);
+      if (x1 - x0 > ctx.measureText(f.text).width + 4) {
+        ctx.fillStyle = COLORS.labelText;
+        ctx.fillText(f.text, (x0 + x1) / 2, y + boxH / 2);
+      }
+    }
+    ctx.textAlign = 'left';
   }
 
   private drawTrace(ctx: CanvasRenderingContext2D, trace: DigitalTrace, top: number, h: number, width: number, until: number): void {
@@ -556,7 +771,13 @@ export class LogicAnalyzerWindow {
         }
         return text;
       });
-      parts.push(`t ${formatTime(t)}`, ...levels);
+      const decoded: string[] = [];
+      for (const row of this.buses) {
+        const items: readonly BusBox[] = row.kind === 'i2c' ? row.i2cStream.items : row.spiStream.items;
+        const f = items[firstEndingAfter(items, t)];
+        if (f && f.start <= t) decoded.push(`${row.name}: ${f.text}${f.error ? ` (${f.error})` : ''}`);
+      }
+      parts.push(`t ${formatTime(t)}`, ...levels, ...decoded);
     }
     if (parts.length === 0) parts.push(this.channels.length > 0 ? 'Click to place cursors A and B · wheel zooms · drag pans' : '');
     const text = parts.join('   ');
