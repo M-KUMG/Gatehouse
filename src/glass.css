@@ -217,7 +217,8 @@ body::before {
 .bo-select,
 .fx-input,
 .palette-search-input,
-.value-editor input {
+.value-editor input,
+.save-dialog input[type='text'] {
   border-radius: var(--gh-radius-sm);
   border-color: var(--gh-border);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);

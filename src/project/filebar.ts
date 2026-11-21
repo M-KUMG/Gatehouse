@@ -1,25 +1,22 @@
-// Small bar in the top-left corner of the grid: New, Open, Save, Undo, Redo,
-// and the project name with a dot while there are unsaved changes.
+// Small bar in the top-left corner of the grid: the File menu (New, and in the
+// browser Import / Export, in Electron Open folder / Save / Save as / Import /
+// Export: see filecommands.ts), the Windows menu (added by main.ts), Undo,
+// Redo, and the project name with a dot while there are unsaved changes.
+
+import { fileMenu, type FileCommand } from './filecommands';
 
 const svg = (body: string): string =>
   '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" ' +
   `stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 
 const ICONS = {
-  new: svg('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M12 12v6M9 15h6"/>'),
-  open: svg('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
-  save: svg(
-    '<path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3"/>' +
-      '<rect x="7" y="13" width="10" height="6" rx="1"/>',
-  ),
   undo: svg('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
   redo: svg('<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>'),
 };
 
 export interface FileBarActions {
-  newProject: () => void;
-  open: () => void;
-  save: () => void;
+  /** A File menu entry was chosen. */
+  command: (command: FileCommand) => void;
   undo: () => void;
   redo: () => void;
 }
@@ -33,8 +30,8 @@ export interface FileBar {
   showHistory: (canUndo: boolean, canRedo: boolean) => void;
 }
 
-/** Builds the bar inside `parent`. */
-export function createFileBar(parent: HTMLElement, actions: FileBarActions): FileBar {
+/** Builds the bar inside `parent`. `folders`: this is the Electron app, which can keep a project in a folder. */
+export function createFileBar(parent: HTMLElement, actions: FileBarActions, folders: boolean): FileBar {
   const bar = document.createElement('div');
   bar.className = 'file-bar';
   const name = document.createElement('span');
@@ -46,15 +43,7 @@ export function createFileBar(parent: HTMLElement, actions: FileBarActions): Fil
   const undo = button('Undo (Ctrl+Z)', ICONS.undo, actions.undo);
   const redo = button('Redo (Ctrl+Y or Ctrl+Shift+Z)', ICONS.redo, actions.redo);
   undo.disabled = redo.disabled = true;
-  bar.append(
-    button('New project', ICONS.new, actions.newProject),
-    button('Open project… (Ctrl+O)', ICONS.open, actions.open),
-    button('Save project (Ctrl+S) · Save as… (Ctrl+Shift+S)', ICONS.save, actions.save),
-    undo,
-    redo,
-    name,
-    dot,
-  );
+  bar.append(createFileMenu(actions.command, folders), undo, redo, name, dot);
   parent.append(bar);
 
   return {
@@ -69,6 +58,78 @@ export function createFileBar(parent: HTMLElement, actions: FileBarActions): Fil
       redo.disabled = !canRedo;
     },
   };
+}
+
+/** The "File" button with its drop-down list; it closes after a choice, on Escape and on an outside press. */
+function createFileMenu(run: (command: FileCommand) => void, folders: boolean): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'windows-menu file-menu';
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'file-button file-menu-button';
+  trigger.textContent = 'File';
+  trigger.title = 'New project, open, save, import and export';
+  trigger.setAttribute('aria-haspopup', 'menu');
+  trigger.setAttribute('aria-expanded', 'false');
+
+  const menu = document.createElement('div');
+  menu.className = 'windows-menu-list file-menu-list';
+  menu.setAttribute('role', 'menu');
+  menu.hidden = true;
+
+  const setOpen = (open: boolean): void => {
+    menu.hidden = !open;
+    trigger.classList.toggle('active', open);
+    trigger.setAttribute('aria-expanded', String(open));
+    if (open) {
+      document.addEventListener('pointerdown', onOutside, true);
+      document.addEventListener('keydown', onKey, true);
+    } else {
+      document.removeEventListener('pointerdown', onOutside, true);
+      document.removeEventListener('keydown', onKey, true);
+    }
+  };
+  const onOutside = (e: PointerEvent): void => {
+    if (!(e.target instanceof Node && wrap.contains(e.target))) setOpen(false);
+  };
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation(); // Escape closes the menu, not the selection on the grid
+    setOpen(false);
+    trigger.focus();
+  };
+
+  for (const entry of fileMenu(folders)) {
+    if (entry === 'separator') {
+      const line = document.createElement('div');
+      line.className = 'windows-menu-separator';
+      menu.append(line);
+      continue;
+    }
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'windows-menu-item file-menu-item';
+    item.setAttribute('role', 'menuitem');
+    const label = document.createElement('span');
+    label.textContent = entry.label;
+    item.append(label);
+    if (entry.keys) {
+      const keys = document.createElement('span');
+      keys.className = 'menu-shortcut';
+      keys.textContent = entry.keys;
+      item.append(keys);
+    }
+    if (entry.title) item.title = entry.title;
+    item.addEventListener('click', () => {
+      setOpen(false);
+      run(entry.command);
+    });
+    menu.append(item);
+  }
+
+  trigger.addEventListener('click', () => setOpen(menu.hidden));
+  wrap.append(trigger, menu);
+  return wrap;
 }
 
 function button(title: string, icon: string, onClick: () => void): HTMLButtonElement {

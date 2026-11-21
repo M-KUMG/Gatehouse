@@ -1,14 +1,20 @@
-// New / Open / Save / Save as, their shortcuts, the unsaved-changes guard,
+// New, Import / Export of `.gth` files, and in the Electron app Open folder /
+// Save / Save as for a project kept in a real folder (filecommands.ts says which
+// exist where), their shortcuts, the unsaved-changes guard,
 // autosave, the offer to restore it at start-up, and the undo history
 // (reset on every load; its shortcuts live in the editor, see interaction.ts).
 
 import { APP_NAME } from '../app';
 import { ask, toast } from './dialog';
+import { commandForKey, type FileCommand } from './filecommands';
 import { createFileBar, type FileBar } from './filebar';
+import { folderHost, type FolderHost } from './folderhost';
+import { askSaveLocation } from './saveasdialog';
 import { projectFromBytes, projectToGth, type ReadFile } from './diskfile';
 import { fileNameFor, projectNameFromFile } from './filename';
 import { chooseFileToOpen, chooseSaveTarget, type SaveTarget } from './files';
 import { ProjectError, type ProjectFile } from './format';
+import { fromFileMap, toFileMap } from './storage';
 import type { Project } from './project';
 import { readAutosave, startAutosave } from './autosave';
 import { UndoManager, type UndoHooks } from './undo';
@@ -28,6 +34,10 @@ const IS_ELECTRON = /\bElectron\//.test(navigator.userAgent);
 export class ProjectController {
   /** The file Save writes to, once known. */
   private target: SaveTarget | null = null;
+  /** The project folder Save writes to (Electron), once known. */
+  private folder: { dir: string; name: string } | null = null;
+  /** The Electron app's folder commands; null in the browser. */
+  private readonly host: FolderHost | null = folderHost();
   private busy = false;
   /** New / Open / Save / Undo / Redo and the project name. */
   readonly fileBar: FileBar;
@@ -39,13 +49,15 @@ export class ProjectController {
     /** Where the file bar goes (the grid's area). */
     fileBarParent: HTMLElement,
   ) {
-    this.fileBar = createFileBar(fileBarParent, {
-      newProject: () => void this.newProject(),
-      open: () => void this.open(),
-      save: () => void this.save(false),
-      undo: () => this.history.undo(),
-      redo: () => this.history.redo(),
-    });
+    this.fileBar = createFileBar(
+      fileBarParent,
+      {
+        command: (command) => void this.runCommand(command),
+        undo: () => this.history.undo(),
+        redo: () => this.history.redo(),
+      },
+      this.host !== null,
+    );
     this.history = new UndoManager(project, hooks);
     this.history.onChange(() => this.fileBar.showHistory(this.history.canUndo, this.history.canRedo));
     project.onChange(this.refresh);
@@ -70,6 +82,7 @@ export class ProjectController {
     await this.run(async () => {
       if (!(await this.confirmDiscard())) return;
       this.target = null;
+      this.folder = null;
       this.hooks.beforeLoad();
       this.project.clear();
       this.history.reset();
@@ -77,6 +90,7 @@ export class ProjectController {
     });
   }
 
+  /** Import: read a `.gth` (or older JSON) file. */
   async open(): Promise<void> {
     await this.run(async () => {
       if (!(await this.confirmDiscard())) return;
@@ -91,13 +105,14 @@ export class ProjectController {
         return;
       }
       this.load(read.file, false);
+      this.folder = null; // Save (Electron) asks for a folder; the file stays the Export target
       // An older JSON file is not overwritten with a zip: the next Save asks where.
       this.target = read.legacy ? null : opened.target;
       toast(`Opened "${opened.name}"`);
     });
   }
 
-  /** Save to the known file, or ask where (always with `as`). */
+  /** Export: write a `.gth` to the known file, or ask where (always with `as`). */
   async save(as: boolean): Promise<void> {
     await this.run(async () => {
       const target = !as && this.target?.reusable ? this.target : await chooseSaveTarget(fileNameFor(this.project.name));
@@ -109,6 +124,81 @@ export class ProjectController {
       this.project.markSaved(name);
       toast(target.reusable ? `Saved "${target.name}"` : `Downloaded "${target.name}"`);
     });
+  }
+
+  /** Open project folder (Electron). */
+  async openFolder(): Promise<void> {
+    const host = this.host;
+    if (!host) return;
+    await this.run(async () => {
+      if (!(await this.confirmDiscard())) return;
+      const picked = await host.pickProjectFolder('open');
+      if ('cancelled' in picked) return;
+      if ('error' in picked) return void toast(picked.error, 'error');
+      const read = await host.readProjectFolder(picked.dir);
+      if ('error' in read) return void toast(`Could not open "${picked.name}": ${read.error}`, 'error');
+      let file: ProjectFile;
+      try {
+        file = { ...fromFileMap(read.map), name: picked.name }; // all checks happen before anything changes
+      } catch (e) {
+        if (!(e instanceof ProjectError)) throw e;
+        return void toast(`Could not open "${picked.name}": ${e.message}`, 'error');
+      }
+      this.load(file, false);
+      this.target = null;
+      this.folder = { dir: picked.dir, name: picked.name };
+      toast(`Opened folder "${picked.name}"`);
+    });
+  }
+
+  /** Save to the project's folder, or ask for one (always with `as`, or when it has none yet). Electron only. */
+  async saveFolder(as: boolean): Promise<void> {
+    const host = this.host;
+    if (!host) return;
+    await this.run(async () => {
+      let folder = as ? null : this.folder;
+      if (!folder) {
+        const picked = await askSaveLocation(host, this.project.name);
+        if (!picked) return;
+        if (picked.kind !== 'empty' && picked.kind !== 'new' && !(await this.confirmFolder(picked.name, picked.kind))) return;
+        folder = { dir: picked.dir, name: picked.name };
+      }
+      const file: ProjectFile = { ...this.project.serialize(), name: folder.name, savedAt: new Date().toISOString() };
+      const written = await host.writeProjectFolder(folder.dir, toFileMap(file));
+      if (written.error) return void toast(`Could not save to "${folder.name}": ${written.error}`, 'error');
+      this.folder = folder;
+      this.project.markSaved(folder.name);
+      toast(`Saved to folder "${folder.name}"`);
+    });
+  }
+
+  /** Writing into a folder that already holds something: say what will happen. */
+  private confirmFolder(name: string, kind: 'project' | 'other'): Promise<boolean> {
+    const detail =
+      kind === 'project'
+        ? `"${name}" already holds a ${APP_NAME} project. Saving here replaces its project files.`
+        : `"${name}" is not empty. ${APP_NAME} will add gatehouse.json and a "boards" folder to it and leave your other files alone.`;
+    return ask(
+      'Save into this folder?',
+      detail,
+      [
+        { label: 'Cancel', value: false },
+        { label: 'Save here', value: true, primary: true },
+      ],
+      false,
+    );
+  }
+
+  private runCommand(command: FileCommand): Promise<void> {
+    switch (command) {
+      case 'new': return this.newProject();
+      case 'openFolder': return this.openFolder();
+      case 'saveFolder': return this.saveFolder(false);
+      case 'saveFolderAs': return this.saveFolder(true);
+      case 'import': return this.open();
+      case 'export': return this.save(false);
+      case 'exportAs': return this.save(true);
+    }
   }
 
   private load(file: ProjectFile, dirty: boolean): void {
@@ -133,6 +223,7 @@ export class ProjectController {
     // Something may have been built while the question was open.
     if (restore && (this.project.empty || (await this.confirmDiscard()))) {
       this.target = null;
+      this.folder = null;
       this.load(file, dirty);
     }
   }
@@ -172,10 +263,9 @@ export class ProjectController {
 
   private onKeyDown = (e: KeyboardEvent): void => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
-    const key = e.key.toLowerCase();
-    if (key === 's') void this.save(e.shiftKey);
-    else if (key === 'o' && !e.shiftKey) void this.open();
-    else return;
+    const command = commandForKey(this.host !== null, e.key.toLowerCase(), e.shiftKey);
+    if (!command) return;
+    void this.runCommand(command);
     e.preventDefault();
   };
 }

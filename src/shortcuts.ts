@@ -3,6 +3,8 @@
 // changed in the code, change it here too (the key handlers are in
 // interaction.ts, project/controller.ts, palette.ts and draggablebar.ts).
 
+import { projectShortcuts } from './project/filecommands';
+
 /** One way to do something: the keys of a chord, pressed together ("Ctrl", "Shift", "Z") or one mouse gesture. */
 export type Chord = readonly string[];
 
@@ -17,7 +19,9 @@ export interface ShortcutGroup {
   items: readonly Shortcut[];
 }
 
-export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
+/** The sheet's groups; the Project group differs in the Electron app (`folders`: it has project folders). */
+export function shortcutGroups(folders: boolean): readonly ShortcutGroup[] {
+  return [
   {
     title: 'Editing',
     items: [
@@ -62,11 +66,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   },
   {
     title: 'Project',
-    items: [
-      { label: 'Save', keys: [['Ctrl', 'S']] },
-      { label: 'Save as…', keys: [['Ctrl', 'Shift', 'S']] },
-      { label: 'Open…', keys: [['Ctrl', 'O']] },
-    ],
+    items: projectShortcuts(folders),
   },
   {
     title: 'Parts menu',
@@ -84,7 +84,11 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       { label: 'Close it', keys: [['Esc']] },
     ],
   },
-];
+  ];
+}
+
+/** The groups of the browser version (what the tests check; the sheet asks `shortcutGroups` itself). */
+export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = shortcutGroups(false);
 
 const MAC_KEYS: Readonly<Record<string, string>> = { Ctrl: '⌘', Shift: '⇧', Alt: '⌥', Delete: '⌦', Backspace: '⌫', Enter: '↩' };
 

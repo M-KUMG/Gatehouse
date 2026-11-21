@@ -1482,3 +1482,90 @@ html, body {
   margin: 4px 2px;
   background: var(--gh-border);
 }
+
+/* Save project popup (Electron): name and location. */
+.save-dialog {
+  width: min(460px, calc(100% - 40px));
+}
+
+.save-dialog label {
+  display: block;
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--gh-text-soft);
+}
+
+.save-dialog input[type='text'] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 5px 8px;
+  border: 1px solid var(--gh-border);
+  border-radius: 5px;
+  background: var(--gh-bg-app);
+  color: var(--gh-text-strong);
+  font: 13px var(--gh-font-ui);
+  outline: none;
+}
+
+.save-dialog input[type='text']:focus {
+  border-color: var(--gh-accent);
+}
+
+.save-dialog input.invalid {
+  border-color: var(--gh-danger);
+}
+
+.save-place {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.save-place input[type='text'] {
+  margin-top: 0;
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+  color: var(--gh-text-soft);
+}
+
+.save-dialog .save-note {
+  margin: 0 0 12px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.save-dialog .save-note.error {
+  color: var(--gh-danger-soft);
+}
+
+.save-dialog .dialog-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* File menu: a text button, entries with their shortcut at the right. */
+.file-menu-button {
+  width: auto;
+  padding: 0 9px;
+  font: 12px var(--gh-font-ui);
+}
+
+.file-menu-list {
+  min-width: 230px;
+}
+
+.file-menu-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding-left: 10px;
+}
+
+.menu-shortcut {
+  color: var(--gh-text-muted);
+  font-size: 11px;
+}

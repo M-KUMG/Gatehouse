@@ -4,7 +4,8 @@
 // (rotate, delete, undo ...) reacts to a key press behind it. UI-only state.
 // The list itself is in shortcuts.ts.
 
-import { SHORTCUT_GROUPS, formatKey, isMacPlatform } from './shortcuts';
+import { folderHost } from './project/folderhost';
+import { formatKey, isMacPlatform, shortcutGroups } from './shortcuts';
 
 const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
@@ -52,7 +53,7 @@ export class ShortcutSheet {
 
     const body = document.createElement('div');
     body.className = 'shortcut-body';
-    for (const group of SHORTCUT_GROUPS) {
+    for (const group of shortcutGroups(folderHost() !== null)) {
       const section = document.createElement('section');
       section.className = 'shortcut-group';
       const heading = document.createElement('h3');

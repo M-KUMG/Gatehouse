@@ -1,8 +1,9 @@
-const { app, BrowserWindow, dialog, protocol, screen } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, protocol, screen } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { SCHEME, ORIGIN, createHandler, isAppUrl } = require('./electron/staticserve.cjs');
 const W = require('./electron/windowstate.cjs');
+const { registerFolderIpc } = require('./electron/folderipc.cjs');
 
 // The product name for the window (src/app.ts holds the same name for the page; this file cannot import TypeScript).
 const APP_NAME = 'Gatehouse';
@@ -71,7 +72,7 @@ function createWindow() {
     backgroundColor: BACKGROUND,
     autoHideMenuBar: true, // the menu (reload, developer tools) is one Alt press away
     show: false, // shown once the first frame is ready, never a blank window
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, preload: path.join(__dirname, 'electron', 'preload.cjs') },
   });
 
   win.once('ready-to-show', () => {
@@ -130,6 +131,10 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     protocol.handle(SCHEME, createHandler(serveRoots));
+    registerFolderIpc(ipcMain, dialog, isAppUrl, (event) => BrowserWindow.fromWebContents(event.sender), {
+      defaultParent: app.getPath('documents'),
+      stateFile: path.join(app.getPath('userData'), 'project-folder.json'),
+    });
     createWindow();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

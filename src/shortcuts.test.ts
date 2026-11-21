@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SHORTCUT_GROUPS, formatKey, isMacPlatform } from './shortcuts';
+import { SHORTCUT_GROUPS, formatKey, isMacPlatform, shortcutGroups } from './shortcuts';
 
 describe('the shortcut list', () => {
   it('has titled groups, each with items that have a label and at least one non-empty way to do it', () => {
@@ -32,6 +32,15 @@ describe('the shortcut list', () => {
     for (const expected of ['Ctrl+Z', 'Ctrl+S', 'Ctrl+O', 'R', 'F', '0', 'Space', '?', 'Delete', 'Esc']) {
       expect(all, expected).toContain(expected);
     }
+  });
+});
+
+describe('the Project group', () => {
+  it('lists the folder commands only for the Electron app', () => {
+    const labels = (folders: boolean) => shortcutGroups(folders).find((g) => g.title === 'Project')!.items.map((i) => i.label);
+    expect(labels(false)).toEqual(['Export (.gth file)', 'Export as…', 'Import…']);
+    expect(labels(true)).toContain('Open project folder…');
+    expect(labels(true)).toContain('Save as… (folder)');
   });
 });
 
