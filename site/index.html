@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gatehouse</title>
+  <meta name="description" content="Build circuits and run real firmware on emulated chips, in your browser or on your desktop." />
+  <meta name="theme-color" content="#090b11" />
+  <link rel="icon" type="image/png" href="icon.png" />
+  <!-- The main site of Gatehouse: one static page, no framework. The three links below are the only
+       things to change when the app moves (docs/PLAN.md, "Main site"). -->
+  <script>
+    window.GATEHOUSE = {
+      appUrl: 'app/', // the web app, next to this page
+      downloadUrl: 'https://github.com/M-KUMG/Gatehouse/releases/latest', // the newest installer
+      repoUrl: 'https://github.com/M-KUMG/Gatehouse',
+    };
+  </script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b11;
+      --text: #e8ebf0;
+      --muted: #a4abb8;
+      --accent: #4ea1ff;
+      --glass: rgba(255, 255, 255, 0.07);
+      --glass-strong: rgba(255, 255, 255, 0.12);
+      --edge: rgba(255, 255, 255, 0.22);
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      color: var(--text);
+      font: 16px/1.55 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* The same soft colour backdrop as the app. */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background:
+        radial-gradient(60% 55% at 14% 10%, rgba(78, 161, 255, 0.55), transparent 72%),
+        radial-gradient(50% 50% at 88% 18%, rgba(150, 96, 255, 0.45), transparent 72%),
+        radial-gradient(55% 55% at 72% 98%, rgba(40, 200, 190, 0.36), transparent 72%),
+        radial-gradient(45% 45% at 6% 90%, rgba(255, 110, 150, 0.25), transparent 72%),
+        linear-gradient(160deg, #0c1018, #10131d 55%, #090b11);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 40px;
+      padding: 48px 20px 24px;
+      text-align: center;
+    }
+
+    .hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      animation: rise 700ms var(--ease) both;
+    }
+
+    .logo {
+      width: 112px;
+      height: 112px;
+      border-radius: 26px;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--edge);
+    }
+
+    h1 {
+      margin: 6px 0 0;
+      font-size: clamp(2.2rem, 7vw, 3.4rem);
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+
+    .tagline {
+      max-width: 34ch;
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(1.02rem, 2.6vw, 1.2rem);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      animation: rise 700ms var(--ease) 120ms both;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-width: 188px;
+      padding: 14px 26px;
+      border: 1px solid var(--edge);
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 22px rgba(0, 0, 0, 0.3);
+      -webkit-backdrop-filter: blur(14px) saturate(1.4);
+      backdrop-filter: blur(14px) saturate(1.4);
+      color: var(--text);
+      font: inherit;
+      font-weight: 600;
+      text-decoration: none;
+      transition:
+        transform 260ms var(--ease),
+        background 200ms ease,
+        box-shadow 200ms ease;
+    }
+
+    .button:hover,
+    .button:focus-visible {
+      transform: translateY(-2px);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 10px 28px rgba(0, 0, 0, 0.36);
+      outline: none;
+    }
+
+    .button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    .button:active {
+      transform: scale(0.97);
+    }
+
+    .button.primary {
+      border-color: rgba(120, 190, 255, 0.7);
+      background: linear-gradient(180deg, rgba(110, 180, 255, 0.55), rgba(78, 140, 255, 0.35));
+    }
+
+    .button.primary:hover,
+    .button.primary:focus-visible {
+      background: linear-gradient(180deg, rgba(130, 195, 255, 0.7), rgba(90, 150, 255, 0.45));
+    }
+
+    .button svg {
+      width: 18px;
+      height: 18px;
+      flex: none;
+    }
+
+    .note {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      width: min(880px, 100%);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      animation: rise 700ms var(--ease) 240ms both;
+    }
+
+    .features li {
+      padding: 18px 18px 16px;
+      border: 1px solid var(--edge);
+      border-radius: 20px;
+      background: var(--glass);
+      -webkit-backdrop-filter: blur(14px) saturate(1.3);
+      backdrop-filter: blur(14px) saturate(1.3);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 8px 26px rgba(0, 0, 0, 0.25);
+      text-align: left;
+    }
+
+    .features h2 {
+      margin: 0 0 4px;
+      font-size: 1rem;
+      font-weight: 650;
+    }
+
+    .features p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    footer {
+      padding: 18px 20px 26px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      text-align: center;
+    }
+
+    footer a {
+      color: var(--text);
+      text-underline-offset: 3px;
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(14px);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero,
+      .actions,
+      .features {
+        animation: none;
+      }
+
+      .button {
+        transition: none;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .button {
+        width: 100%;
+      }
+
+      .actions {
+        width: min(340px, 100%);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <img class="logo" src="icon.png" alt="" width="112" height="112" />
+      <h1>Gatehouse</h1>
+      <p class="tagline">Build circuits and run real firmware on emulated chips, in your browser or on your desktop.</p>
+    </section>
+
+    <section>
+      <div class="actions">
+        <a class="button primary" id="download" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          Download
+        </a>
+        <a class="button" id="webapp" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+          Open the web app
+        </a>
+      </div>
+      <p class="note">The download is the Windows desktop app. Everything also works in the web app, in a desktop browser.</p>
+    </section>
+
+    <ul class="features">
+      <li>
+        <h2>Real firmware</h2>
+        <p>Your sketch is compiled and runs on an emulated chip, cycle by cycle, not a lookalike.</p>
+      </li>
+      <li>
+        <h2>Compiles in the browser</h2>
+        <p>The compiler runs as WebAssembly on your machine. No server, and it works offline once loaded.</p>
+      </li>
+      <li>
+        <h2>A live circuit</h2>
+        <p>Wire parts on a grid, watch current flow, and probe voltages with a scope and a logic analyzer.</p>
+      </li>
+    </ul>
+  </main>
+
+  <footer>
+    Open source (MIT) · <a id="repo" href="#">GitHub</a> · A university project, built with Claude
+  </footer>
+
+  <script>
+    // The links come from window.GATEHOUSE at the top of this file.
+    (function () {
+      var g = window.GATEHOUSE;
+      document.getElementById('download').href = g.downloadUrl;
+      document.getElementById('webapp').href = g.appUrl;
+      document.getElementById('repo').href = g.repoUrl;
+    })();
+  </script>
+</body>
+</html>
