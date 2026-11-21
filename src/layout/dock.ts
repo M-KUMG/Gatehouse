@@ -27,9 +27,12 @@ import {
   placeholderRenderer,
   tabMenuItems,
 } from './panels';
+import { installDropPreview } from './droppreview';
 import { browserStorage, clearLayout, loadLayout, saveLayout, type LayoutStorage } from './persist';
 
-const THEME: DockviewTheme = { ...themeDark, name: 'gatehouse', className: `${themeDark.className} gh-dock` };
+// 'absolute': the drop preview is ONE overlay that glides from window to window
+// (the default draws a separate rectangle inside each window, which cannot animate across them).
+const THEME: DockviewTheme = { ...themeDark, name: 'gatehouse', className: `${themeDark.className} gh-dock`, dndOverlayMounting: 'absolute' };
 const SAVE_DELAY_MS = 400;
 /** Tab component name of every panel; createTabComponent picks the tab by panel id. */
 const TAB_COMPONENT = 'gh-tab';
@@ -68,6 +71,8 @@ export class DockLayout {
       },
       true,
     );
+    // One card for the "where will it land" preview, which also glides from window to window.
+    installDropPreview(host);
     this.restore();
     this.api.onDidLayoutChange(this.scheduleSave);
     this.api.onDidAddPanel(this.changed);

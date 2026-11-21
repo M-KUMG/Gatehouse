@@ -59,7 +59,8 @@ export class ValueEditor {
         const input = document.createElement('input');
         input.type = 'text';
         input.spellcheck = false;
-        input.value = formatSI(current, '', 6).trim().replace(' ', '');
+        // A fraction such as a duty cycle is shown as 0.5, not as "500m".
+        input.value = key === 'duty' ? String(+current.toFixed(4)) : formatSI(current, '', 6).trim().replace(' ', '');
         input.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             const value = parseSI(input.value);

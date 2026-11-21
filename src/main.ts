@@ -27,6 +27,7 @@ import { ProjectController } from './project/controller';
 import { Project } from './project/project';
 import { openSimWorker } from './sim/worker/client';
 import { ShortcutSheet } from './shortcutsheet';
+import { installGlassSelects } from './glassselect';
 import { installTooltips } from './tooltips';
 import { Welcome } from './welcome';
 import { Simulation, buildNetlist } from './simulation';
@@ -231,6 +232,8 @@ editor.onUndo = () => controller.history.undo();
 editor.onRedo = () => controller.history.redo();
 // Every control with a title gets the glass tooltip instead of the browser's plain one.
 installTooltips();
+// Dropdowns (select) get the glass button and list; every later select is picked up too.
+installGlassSelects();
 // The keyboard shortcuts sheet: the ? key, or the round ? button in the corner of the grid.
 new ShortcutSheet(editorArea);
 // A card in the middle of an empty grid with ways to get started; gone as soon as anything is on the grid.

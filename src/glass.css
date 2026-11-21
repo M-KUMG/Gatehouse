@@ -480,3 +480,61 @@ body::before {
     backdrop-filter: none;
   }
 }
+
+/* ---- Drop preview while moving a window (dockview) ----
+   The card that shows where a dragged tab will land is drawn by droppreview.ts
+   (.gh-drop-ghost): one rounded glass card with a bright rim that glides to the
+   next place, also from one window to another. Dockview's own rectangle is kept
+   (the card measures it) but invisible and instant. */
+.dv-drop-target-container .dv-drop-target-anchor,
+.dockview-theme-dark .dv-drop-target-container .dv-drop-target-anchor.dv-drop-target-anchor-container-changed {
+  opacity: 0 !important;
+  transition: none !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+.gh-drop-ghost {
+  position: fixed;
+  z-index: 100000;
+  box-sizing: border-box;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.985);
+  border: 1.5px solid rgba(150, 205, 255, 0.75);
+  border-radius: var(--gh-radius-lg);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.04) 55%),
+    rgba(78, 161, 255, 0.2);
+  -webkit-backdrop-filter: blur(6px) saturate(170%);
+  backdrop-filter: blur(6px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 0 28px rgba(150, 205, 255, 0.22),
+    0 10px 36px rgba(40, 110, 220, 0.35);
+  transition:
+    opacity 220ms ease,
+    transform 320ms var(--gh-ease-spring),
+    left 380ms cubic-bezier(0.22, 1, 0.36, 1),
+    top 380ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 380ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gh-drop-ghost.show {
+  opacity: 1;
+  transform: none;
+}
+
+/* The first placement of a drag: no sliding in from wherever the card was last. */
+.gh-drop-ghost.jump {
+  transition: opacity 220ms ease, transform 320ms var(--gh-ease-spring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gh-drop-ghost,
+  .gh-drop-ghost.jump {
+    transition: opacity 120ms ease;
+  }
+}
