@@ -25,8 +25,8 @@ protocol.registerSchemesAsPrivileged([
  *  - the built app: dist/ next to this file;
  *  - the compiler packs at /toolchain-packs/: in development toolchain/packs/ at
  *    the repo root (npm run toolchain:fetch + toolchain:packs); in a packaged app
- *    <resources>/toolchain-packs/ if it exists. Packaging (copying the packs there)
- *    is a later task: today only this lookup exists. If the folder is missing the
+ *    <resources>/toolchain-packs/ (electron-builder copies the packs there, see the
+ *    "build" field of package.json, `npm run dist`). If the folder is missing the
  *    packs answer 404 and the compiler reports 'unavailable'.
  */
 function serveRoots() {

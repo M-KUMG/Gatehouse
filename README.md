@@ -17,6 +17,7 @@ The full roadmap, decisions and honest status are in [`docs/PLAN.md`](docs/PLAN.
 - Install: `npm install`
 - Web (dev): `npm run dev`, then open the address it prints
 - Electron: `npm start` (builds first)
+- Windows installer: `npm run toolchain:fetch`, `npm run toolchain:packs`, then `npm run dist` makes `release/Gatehouse-Setup-<version>.exe` (unsigned: Windows SmartScreen asks for "More info" then "Run anyway"). The compiler packs are inside the installer, so building sketches works offline.
 - Type check: `npm run typecheck`
 - Tests: `npm test`
 - Build: `npm run build` (output in `dist/`, including `THIRD_PARTY_LICENSES.txt`, `NOTICE` and `licenses/`)
@@ -36,7 +37,7 @@ Then press Run (or Build) on a board with sketch files: the first time the brows
 
 - `npm run toolchain:sources` downloads the matching source archives (about 100 MB) for the GPL source mirror. This is only needed before publishing a build that contains the compiler; the steps are in `scripts/MIRROR.md`.
 - The pack format, sizes and how the Worker loads them are in `docs/toolchain-packs.md`.
-- `vite build` deliberately does not copy the compiler packs into `dist/`, so a deployed site would use `firmware.hex` until the packs are published with it. `npm start` (Electron) serves the app and `toolchain/packs/` through a small built-in `gatehouse://app/` address, so compiling should work there too after the two toolchain commands (not yet confirmed by hand); installers will need the packs inside the app, which is a later task.
+- `vite build` deliberately does not copy the compiler packs into `dist/`, so a deployed site would use `firmware.hex` until the packs are published with it. `npm start` (Electron) serves the app and `toolchain/packs/` through a small built-in `gatehouse://app/` address, so compiling should work there too after the two toolchain commands (not yet confirmed by hand); the installer (`npm run dist`) carries the packs inside the app.
 - Compiler tests that use the real tools run automatically when `toolchain/` exists and are skipped otherwise: `npx vitest run src/build/wasm`.
 
 ## Using it

@@ -13,10 +13,12 @@
     "licenses": "node scripts/third-party-licenses.mjs",
     "toolchain:fetch": "node scripts/fetch-toolchain.mjs",
     "toolchain:sources": "node scripts/fetch-toolchain-sources.mjs",
-    "toolchain:packs": "node scripts/make-packs.mjs"
+    "toolchain:packs": "node scripts/make-packs.mjs",
+    "dist": "npm run build && electron-builder --win nsis"
   },
   "devDependencies": {
     "electron": "^33.0.0",
+    "electron-builder": "26.18.0",
     "typescript": "^5.6.0",
     "vite": "^6.0.0",
     "vitest": "^5.1.0"
@@ -37,5 +39,64 @@
     "codemirror": "6.0.2",
     "dockview": "8.9.0",
     "fflate": "0.8.3"
+  },
+  "build": {
+    "appId": "io.github.mkumg.gatehouse",
+    "productName": "Gatehouse",
+    "copyright": "MIT licence",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "electron/*.cjs",
+      "dist/**/*",
+      "package.json",
+      "!node_modules/**"
+    ],
+    "extraResources": [
+      {
+        "from": "toolchain/packs",
+        "to": "toolchain-packs",
+        "filter": [
+          "manifest.json",
+          "*.pack",
+          "*.pack.gz"
+        ]
+      },
+      {
+        "from": "LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "NOTICE",
+        "to": "NOTICE"
+      },
+      {
+        "from": "licenses",
+        "to": "licenses"
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/icon.png",
+      "artifactName": "Gatehouse-Setup-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Gatehouse",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": null
   }
 }

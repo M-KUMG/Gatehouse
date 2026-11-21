@@ -7,3 +7,6 @@ THIRD_PARTY_LICENSES.txt
 
 # WebAssembly AVR toolchain downloads, unpacked files and packs (never commit)
 /toolchain/
+
+# Installer output (npm run dist)
+/release/
