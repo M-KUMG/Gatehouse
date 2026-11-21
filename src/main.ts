@@ -225,4 +225,5 @@ createPalette(
   circuitView,
   (typeId, e) => editor.startPlacing(typeId, e),
   EXAMPLES.map((ex) => ({ name: ex.name, hint: ex.hint, run: () => editor.loadExample(ex.state) })),
+  (typeId) => editor.placeAtCentre(typeId) !== null,
 );

@@ -200,6 +200,80 @@ body::before {
   box-shadow: var(--gh-glass-rim), var(--gh-glass-drop);
 }
 
+/* Tabs: a soft glass strip with pill-shaped tabs. The tab in front is a lit glass
+   pill (brighter when its window is the active one); the others are quiet text
+   that lights up on hover. The selectors repeat dockview's own so that, loaded
+   later, these win. */
+.gh-dock .dv-groupview .dv-tabs-and-actions-container {
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--gh-border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.gh-dock .dv-groupview .dv-tabs-and-actions-container .dv-tab {
+  height: calc(var(--dv-tabs-and-actions-container-height) - 10px);
+  margin: 5px 2px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--gh-radius-pill);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+.gh-dock .dv-groupview .dv-tabs-and-actions-container .dv-tab:first-child {
+  margin-left: 6px;
+}
+
+.gh-dock .dv-groupview .dv-tabs-and-actions-container .dv-tab.dv-inactive-tab {
+  background: transparent;
+  color: var(--gh-text-muted);
+}
+
+.gh-dock .dv-groupview .dv-tabs-and-actions-container .dv-tab.dv-inactive-tab:hover {
+  background: var(--gh-bg-raised);
+  color: var(--gh-text);
+}
+
+/* The tab in front: a lit pill in the window that has focus, a dimmer one elsewhere. */
+.gh-dock .dv-groupview .dv-tabs-and-actions-container .dv-tab.dv-active-tab {
+  background: var(--gh-glass-sheen), var(--gh-bg-subtle);
+  color: var(--gh-text-muted);
+  border-color: var(--gh-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.gh-dock .dv-groupview.dv-active-group .dv-tabs-and-actions-container .dv-tab.dv-active-tab {
+  background: var(--gh-glass-sheen), var(--gh-bg-raised);
+  color: var(--gh-text-strong);
+  border-color: var(--gh-glass-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 0 12px rgba(78, 161, 255, 0.28), 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.gh-dock .dv-tab:focus-visible {
+  outline: 2px solid var(--gh-accent);
+  outline-offset: 1px;
+}
+
+/* The close cross is a round glass dot on hover. */
+.gh-dock .dv-default-tab .dv-default-tab-action {
+  border-radius: 50%;
+  transition: background-color 140ms ease;
+}
+
+.gh-dock .dv-default-tab .dv-default-tab-action:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gh-dock .dv-groupview .dv-tabs-and-actions-container .dv-tab,
+  .gh-dock .dv-default-tab .dv-default-tab-action {
+    transition: none;
+  }
+}
+
 /* Window contents sit directly on the glass of their window. */
 .file-explorer,
 .serial-console,

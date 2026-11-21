@@ -6,7 +6,7 @@
   /* Groups get their glass fill in glass.css; the dock root stays see-through. */
   --dv-group-view-background-color: transparent;
   --dv-tabs-and-actions-container-background-color: var(--gh-bg-panel);
-  --dv-tabs-and-actions-container-height: 30px;
+  --dv-tabs-and-actions-container-height: 38px; /* room for the pill-shaped glass tabs (glass.css) */
   --dv-tabs-and-actions-container-font-size: 12px;
   --dv-activegroup-visiblepanel-tab-background-color: var(--gh-bg-raised);
   --dv-activegroup-hiddenpanel-tab-background-color: var(--gh-bg-panel);
@@ -16,7 +16,7 @@
   --dv-activegroup-hiddenpanel-tab-color: var(--gh-text-muted);
   --dv-inactivegroup-visiblepanel-tab-color: var(--gh-text-soft);
   --dv-inactivegroup-hiddenpanel-tab-color: var(--gh-text-dim);
-  --dv-tab-divider-color: var(--gh-border);
+  --dv-tab-divider-color: transparent; /* pill tabs need no dividers */
   --dv-separator-border: var(--gh-border);
   --dv-paneview-header-border-color: var(--gh-border);
   --dv-paneview-active-outline-color: var(--gh-accent);
@@ -35,14 +35,7 @@
   font: 12px var(--gh-font-ui);
 }
 
-/* The tab of the window in front gets the accent line used across the app. */
-.gh-dock .dv-tab.dv-active-tab {
-  box-shadow: inset 0 -2px 0 var(--gh-accent);
-}
-
-.gh-dock .dv-groupview:not(.dv-active-group) .dv-tab.dv-active-tab {
-  box-shadow: inset 0 -2px 0 var(--gh-info);
-}
+/* Tabs are pill-shaped glass; their look is in glass.css. */
 
 /* Panel contents fill their group's content box exactly (it is a flex item
    without a definite height, so percentages are not reliable inside it). */

@@ -7,6 +7,29 @@ import {
 import { getPart } from './parts';
 import { partImageUrl } from './sprites';
 
+/** Top-left cell that centres a part of `size` cells on a (fractional) cell, snapped to the grid. */
+export function centreOnCell(cell: { col: number; row: number }, size: { cols: number; rows: number }): { col: number; row: number } {
+  return { col: Math.round(cell.col - size.cols / 2), row: Math.round(cell.row - size.rows / 2) };
+}
+
+/**
+ * The first spot at or after `start`, stepping one cell down and right at a
+ * time, that `isTaken` does not claim: pressing Enter on the same menu tile
+ * twice gives two parts side by side instead of one on top of the other.
+ */
+export function freeSpot(
+  start: { col: number; row: number },
+  isTaken: (col: number, row: number) => boolean,
+  maxSteps = 40,
+): { col: number; row: number } {
+  let { col, row } = start;
+  for (let i = 0; i < maxSteps && isTaken(col, row); i++) {
+    col += 1;
+    row += 1;
+  }
+  return { col, row };
+}
+
 interface Placing {
   typeId: string;
   rotation: Rotation;
@@ -54,6 +77,23 @@ export class Placer {
     window.addEventListener('pointercancel', this.end);
     window.addEventListener('blur', this.end);
     this.update(e.clientX, e.clientY);
+  }
+
+  /**
+   * Add a part in the middle of the visible grid without dragging (for the
+   * keyboard). Steps off a part already standing there. Returns the new part,
+   * or null when the grid has no size (hidden) or a drag is in progress.
+   */
+  addAtCentre(typeId: string): PlacedPart | null {
+    if (this.placing || !getPart(typeId)) return null;
+    const rect = this.view.canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const { cols, rows } = rotatedSize(typeId, 0);
+    const start = centreOnCell(this.view.toCell(rect.left + rect.width / 2, rect.top + rect.height / 2), { cols, rows });
+    const spot = freeSpot(start, (col, row) => this.scene.parts.some((q) => q.col === col && q.row === row));
+    const part = this.scene.add({ typeId, rotation: 0, ...spot });
+    this.view.requestRender();
+    return part;
   }
 
   rotate(): void {
@@ -110,8 +150,7 @@ export class Placer {
         rotation: p.rotation,
         ...(p.mirrorX ? { mirrorX: true } : {}),
         ...(p.mirrorY ? { mirrorY: true } : {}),
-        col: Math.round(cell.col - cols / 2),
-        row: Math.round(cell.row - rows / 2),
+        ...centreOnCell(cell, { cols, rows }),
       };
       p.float.style.display = 'none';
     } else {

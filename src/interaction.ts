@@ -195,6 +195,16 @@ export class Editor {
     this.placer.start(typeId, e);
   }
 
+  /** Add a new part in the middle of the visible grid and select it (the keyboard way to use the parts menu). */
+  placeAtCentre(typeId: string): PlacedPart | null {
+    if (this.placer.active || this.drag) return null;
+    this.wiring.cancel();
+    this.closePopups();
+    const part = this.placer.addAtCentre(typeId);
+    if (part) this.selection.set([part.id]);
+    return part;
+  }
+
   /** A gesture is half done (dragging, drawing a wire, placing a part, typing a value). */
   get busy(): boolean {
     return this.placer.active || this.wiring.active || this.drag !== null || this.valueEditor.isOpen || this.nameEditor.isOpen;
