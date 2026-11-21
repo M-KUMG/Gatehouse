@@ -8,12 +8,12 @@
   width: min(320px, calc(100% - 40px));
   transform: translateX(-50%);
   padding: 8px 12px 9px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 6px;
   background: rgba(24, 25, 28, 0.96);
-  color: #d8dbe0;
-  font: 13px/1.4 system-ui, sans-serif;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  color: var(--gh-text);
+  font: 13px/1.4 var(--gh-font-ui);
+  box-shadow: 0 3px 10px var(--gh-shadow);
 }
 
 .build-card[hidden] {
@@ -21,17 +21,17 @@
 }
 
 .build-card.error {
-  border-color: #e5534b;
+  border-color: var(--gh-danger);
   cursor: pointer;
 }
 
 .build-card-title {
   font-weight: 600;
-  color: #e6e8ec;
+  color: var(--gh-text-strong);
 }
 
 .build-card.error .build-card-title {
-  color: #ffb4ad;
+  color: var(--gh-danger-soft);
 }
 
 .build-card-bar {
@@ -39,7 +39,7 @@
   margin: 7px 0 5px;
   overflow: hidden;
   border-radius: 3px;
-  background: #3a3d44;
+  background: var(--gh-border);
 }
 
 .build-card-bar[hidden] {
@@ -50,7 +50,7 @@
   width: 0;
   height: 100%;
   border-radius: 3px;
-  background: #4ea1ff;
+  background: var(--gh-accent);
   transition: width 0.15s linear;
 }
 
@@ -65,7 +65,7 @@
 .build-card-pack {
   min-width: 0;
   overflow: hidden;
-  color: #7d828c;
+  color: var(--gh-text-dim);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -73,11 +73,11 @@
 
 .build-card-note {
   margin-top: 2px;
-  color: #7d828c;
+  color: var(--gh-text-dim);
   font-size: 11px;
 }
 
 .build-card-note.error {
-  color: #ff8a80;
+  color: var(--gh-danger-text);
   font-size: 12px;
 }

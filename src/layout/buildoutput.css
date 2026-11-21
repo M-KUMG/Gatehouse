@@ -5,9 +5,9 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: #18191c;
-  color: #c3c7ce;
-  font: 12px system-ui, sans-serif;
+  background: var(--gh-bg-deep);
+  color: var(--gh-text-soft);
+  font: 12px var(--gh-font-ui);
 }
 
 .bo-bar {
@@ -17,8 +17,8 @@
   align-items: center;
   gap: 6px 12px;
   padding: 5px 8px;
-  border-bottom: 1px solid #3a3d44;
-  background: #25272c;
+  border-bottom: 1px solid var(--gh-border);
+  background: var(--gh-bg-panel);
 }
 
 .bo-field {
@@ -26,22 +26,22 @@
   align-items: center;
   gap: 5px;
   min-width: 0;
-  color: #9aa0aa;
+  color: var(--gh-text-muted);
 }
 
 .bo-select {
   max-width: 260px;
   min-width: 0;
   padding: 2px 4px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 4px;
-  background: #1e1f22;
-  color: #d8dbe0;
+  background: var(--gh-bg-app);
+  color: var(--gh-text);
   font: inherit;
 }
 
 .bo-select:focus-visible {
-  border-color: #4ea1ff;
+  border-color: var(--gh-accent);
   outline: none;
 }
 
@@ -55,16 +55,16 @@
 
 .bo-button {
   padding: 2px 10px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 4px;
-  background: #2b2e34;
-  color: #d8dbe0;
+  background: var(--gh-bg-raised);
+  color: var(--gh-text);
   font: inherit;
   cursor: pointer;
 }
 
 .bo-button:hover:not(:disabled) {
-  border-color: #4ea1ff;
+  border-color: var(--gh-accent);
 }
 
 .bo-button:disabled {
@@ -83,7 +83,7 @@
   align-items: center;
   gap: 7px;
   padding: 7px 0 5px;
-  color: #e6e8ec;
+  color: var(--gh-text-strong);
   font-size: 13px;
   font-weight: 600;
 }
@@ -97,23 +97,23 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #7d828b;
+  background: var(--gh-text-dim);
 }
 
 .bo-header.ok .bo-dot {
-  background: #3fbf55;
+  background: var(--gh-ok);
 }
 
 .bo-header.error .bo-dot {
-  background: #e5534b;
+  background: var(--gh-danger);
 }
 
 .bo-header.error .bo-header-text {
-  color: #ff8a80;
+  color: var(--gh-danger-text);
 }
 
 .bo-header.busy .bo-dot {
-  background: #4ea1ff;
+  background: var(--gh-accent);
   animation: bo-pulse 1s ease-in-out infinite;
 }
 
@@ -144,7 +144,7 @@
 .bo-usage-label {
   flex: none;
   width: 34px;
-  color: #9aa0aa;
+  color: var(--gh-text-muted);
 }
 
 .bo-usage-bar {
@@ -153,26 +153,26 @@
   height: 6px;
   overflow: hidden;
   border-radius: 3px;
-  background: #3a3d44;
+  background: var(--gh-border);
 }
 
 .bo-usage-fill {
   height: 100%;
   border-radius: 3px;
-  background: #4ea1ff;
+  background: var(--gh-accent);
 }
 
 .bo-usage-bar.warn .bo-usage-fill {
-  background: #e3b341;
+  background: var(--gh-warn);
 }
 
 .bo-usage-bar.full .bo-usage-fill {
-  background: #e5534b;
+  background: var(--gh-danger);
 }
 
 .bo-usage-text {
   min-width: 0;
-  color: #c3c7ce;
+  color: var(--gh-text-soft);
 }
 
 .bo-compiler {
@@ -182,9 +182,9 @@
   gap: 4px 10px;
   margin: 4px 0 6px;
   padding: 6px 8px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 5px;
-  background: #1e1f22;
+  background: var(--gh-bg-app);
 }
 
 .bo-compiler[hidden] {
@@ -196,18 +196,18 @@
 }
 
 .bo-compiler-text {
-  color: #d8dbe0;
+  color: var(--gh-text);
 }
 
 .bo-compiler-hint,
 .bo-compiler-error {
   flex-basis: 100%;
-  color: #9aa0aa;
+  color: var(--gh-text-muted);
   font-size: 11px;
 }
 
 .bo-compiler-error {
-  color: #ff8a80;
+  color: var(--gh-danger-text);
 }
 
 .bo-body {
@@ -240,7 +240,7 @@
   align-items: flex-start;
   justify-content: center;
   padding: 18px 12px;
-  color: #7d828c;
+  color: var(--gh-text-dim);
   text-align: center;
   pointer-events: none;
 }
@@ -250,11 +250,11 @@
 }
 
 .bo-msg.error {
-  border-left-color: #e5534b;
+  border-left-color: var(--gh-danger);
 }
 
 .bo-msg.warning {
-  border-left-color: #e3b341;
+  border-left-color: var(--gh-warn);
 }
 
 .bo-msg.note {
@@ -281,7 +281,7 @@
 }
 
 .bo-msg-head:focus-visible {
-  outline: 1px solid #4ea1ff;
+  outline: 1px solid var(--gh-accent);
   outline-offset: -1px;
 }
 
@@ -292,25 +292,25 @@
 }
 
 .bo-msg.error .bo-icon {
-  color: #e5534b;
+  color: var(--gh-danger);
 }
 
 .bo-msg.warning .bo-icon {
-  color: #e3b341;
+  color: var(--gh-warn);
 }
 
 .bo-msg.note .bo-icon {
-  color: #9aa0aa;
+  color: var(--gh-text-muted);
 }
 
 .bo-loc {
   flex: none;
   color: #7fb4f0;
-  font: 12px ui-monospace, Consolas, monospace;
+  font: 12px var(--gh-font-mono);
 }
 
 .bo-msg:not(.clickable) .bo-loc {
-  color: #9aa0aa;
+  color: var(--gh-text-muted);
 }
 
 .bo-text {
@@ -320,7 +320,7 @@
 }
 
 .bo-msg.error .bo-text {
-  color: #ffb4ad;
+  color: var(--gh-danger-soft);
 }
 
 .bo-msg.warning .bo-text {
@@ -328,7 +328,7 @@
 }
 
 .bo-msg.note .bo-text {
-  color: #9aa0aa;
+  color: var(--gh-text-muted);
 }
 
 .bo-toggle {
@@ -336,13 +336,13 @@
   padding: 0 4px;
   border: none;
   background: none;
-  color: #7d828c;
-  font: 11px system-ui, sans-serif;
+  color: var(--gh-text-dim);
+  font: 11px var(--gh-font-ui);
   cursor: pointer;
 }
 
 .bo-toggle:hover {
-  color: #d8dbe0;
+  color: var(--gh-text);
   text-decoration: underline;
 }
 
@@ -351,9 +351,9 @@
   padding: 4px 8px;
   overflow-x: auto;
   border-radius: 4px;
-  background: #1e1f22;
+  background: var(--gh-bg-app);
   color: #b4bac4;
-  font: 12px/1.4 ui-monospace, Consolas, monospace;
+  font: 12px/1.4 var(--gh-font-mono);
   white-space: pre;
 }
 

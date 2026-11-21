@@ -7,9 +7,9 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: #18191c;
-  color: #c3c7ce;
-  font: 12px system-ui, sans-serif;
+  background: var(--gh-bg-deep);
+  color: var(--gh-text-soft);
+  font: 12px var(--gh-font-ui);
 }
 
 .scope-bar {
@@ -19,8 +19,8 @@
   align-items: center;
   gap: 6px 10px;
   padding: 5px 8px;
-  border-bottom: 1px solid #3a3d44;
-  background: #25272c;
+  border-bottom: 1px solid var(--gh-border);
+  background: var(--gh-bg-panel);
 }
 
 .scope-note {
@@ -28,9 +28,9 @@
 }
 
 .scope-window .serial-button.scope-on {
-  border-color: #4ea1ff;
-  background: #2f5f99;
-  color: #fff;
+  border-color: var(--gh-accent);
+  background: var(--gh-accent-dim);
+  color: var(--gh-on-accent);
 }
 
 .scope-body {
@@ -46,8 +46,8 @@
   flex: none;
   width: 240px;
   align-self: flex-start;
-  border-right: 1px solid #3a3d44;
-  background: #1e1f22;
+  border-right: 1px solid var(--gh-border);
+  background: var(--gh-bg-app);
 }
 
 .scope-list-header {
@@ -55,8 +55,8 @@
   display: flex;
   align-items: center;
   padding: 0 8px;
-  border-bottom: 1px solid #3a3d44;
-  color: #7d828c;
+  border-bottom: 1px solid var(--gh-border);
+  color: var(--gh-text-dim);
 }
 
 .scope-channel {
@@ -66,7 +66,7 @@
   justify-content: center;
   gap: 4px;
   padding: 0 6px;
-  border-bottom: 1px solid #2a2c31;
+  border-bottom: 1px solid var(--gh-bg-subtle);
 }
 
 .scope-channel-line {
@@ -83,17 +83,17 @@
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: #d8dbe0;
+  color: var(--gh-text);
   font: inherit;
 }
 
 .scope-name:hover {
-  border-color: #3a3d44;
+  border-color: var(--gh-border);
 }
 
 .scope-name:focus-visible {
-  border-color: #4ea1ff;
-  background: #18191c;
+  border-color: var(--gh-accent);
+  background: var(--gh-bg-deep);
   outline: none;
 }
 
@@ -105,14 +105,14 @@
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: #9aa0aa;
-  font: 14px/1 system-ui, sans-serif;
+  color: var(--gh-text-muted);
+  font: 14px/1 var(--gh-font-ui);
   cursor: pointer;
 }
 
 .scope-remove:hover {
   border-color: #d0544c;
-  color: #fff;
+  color: var(--gh-on-accent);
 }
 
 .scope-small-select {
@@ -145,10 +145,10 @@
   min-height: 18px;
   padding: 3px 8px;
   overflow: hidden;
-  border-top: 1px solid #3a3d44;
-  background: #25272c;
-  color: #9aa0aa;
-  font: 11px ui-monospace, Consolas, monospace;
+  border-top: 1px solid var(--gh-border);
+  background: var(--gh-bg-panel);
+  color: var(--gh-text-muted);
+  font: 11px var(--gh-font-mono);
   white-space: nowrap;
   text-overflow: ellipsis;
 }

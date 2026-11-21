@@ -5,9 +5,9 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: #18191c;
-  color: #c3c7ce;
-  font: 12px system-ui, sans-serif;
+  background: var(--gh-bg-deep);
+  color: var(--gh-text-soft);
+  font: 12px var(--gh-font-ui);
 }
 
 .ce-tabs {
@@ -16,10 +16,10 @@
   min-height: 28px;
   overflow-x: auto;
   overflow-y: hidden;
-  border-bottom: 1px solid #3a3d44;
-  background: #25272c;
+  border-bottom: 1px solid var(--gh-border);
+  background: var(--gh-bg-panel);
   scrollbar-width: thin;
-  scrollbar-color: #4a4d55 transparent;
+  scrollbar-color: var(--gh-scrollbar) transparent;
 }
 
 .ce-tab {
@@ -30,23 +30,23 @@
   box-sizing: border-box;
   max-width: 220px;
   padding: 0 4px 0 10px;
-  border-right: 1px solid #3a3d44;
-  background: #25272c;
-  color: #9aa0aa;
+  border-right: 1px solid var(--gh-border);
+  background: var(--gh-bg-panel);
+  color: var(--gh-text-muted);
   white-space: nowrap;
   cursor: default;
   user-select: none;
 }
 
 .ce-tab:hover {
-  background: #2b2e34;
-  color: #c3c7ce;
+  background: var(--gh-bg-raised);
+  color: var(--gh-text-soft);
 }
 
 .ce-tab.active {
-  background: #18191c;
-  color: #e6e8ec;
-  box-shadow: inset 0 -2px 0 #4ea1ff;
+  background: var(--gh-bg-deep);
+  color: var(--gh-text-strong);
+  box-shadow: inset 0 -2px 0 var(--gh-accent);
 }
 
 .ce-tab:focus {
@@ -54,7 +54,7 @@
 }
 
 .ce-tab:focus-visible {
-  box-shadow: inset 0 0 0 1px #4ea1ff;
+  box-shadow: inset 0 0 0 1px var(--gh-accent);
 }
 
 .ce-tab-name {
@@ -64,7 +64,7 @@
 
 .ce-tab-board {
   overflow: hidden;
-  color: #7d828c;
+  color: var(--gh-text-dim);
   font-size: 11px;
   text-overflow: ellipsis;
 }
@@ -112,7 +112,7 @@
   align-items: center;
   justify-content: center;
   padding: 12px;
-  color: #7d828c;
+  color: var(--gh-text-dim);
   font-size: 13px;
   text-align: center;
   pointer-events: none;
@@ -127,11 +127,11 @@
 .ce-tab-lock {
   display: inline-flex;
   flex: none;
-  color: #7d828c;
+  color: var(--gh-text-dim);
 }
 
 .ce-tab.active .ce-tab-lock {
-  color: #e6b36a;
+  color: var(--gh-warn-text);
 }
 
 .ce-note {
@@ -140,9 +140,9 @@
   align-items: center;
   gap: 6px;
   padding: 3px 10px;
-  border-bottom: 1px solid #3a3d44;
+  border-bottom: 1px solid var(--gh-border);
   background: #22242a;
-  color: #9aa0aa;
+  color: var(--gh-text-muted);
   font-size: 11px;
 }
 
@@ -152,7 +152,7 @@
 
 .ce-note-icon {
   display: inline-flex;
-  color: #e6b36a;
+  color: var(--gh-warn-text);
 }
 
 /* The line a build message points at flashes once (editorcm.ts removes the class after the animation). */

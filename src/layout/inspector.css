@@ -5,12 +5,12 @@
    colours are in COLORS / TRACE_COLORS in inspector.ts. */
 
 .inspector-title {
-  color: #e8eaed;
+  color: var(--gh-text-bright);
   font-weight: 600;
 }
 
 .inspector-mode {
-  color: #7d828c;
+  color: var(--gh-text-dim);
 }
 
 .inspector-body {
@@ -24,14 +24,14 @@
   flex: none;
   width: 250px;
   overflow-y: auto;
-  border-right: 1px solid #3a3d44;
-  background: #1e1f22;
+  border-right: 1px solid var(--gh-border);
+  background: var(--gh-bg-app);
 }
 
 .inspector-group {
   padding: 6px 8px 2px;
-  border-top: 1px solid #2a2c31;
-  color: #7d828c;
+  border-top: 1px solid var(--gh-bg-subtle);
+  color: var(--gh-text-dim);
 }
 
 .inspector-row {
@@ -44,7 +44,7 @@
 }
 
 .inspector-row:hover {
-  background: #25272c;
+  background: var(--gh-bg-panel);
 }
 
 .inspector-row-text {
@@ -63,14 +63,14 @@
 
 .inspector-label {
   overflow: hidden;
-  color: #9aa0aa;
+  color: var(--gh-text-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .inspector-value {
-  color: #e8eaed;
-  font: 12px ui-monospace, Consolas, monospace;
+  color: var(--gh-text-bright);
+  font: 12px var(--gh-font-mono);
   text-align: right;
   white-space: nowrap;
 }

@@ -2,7 +2,7 @@ html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #1e1f22;
+  background: var(--gh-bg-app);
 }
 
 /* Whole window: the dock area (the Circuit panel and the windows around it). */
@@ -49,10 +49,10 @@ html, body {
   box-sizing: border-box;
   padding: 12px;
   overflow: hidden;
-  background: #25272c;
-  border-left: 1px solid #3a3d44;
-  color: #d8dbe0;
-  font: 14px system-ui, sans-serif;
+  background: var(--gh-bg-panel);
+  border-left: 1px solid var(--gh-border);
+  color: var(--gh-text);
+  font: 14px var(--gh-font-ui);
   display: flex;
   flex-direction: column;
   user-select: none;
@@ -74,7 +74,7 @@ html, body {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #9aa0aa;
+  color: var(--gh-text-muted);
 }
 
 #palette-toggle {
@@ -84,17 +84,17 @@ html, body {
   width: 26px;
   height: 26px;
   padding: 0;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 5px;
-  background: #2b2e34;
-  color: #d8dbe0;
+  background: var(--gh-bg-raised);
+  color: var(--gh-text);
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
 }
 
 #palette-toggle:hover {
-  border-color: #4ea1ff;
+  border-color: var(--gh-accent);
 }
 
 #palette.closed #palette-toggle {
@@ -106,7 +106,7 @@ html, body {
 .palette-list {
   overflow: hidden auto;
   scrollbar-width: thin;
-  scrollbar-color: #4a4d55 transparent;
+  scrollbar-color: var(--gh-scrollbar) transparent;
   min-height: 0;
   flex: 0 1 auto;
   display: grid;
@@ -118,15 +118,15 @@ html, body {
   align-items: center;
   gap: 12px;
   padding: 8px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 6px;
-  background: #2b2e34;
+  background: var(--gh-bg-raised);
   cursor: grab;
   touch-action: none;
 }
 
 .palette-item:hover {
-  border-color: #6b7280;
+  border-color: var(--gh-border-strong);
 }
 
 .palette-icon {
@@ -152,7 +152,7 @@ html, body {
   z-index: 1200;
   pointer-events: none;
   opacity: 0.9;
-  filter: drop-shadow(2px 3px 3px rgba(0, 0, 0, 0.5));
+  filter: drop-shadow(2px 3px 3px var(--gh-shadow));
 }
 
 .gh-placing,
@@ -175,23 +175,23 @@ html, body {
   width: 26px;
   height: 26px;
   padding: 0;
-  border: 1px solid #4ea1ff;
+  border: 1px solid var(--gh-accent);
   border-radius: 50%;
-  background: #25272c;
-  color: #d8dbe0;
+  background: var(--gh-bg-panel);
+  color: var(--gh-text);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   cursor: pointer;
 }
 
 .tool-button:hover {
-  background: #4ea1ff;
-  color: #fff;
+  background: var(--gh-accent);
+  color: var(--gh-on-accent);
 }
 
 .tool-button.danger:hover {
-  border-color: #e5534b;
+  border-color: var(--gh-danger);
   background: #c93c37;
-  color: #fff;
+  color: var(--gh-on-accent);
 }
 
 /* Zoom level in the bottom-left corner of the grid; click resets to 100%. */
@@ -202,19 +202,19 @@ html, body {
   z-index: 5;
   min-width: 48px;
   padding: 3px 8px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 4px;
-  background: rgba(37, 39, 44, 0.85);
-  color: #9aa0aa;
-  font: 12px system-ui, sans-serif;
+  background: var(--gh-panel-glass);
+  color: var(--gh-text-muted);
+  font: 12px var(--gh-font-ui);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   user-select: none;
 }
 
 .zoom-readout:hover {
-  color: #d8dbe0;
-  border-color: #6b7280;
+  color: var(--gh-text);
+  border-color: var(--gh-border-strong);
 }
 
 /* Example circuit buttons under the parts list. */
@@ -225,17 +225,17 @@ html, body {
 .palette-example {
   margin-bottom: 6px;
   padding: 7px 8px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 6px;
-  background: #2b2e34;
-  color: #d8dbe0;
+  background: var(--gh-bg-raised);
+  color: var(--gh-text);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
 .palette-example:hover {
-  border-color: #4ea1ff;
+  border-color: var(--gh-accent);
 }
 
 /* Simulation status along the bottom edge of the grid, right of the zoom readout. */
@@ -246,11 +246,11 @@ html, body {
   z-index: 5;
   max-width: calc(100% - 92px);
   padding: 3px 8px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 4px;
-  background: rgba(37, 39, 44, 0.85);
-  color: #9aa0aa;
-  font: 12px system-ui, sans-serif;
+  background: var(--gh-panel-glass);
+  color: var(--gh-text-muted);
+  font: 12px var(--gh-font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
@@ -265,11 +265,11 @@ html, body {
   z-index: 1100;
   max-width: 260px;
   padding: 5px 8px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 5px;
   background: rgba(24, 25, 28, 0.94);
-  color: #d8dbe0;
-  font: 12px/1.45 system-ui, sans-serif;
+  color: var(--gh-text);
+  font: 12px/1.45 var(--gh-font-ui);
   font-variant-numeric: tabular-nums;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
   pointer-events: none;
@@ -277,11 +277,11 @@ html, body {
 }
 
 .readout-title {
-  color: #9aa0aa;
+  color: var(--gh-text-muted);
 }
 
 .readout-warning {
-  color: #ff8a80;
+  color: var(--gh-danger-text);
 }
 
 /* Popup for typing a part's value. */
@@ -289,12 +289,12 @@ html, body {
   position: fixed;
   z-index: 1100;
   padding: 6px 8px;
-  border: 1px solid #4ea1ff;
+  border: 1px solid var(--gh-accent);
   border-radius: 6px;
-  background: #25272c;
-  color: #9aa0aa;
-  font: 12px system-ui, sans-serif;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  background: var(--gh-bg-panel);
+  color: var(--gh-text-muted);
+  font: 12px var(--gh-font-ui);
+  box-shadow: 0 3px 10px var(--gh-shadow);
 }
 
 .value-editor label {
@@ -306,11 +306,11 @@ html, body {
 .value-editor input {
   width: 70px;
   padding: 3px 5px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 4px;
-  background: #1e1f22;
-  color: #e6e8ec;
-  font: 13px system-ui, sans-serif;
+  background: var(--gh-bg-app);
+  color: var(--gh-text-strong);
+  font: 13px var(--gh-font-ui);
   outline: none;
 }
 
@@ -325,16 +325,16 @@ html, body {
 
 .name-error {
   margin-top: 4px;
-  color: #ff8a80;
+  color: var(--gh-danger-text);
   line-height: 1.3;
 }
 
 .value-editor input:focus {
-  border-color: #4ea1ff;
+  border-color: var(--gh-accent);
 }
 
 .value-editor input.invalid {
-  border-color: #e5534b;
+  border-color: var(--gh-danger);
 }
 
 /* New / Open / Save, Windows and the project name, top-left of the grid. */
@@ -347,11 +347,11 @@ html, body {
   align-items: center;
   gap: 4px;
   padding: 3px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 6px;
-  background: rgba(37, 39, 44, 0.85);
-  color: #9aa0aa;
-  font: 12px system-ui, sans-serif;
+  background: var(--gh-panel-glass);
+  color: var(--gh-text-muted);
+  font: 12px var(--gh-font-ui);
   user-select: none;
 }
 
@@ -365,13 +365,13 @@ html, body {
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: #9aa0aa;
+  color: var(--gh-text-muted);
   cursor: pointer;
 }
 
 .file-button:hover:not(:disabled) {
-  border-color: #4ea1ff;
-  color: #d8dbe0;
+  border-color: var(--gh-accent);
+  color: var(--gh-text);
 }
 
 .file-button:disabled {
@@ -385,12 +385,12 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #d8dbe0;
+  color: var(--gh-text);
 }
 
 .dirty-dot {
   margin: 0 4px 0 1px;
-  color: #e3b341;
+  color: var(--gh-warn);
   font-size: 10px;
 }
 
@@ -403,18 +403,18 @@ html, body {
   max-width: min(560px, calc(100% - 40px));
   transform: translateX(-50%);
   padding: 7px 12px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 6px;
   background: rgba(24, 25, 28, 0.96);
-  color: #d8dbe0;
-  font: 13px/1.4 system-ui, sans-serif;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  color: var(--gh-text);
+  font: 13px/1.4 var(--gh-font-ui);
+  box-shadow: 0 3px 10px var(--gh-shadow);
   cursor: pointer;
 }
 
 .toast.error {
-  border-color: #e5534b;
-  color: #ffb4ad;
+  border-color: var(--gh-danger);
+  color: var(--gh-danger-soft);
 }
 
 /* Modal question (unsaved changes, restore last session). */
@@ -431,18 +431,18 @@ html, body {
 .dialog {
   width: min(380px, calc(100% - 40px));
   padding: 14px 16px 12px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 8px;
-  background: #25272c;
-  color: #c3c7ce;
-  font: 13px/1.45 system-ui, sans-serif;
+  background: var(--gh-bg-panel);
+  color: var(--gh-text-soft);
+  font: 13px/1.45 var(--gh-font-ui);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
 }
 
 .dialog h3 {
   margin: 0 0 6px;
   font-size: 14px;
-  color: #e6e8ec;
+  color: var(--gh-text-strong);
 }
 
 .dialog p {
@@ -457,24 +457,24 @@ html, body {
 
 .dialog-button {
   padding: 5px 12px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 5px;
-  background: #2b2e34;
-  color: #d8dbe0;
+  background: var(--gh-bg-raised);
+  color: var(--gh-text);
   font: inherit;
   cursor: pointer;
 }
 
 .dialog-button:hover,
 .dialog-button:focus-visible {
-  border-color: #4ea1ff;
+  border-color: var(--gh-accent);
   outline: none;
 }
 
 .dialog-button.primary {
-  border-color: #4ea1ff;
-  background: #2f5f99;
-  color: #fff;
+  border-color: var(--gh-accent);
+  background: var(--gh-accent-dim);
+  color: var(--gh-on-accent);
 }
 
 /* One selected board: its buttons in the selection toolbar and the status chip below it. */
@@ -482,7 +482,7 @@ html, body {
   display: flex;
   gap: 6px;
   padding-right: 6px;
-  border-right: 1px solid #3a3d44;
+  border-right: 1px solid var(--gh-border);
 }
 
 .tool-button:disabled {
@@ -491,8 +491,8 @@ html, body {
 }
 
 .tool-button:disabled:hover {
-  background: #25272c;
-  color: #d8dbe0;
+  background: var(--gh-bg-panel);
+  color: var(--gh-text);
 }
 
 /* Run and Build buttons after a failed build: red marker in the corner. */
@@ -508,9 +508,9 @@ html, body {
   right: -2px;
   width: 8px;
   height: 8px;
-  border: 1px solid #25272c;
+  border: 1px solid var(--gh-bg-panel);
   border-radius: 50%;
-  background: #e5534b;
+  background: var(--gh-danger);
 }
 
 .board-chip {
@@ -519,11 +519,11 @@ html, body {
   box-sizing: border-box;
   max-width: 340px;
   padding: 4px 8px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 6px;
   background: rgba(37, 39, 44, 0.92);
-  color: #c3c7ce;
-  font: 12px/1.35 system-ui, sans-serif;
+  color: var(--gh-text-soft);
+  font: 12px/1.35 var(--gh-font-ui);
   font-variant-numeric: tabular-nums;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   user-select: none;
@@ -535,7 +535,7 @@ html, body {
 }
 
 .board-chip.clickable:hover {
-  border-color: #e5534b;
+  border-color: var(--gh-danger);
 }
 
 .board-chip-row {
@@ -554,16 +554,16 @@ html, body {
 }
 
 .board-chip-name {
-  color: #e6e8ec;
+  color: var(--gh-text-strong);
   font-weight: 600;
 }
 
 .board-chip-note {
-  color: #9aa0aa;
+  color: var(--gh-text-muted);
 }
 
 .board-chip-note.error {
-  color: #ff8a80;
+  color: var(--gh-danger-text);
 }
 
 .board-chip-dot {
@@ -571,19 +571,19 @@ html, body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #7d828b;
+  background: var(--gh-text-dim);
 }
 
 .board-chip-dot.running {
-  background: #3fbf55;
+  background: var(--gh-ok);
 }
 
 .board-chip-dot.paused {
-  background: #e3b341;
+  background: var(--gh-warn);
 }
 
 .board-chip-dot.error {
-  background: #e5534b;
+  background: var(--gh-danger);
 }
 
 /* Windows menu in the file bar. */
@@ -593,8 +593,8 @@ html, body {
 }
 
 .file-button.active {
-  border-color: #4ea1ff;
-  color: #d8dbe0;
+  border-color: var(--gh-accent);
+  color: var(--gh-text);
 }
 
 .windows-menu-list {
@@ -604,10 +604,10 @@ html, body {
   z-index: 10;
   min-width: 170px;
   padding: 4px;
-  border: 1px solid #3a3d44;
+  border: 1px solid var(--gh-border);
   border-radius: 6px;
-  background: #25272c;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  background: var(--gh-bg-panel);
+  box-shadow: 0 3px 10px var(--gh-shadow);
 }
 
 .windows-menu-list[hidden] {
@@ -621,8 +621,8 @@ html, body {
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: #d8dbe0;
-  font: 12px system-ui, sans-serif;
+  color: var(--gh-text);
+  font: 12px var(--gh-font-ui);
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
@@ -631,7 +631,7 @@ html, body {
 
 .windows-menu-item:hover,
 .windows-menu-item:focus-visible {
-  background: #2f5f99;
+  background: var(--gh-accent-dim);
   outline: none;
 }
 
@@ -639,11 +639,11 @@ html, body {
   content: '✓';
   position: absolute;
   left: 8px;
-  color: #4ea1ff;
+  color: var(--gh-accent);
 }
 
 .windows-menu-separator {
   height: 1px;
   margin: 4px 2px;
-  background: #3a3d44;
+  background: var(--gh-border);
 }
