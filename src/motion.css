@@ -118,11 +118,76 @@
   animation: gh-pop-in var(--gh-fade) var(--gh-ease-spring);
 }
 
-/* Menus */
-.windows-menu-list:not([hidden]),
+/* Menus that stay in the page and are shown with the `hidden` attribute (Windows, File)
+   open AND close with a transition: `display` is transitioned too (allow-discrete),
+   so the closing menu stays visible while it fades. */
+.windows-menu-list {
+  transform-origin: top left;
+  transition:
+    opacity var(--gh-fade-fast) ease,
+    transform var(--gh-fade) var(--gh-ease-spring),
+    display var(--gh-fade-fast) allow-discrete;
+}
+
+.windows-menu-list[hidden] {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.97);
+}
+
+@starting-style {
+  .windows-menu-list:not([hidden]) {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+}
+
 .gh-dock .dv-context-menu {
   animation: gh-menu-in var(--gh-fade-fast) var(--gh-ease-spring);
   transform-origin: top left;
+}
+
+/* The file bar unfolds into its menu: while a menu is open the bar grows downward (and
+   widens to the list), and the list sits inside it without a glass box of its own.
+   barmenu.ts sets --gh-bar-menu-h to the list's height. The bar's rows are 24px high
+   and top-aligned so they do not move when the bar grows. */
+.file-bar {
+  align-items: flex-start;
+  min-width: 0;
+  transition:
+    padding-bottom var(--gh-glide) var(--gh-ease-glide),
+    min-width var(--gh-glide) var(--gh-ease-glide);
+}
+
+.file-bar > .project-name,
+.file-bar > .dirty-dot {
+  align-self: flex-start;
+  height: 24px;
+  line-height: 24px;
+}
+
+.file-bar.menu-open {
+  padding-bottom: calc(7px + var(--gh-bar-menu-h, 0px));
+  min-width: 236px;
+}
+
+.file-bar .windows-menu {
+  position: static;
+}
+
+.file-bar .windows-menu-list {
+  top: 31px;
+  left: 3px;
+  right: 3px;
+  min-width: 0;
+  padding: 2px 0 0;
+  border: 0;
+  border-top: 1px solid var(--gh-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transform-origin: top center;
 }
 
 /* Dialogs and toasts */
@@ -134,8 +199,119 @@
   animation: gh-pop-in var(--gh-fade) var(--gh-ease-spring);
 }
 
-.shortcut-backdrop:not([hidden]) {
-  animation: gh-fade-in var(--gh-fade-fast) ease-out;
+.shortcut-backdrop {
+  transition:
+    opacity var(--gh-fade) ease,
+    display var(--gh-fade) allow-discrete;
+}
+
+.shortcut-backdrop[hidden] {
+  opacity: 0;
+}
+
+.shortcut-sheet {
+  transition: transform var(--gh-fade) var(--gh-ease-glide);
+}
+
+.shortcut-backdrop[hidden] .shortcut-sheet {
+  transform: translateY(8px) scale(0.98);
+}
+
+@starting-style {
+  .shortcut-backdrop:not([hidden]) {
+    opacity: 0;
+  }
+
+  .shortcut-backdrop:not([hidden]) .shortcut-sheet {
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+/* ---- Things leaving ------------------------------------------------------
+   Elements taken out with leave() (src/leave.ts) get .gh-leaving and fade away
+   before they are removed (LEAVE_MS there is a little longer than these). */
+
+@keyframes gh-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes gh-pop-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+
+@keyframes gh-toast-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+}
+
+.dialog-backdrop.gh-leaving {
+  animation: gh-fade-out var(--gh-fade) ease-in forwards;
+}
+
+.dialog-backdrop.gh-leaving .dialog {
+  animation: gh-pop-out var(--gh-fade) ease-in forwards;
+}
+
+.toast.gh-leaving {
+  animation: gh-toast-out var(--gh-fade) ease-in forwards;
+}
+
+.value-editor.gh-leaving,
+.name-editor.gh-leaving {
+  animation: gh-pop-out var(--gh-fade-fast) ease-in forwards;
+  transform-origin: top left;
+}
+
+/* ---- The parts menu folding ----------------------------------------------
+   The column glides between its full width and the thin strip; its contents keep
+   their width (clipped) and fade, so nothing reflows or snaps. */
+
+#palette {
+  transition:
+    width var(--gh-glide) var(--gh-ease-glide),
+    padding var(--gh-glide) var(--gh-ease-glide);
+}
+
+/* The show/hide button turns from the small square in the corner into the tall tab on the strip's
+   edge as the menu glides, and its arrow turns around meanwhile (it is one arrow, rotated). */
+#palette-toggle {
+  transition:
+    transform var(--gh-fade-fast) var(--gh-ease-spring),
+    top var(--gh-glide) var(--gh-ease-glide),
+    right var(--gh-glide) var(--gh-ease-glide),
+    height var(--gh-glide) var(--gh-ease-glide),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.palette-toggle-arrow {
+  display: block;
+  transition: transform var(--gh-glide) var(--gh-ease-glide);
+}
+
+#palette.closed .palette-toggle-arrow {
+  transform: rotate(180deg);
+}
+
+#palette > :not(#palette-toggle) {
+  min-width: calc(196px * var(--gh-menu-scale));
+  transition:
+    opacity var(--gh-fade) ease 120ms,
+    visibility 0s;
+}
+
+#palette.closed > :not(#palette-toggle) {
+  transition:
+    opacity 120ms ease,
+    visibility 0s linear 120ms;
 }
 
 .toast {
@@ -153,8 +329,23 @@
   .dialog-backdrop,
   .dialog,
   .shortcut-backdrop,
-  .toast {
+  .toast,
+  .dialog-backdrop.gh-leaving,
+  .dialog-backdrop.gh-leaving .dialog,
+  .toast.gh-leaving,
+  .value-editor.gh-leaving,
+  .name-editor.gh-leaving {
     animation: none;
+  }
+
+  .windows-menu-list,
+  .file-bar,
+  .shortcut-backdrop,
+  .shortcut-sheet,
+  #palette,
+  #palette > :not(#palette-toggle),
+  .palette-toggle-arrow {
+    transition: none;
   }
 
   .file-button:active,

@@ -2,6 +2,8 @@
 // dockable window, and to reset the layout. The Circuit panel is listed too,
 // always open: choosing it brings it to the front (it can not be closed).
 
+import { setBarMenuOpen } from '../barmenu';
+import { attachDrop } from '../droplight';
 import type { DockLayout } from './dock';
 import { EDITOR_ID, WINDOWS, isClosable } from './panels';
 
@@ -43,6 +45,7 @@ export function createWindowsMenu(layout: DockLayout): HTMLElement {
   const reset = menuItem('Reset layout', () => layout.reset());
   reset.title = 'Close all windows, put the Circuit panel back and forget their positions';
   menu.append(...items.map((i) => i.item), separator, reset);
+  attachDrop(menu, '.windows-menu-item');
 
   const refresh = (): void => {
     for (const { spec, item } of items) item.setAttribute('aria-checked', String(layout.isOpen(spec.id)));
@@ -53,6 +56,7 @@ export function createWindowsMenu(layout: DockLayout): HTMLElement {
   const setOpen = (open: boolean): void => {
     menu.hidden = !open;
     button.classList.toggle('active', open);
+    setBarMenuOpen(wrap, menu, open);
     if (open) {
       refresh();
       document.addEventListener('pointerdown', onOutside, true);

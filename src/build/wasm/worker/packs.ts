@@ -12,7 +12,8 @@ import { PackError, readPack, sha256Hex, type PackReader } from './packreader';
 export type { DownloadProgress };
 
 /** Where the dev server (vite.config.ts) serves toolchain/packs/. */
-export const DEFAULT_PACKS_URL = '/toolchain-packs/';
+// Relative to the page (resolvePacksUrl), so the same build works at a site root (dev, Electron) and under /app/ on the web host.
+export const DEFAULT_PACKS_URL = './toolchain-packs/';
 export const PACK_CACHE_NAME = 'gatehouse-packs';
 const KEY_ORIGIN = 'https://gatehouse.invalid';
 /** The last manifest fetched, for offline use. */

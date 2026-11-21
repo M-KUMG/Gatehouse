@@ -3,6 +3,7 @@
 // console and Rename. Also the small readouts along the bottom edge.
 
 import type { BoardToolbar, ToolbarButtons } from './boardcontrols';
+import { attachDrop } from './droplight';
 import { MAX_ZOOM, MIN_ZOOM } from './camera';
 import type { ScreenRect } from './grid';
 
@@ -72,6 +73,7 @@ export class Toolbar {
   ) {
     this.el = document.createElement('div');
     this.el.className = 'selection-toolbar';
+    attachDrop(this.el, '.tool-button');
     this.buttons = {
       rotate: button('Rotate 90° clockwise (R)', ICONS.rotate, actions.rotate),
       flipH: button('Flip horizontal (H)', ICONS.flipH, actions.flipH),
@@ -204,6 +206,7 @@ const ZOOM_ICONS = {
 export function createZoomControls(parent: HTMLElement, actions: ZoomActions): () => void {
   const group = document.createElement('div');
   group.className = 'zoom-controls';
+  attachDrop(group, '.zoom-button, .zoom-readout');
   group.setAttribute('role', 'group');
   group.setAttribute('aria-label', 'Zoom');
 

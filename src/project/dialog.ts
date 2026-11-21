@@ -1,5 +1,7 @@
 // Small modal question and a passing message (toast), in the app's style.
 
+import { leave } from '../leave';
+
 export interface Choice<T> {
   label: string;
   value: T;
@@ -26,7 +28,7 @@ export function ask<T>(title: string, message: string, choices: readonly Choice<
 
     const finish = (value: T): void => {
       window.removeEventListener('keydown', onKey, true);
-      backdrop.remove();
+      leave(backdrop);
       resolve(value);
     };
     // While open, keys belong to the dialog, not the editor underneath.
@@ -62,8 +64,8 @@ export function toast(message: string, kind: 'info' | 'error' = 'info'): void {
   el.setAttribute('role', kind === 'error' ? 'alert' : 'status');
   el.textContent = message;
   el.title = 'Click to close';
-  el.addEventListener('click', () => el.remove());
+  el.addEventListener('click', () => leave(el));
   document.body.append(el);
   current = el;
-  window.setTimeout(() => el.remove(), kind === 'error' ? 9000 : 2500);
+  window.setTimeout(() => leave(el), kind === 'error' ? 9000 : 2500);
 }

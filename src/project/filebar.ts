@@ -3,6 +3,8 @@
 // Export: see filecommands.ts), the Windows menu (added by main.ts), Undo,
 // Redo, and the project name with a dot while there are unsaved changes.
 
+import { setBarMenuOpen } from '../barmenu';
+import { attachDrop } from '../droplight';
 import { fileMenu, type FileCommand } from './filecommands';
 
 const svg = (body: string): string =>
@@ -45,6 +47,7 @@ export function createFileBar(parent: HTMLElement, actions: FileBarActions, fold
   undo.disabled = redo.disabled = true;
   bar.append(createFileMenu(actions.command, folders), undo, redo, name, dot);
   parent.append(bar);
+  attachDrop(bar, '.file-button');
 
   return {
     element: bar,
@@ -81,6 +84,7 @@ function createFileMenu(run: (command: FileCommand) => void, folders: boolean): 
     menu.hidden = !open;
     trigger.classList.toggle('active', open);
     trigger.setAttribute('aria-expanded', String(open));
+    setBarMenuOpen(wrap, menu, open);
     if (open) {
       document.addEventListener('pointerdown', onOutside, true);
       document.addEventListener('keydown', onKey, true);
@@ -127,6 +131,7 @@ function createFileMenu(run: (command: FileCommand) => void, folders: boolean): 
     menu.append(item);
   }
 
+  attachDrop(menu, '.windows-menu-item');
   trigger.addEventListener('click', () => setOpen(menu.hidden));
   wrap.append(trigger, menu);
   return wrap;

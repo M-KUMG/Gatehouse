@@ -6,6 +6,7 @@
 // here is saved or recorded in the undo history.
 
 import './transport.css';
+import { attachDrop } from './droplight';
 import type { SimClock } from './boardclock';
 import type { Simulation } from './simulation';
 import { DEFAULT_SPEED, SPEEDS, speedLabel, transportView } from './transportmodel';
@@ -40,6 +41,7 @@ export class TransportBar {
   ) {
     const el = this.element;
     el.className = 'transport-bar';
+    attachDrop(el, '.file-button');
     this.toggleButton = button(() => this.toggle());
     this.resetButton = button(() => this.reset());
     this.resetButton.innerHTML = ICONS.reset;

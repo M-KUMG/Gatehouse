@@ -83,7 +83,7 @@
   position: fixed;
   z-index: 100000;
   box-sizing: border-box;
-  overflow-y: auto;
+  overflow: hidden; /* while it grows (.settled lets it scroll) */
   padding: 5px;
   border: 1px solid var(--gh-glass-edge);
   border-radius: var(--gh-radius-md);
@@ -93,22 +93,38 @@
   box-shadow: var(--gh-glass-rim), var(--gh-glass-drop);
   color: var(--gh-text);
   font: 12px var(--gh-font-ui);
-  opacity: 0;
-  transform: translateY(-6px) scale(0.96);
-  transform-origin: top left;
-  transition: opacity var(--gh-fade-fast) ease, transform 0.24s var(--gh-ease-spring);
+  /* It starts as the button's own box (glassselect.ts sets top/left/width/height inline) and glides to the
+     list's box, so the button itself seems to turn into the list. */
+  opacity: 1; /* it starts exactly over the button: no fade, so the label's text never dips */
+  transition:
+    opacity var(--gh-fade-fast) ease,
+    top 380ms var(--gh-ease-glide),
+    left 380ms var(--gh-ease-glide),
+    width 380ms var(--gh-ease-glide),
+    height 380ms var(--gh-ease-glide),
+    border-radius 380ms var(--gh-ease-glide);
   scrollbar-width: thin;
   scrollbar-color: var(--gh-scrollbar) transparent;
 }
 
-.gs-list.up {
-  transform: translateY(6px) scale(0.96);
-  transform-origin: bottom left;
-}
-
 .gs-list.open {
   opacity: 1;
-  transform: none;
+}
+
+.gs-list.settled {
+  overflow-y: auto;
+}
+
+/* The entries appear a moment after the list starts to grow. */
+.gs-item,
+.gs-group {
+  opacity: 0;
+  transition: opacity 220ms ease 140ms, background var(--gh-fade-fast) ease, transform var(--gh-fade-fast) var(--gh-ease-spring);
+}
+
+.gs-list.open .gs-item,
+.gs-list.open .gs-group {
+  opacity: 1;
 }
 
 .gs-item {
@@ -120,7 +136,6 @@
   white-space: nowrap;
   cursor: pointer;
   position: relative;
-  transition: background var(--gh-fade-fast) ease, transform var(--gh-fade-fast) var(--gh-ease-spring);
 }
 
 .gs-item.active {
@@ -193,4 +208,89 @@
 
 .value-editor-multi > label > .gs-trigger {
   grid-column: 2 / 4;
+}
+
+/* A list that is folding back into its button must not catch clicks meant for the button. */
+.gs-list:not(.open) {
+  pointer-events: none;
+}
+
+/* While the list is being placed its start state (the button's box, the entries shifted) must appear at once. */
+.gs-list.placing,
+.gs-list.placing * {
+  transition: none !important;
+}
+
+/* The entries keep their final width while the box is still growing (clipped), so the text does not rewrap. */
+.gs-item {
+  min-width: var(--gs-inner-w, 0);
+}
+
+/* The entries move as one (--gs-dx / --gs-dy, glassselect.ts) so that the chosen entry's text sits over the
+   button's text while the box is the button's box, and slides to its place in the list as it grows. */
+.gs-item,
+.gs-group {
+  translate: var(--gs-dx, 0px) var(--gs-dy, 0px);
+  transition:
+    translate 380ms var(--gh-ease-glide),
+    opacity 220ms ease 140ms,
+    background var(--gh-fade-fast) ease,
+    transform var(--gh-fade-fast) var(--gh-ease-spring);
+}
+
+/* The chosen entry is the button's label: it never fades; the others appear around it. */
+.gs-item[aria-selected='true'] {
+  opacity: 1;
+}
+
+.gs-item::before {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.gs-list.open .gs-item::before {
+  opacity: 1;
+  transition: opacity 200ms ease 220ms;
+}
+
+/* The button's own label hides while the list is open or folding back, so the same text is not drawn twice. */
+.gs-trigger[aria-expanded='true'] .gs-label,
+.gs-trigger.gs-folding .gs-label {
+  opacity: 0;
+  transition: none;
+}
+
+.gs-label {
+  transition: opacity 120ms ease;
+}
+
+.gs-item {
+  box-sizing: border-box;
+}
+
+/* Folding back: the box shrinks into the button and fades over the second half; the button's label
+   comes back as the list's chosen text lands on it, so the text is always there (no gap, no pop). */
+.gs-list.closing {
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 200ms ease 230ms,
+    top 380ms var(--gh-ease-glide),
+    left 380ms var(--gh-ease-glide),
+    width 380ms var(--gh-ease-glide),
+    height 380ms var(--gh-ease-glide),
+    border-radius 380ms var(--gh-ease-glide);
+}
+
+.gs-list.closing .gs-item,
+.gs-list.closing .gs-group {
+  transition:
+    translate 380ms var(--gh-ease-glide),
+    opacity 120ms ease,
+    background var(--gh-fade-fast) ease,
+    transform var(--gh-fade-fast) var(--gh-ease-spring);
+}
+
+.gs-list.closing .gs-item[aria-selected='true'] {
+  opacity: 1;
 }

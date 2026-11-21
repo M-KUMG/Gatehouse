@@ -1,3 +1,4 @@
+import { attachDrop } from './droplight';
 import { groupParts } from './partcategories';
 import { isNavKey, moveIndex } from './palettenav';
 import { searchNamed, searchParts } from './partsearch';
@@ -76,6 +77,12 @@ export function createPalette(
   toggle.type = 'button';
   toggle.title = 'Show or hide parts';
   toggle.setAttribute('aria-label', 'Show or hide the parts menu');
+  // One arrow that turns around as the menu folds (not two glyphs swapped): see motion.css.
+  const arrow = document.createElement('span');
+  arrow.className = 'palette-toggle-arrow';
+  arrow.setAttribute('aria-hidden', 'true');
+  arrow.textContent = '›';
+  toggle.appendChild(arrow);
   panel.appendChild(toggle);
 
   const title = document.createElement('h2');
@@ -276,6 +283,7 @@ export function createPalette(
   for (const group of groupParts(PARTS)) {
     const list = document.createElement('div');
     list.className = 'palette-list';
+    attachDrop(list, '.palette-item', { over: true });
     const tiles: HTMLElement[] = [];
     for (const part of group.parts) list.appendChild(makeTile(part, tiles));
     addSection(group.id, group.name, group.parts.length, list, tiles);
@@ -326,6 +334,7 @@ export function createPalette(
     if (foundParts.length > 0) {
       const list = document.createElement('div');
       list.className = 'palette-list';
+      attachDrop(list, '.palette-item', { over: true });
       for (const part of foundParts) {
         list.appendChild(makeTile(part, resultTiles, (key) => {
           if (key === 'ArrowUp') input.focus();
@@ -369,7 +378,6 @@ export function createPalette(
 
   const setOpen = (isOpen: boolean): void => {
     panel.classList.toggle('closed', !isOpen);
-    toggle.textContent = isOpen ? '›' : '‹';
     toggle.setAttribute('aria-expanded', String(isOpen));
     bubble.hide();
   };

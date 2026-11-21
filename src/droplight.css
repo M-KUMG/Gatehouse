@@ -1,0 +1,94 @@
+/* The water drop (droplight.ts): a glass highlight that glides between options. */
+
+.gh-drop {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  opacity: 0;
+  border-radius: var(--gh-drop-radius, var(--gh-radius-sm));
+  background:
+    radial-gradient(130% 150% at 18% 0%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.08) 58%),
+    rgba(255, 255, 255, 0.07);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 6px rgba(255, 255, 255, 0.08),
+    0 3px 12px rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(6px) saturate(1.4);
+  backdrop-filter: blur(6px) saturate(1.4);
+  transition:
+    transform 340ms cubic-bezier(0.3, 1.2, 0.4, 1),
+    width 260ms var(--gh-ease-glide, ease),
+    height 260ms var(--gh-ease-glide, ease),
+    opacity 160ms ease;
+}
+
+/* The little bright spot of a drop of water. */
+.gh-drop::before {
+  content: '';
+  position: absolute;
+  left: 9%;
+  top: 8%;
+  width: 36%;
+  height: 24%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 70%);
+}
+
+.gh-drop.show {
+  opacity: 1;
+}
+
+.gh-drop.jump {
+  transition: none;
+}
+
+/* Over the options (the parts menu): lighter, so the picture underneath shows through. */
+.gh-drop.gh-drop-over {
+  z-index: 2;
+  opacity: 0;
+  background:
+    radial-gradient(130% 150% at 18% 0%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.04) 60%),
+    rgba(255, 255, 255, 0.03);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.gh-drop.gh-drop-over.show {
+  opacity: 1;
+}
+
+/* The options sit above the drop (or, for the parts menu, below it), and the drop replaces their own hover fill. */
+.has-drop > .windows-menu-item,
+.has-drop > .context-menu-item,
+.has-drop > .gs-item,
+.has-drop .file-button,
+.has-drop .zoom-button,
+.has-drop .zoom-readout,
+.has-drop .tool-button {
+  position: relative;
+  z-index: 1;
+}
+
+.has-drop > .windows-menu-item:hover,
+.has-drop > .windows-menu-item:focus-visible,
+.has-drop > .context-menu-item:hover:not(:disabled),
+.has-drop > .context-menu-item:focus-visible,
+.has-drop > .context-menu-item.danger:hover:not(:disabled),
+.has-drop > .gs-item.active {
+  background: transparent;
+}
+
+/* Parts menu tiles: the drop is the hover effect, so the tile does not also jump. */
+.has-drop > .palette-item:hover:not(:active) {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gh-drop {
+    transition: opacity 80ms linear;
+  }
+}

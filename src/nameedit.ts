@@ -4,6 +4,7 @@
 // reason under the field. An empty name restores the default.
 
 import type { ScreenRect } from './grid';
+import { leave } from './leave';
 import type { FileOpResult } from './project/boardfiles';
 
 const GAP = 8;
@@ -87,6 +88,6 @@ export class NameEditor {
   close(): void {
     const el = this.el;
     this.el = null;
-    el?.remove(); // removing a focused input fires blur, which finds el already cleared
+    if (el) leave(el); // a focused input that goes away fires blur, which finds el already cleared
   }
 }

@@ -1,6 +1,6 @@
 // The Worker client with a fake Worker: ids, progress relay, queueing,
 // inactivity timeout and recycling, the instant re-run, failures.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { CompileProgress, CompileResult } from '../pipeline';
 import { BUILD_TIMED_OUT, resolvePacksUrl, WasmCompilerClient, type WorkerLike } from './client';
 import type { DownloadProgress } from './packs';
@@ -189,6 +189,17 @@ describe('WasmCompilerClient', () => {
     expect(await broken.compile(sketch(), 'uno')).toMatchObject({ ok: false, errors: ['error: The compiler could not start: no Worker here'] });
     expect(resolvePacksUrl('file:///C:/app/dist/toolchain-packs/')).toBeNull();
     expect(resolvePacksUrl(BASE)).toBe(BASE);
+    // The default is relative to the page: the same build works at a root and under /app/.
+    const page = (href: string) => vi.stubGlobal('location', { href });
+    page('https://host.test/app/index.html');
+    expect(resolvePacksUrl()).toBe('https://host.test/app/toolchain-packs/');
+    page('https://host.test/app/');
+    expect(resolvePacksUrl()).toBe('https://host.test/app/toolchain-packs/');
+    page('gatehouse://app/index.html');
+    expect(resolvePacksUrl()).toBe('gatehouse://app/toolchain-packs/');
+    page('http://localhost:5173/');
+    expect(resolvePacksUrl()).toBe('http://localhost:5173/toolchain-packs/');
+    vi.unstubAllGlobals();
     expect(resolvePacksUrl('gatehouse://app/toolchain-packs')).toBe('gatehouse://app/toolchain-packs/');
     const electron = new WasmCompilerClient({ baseUrl: 'file:///C:/app/dist/toolchain-packs/', createWorker: () => { throw new Error('never'); } });
     expect(electron.baseUrl).toBeNull();

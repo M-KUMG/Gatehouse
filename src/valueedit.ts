@@ -5,6 +5,7 @@
 // offset, duty) gets one row per field; the popup then stays open after each
 // change and closes when the focus leaves it.
 
+import { leave } from './leave';
 import { formatSI, parseSI } from './format';
 import type { ScreenRect } from './grid';
 import type { PlacedPart } from './model';
@@ -131,6 +132,6 @@ export class ValueEditor {
   close(): void {
     const el = this.el;
     this.el = null;
-    el?.remove(); // removing a focused input fires focusout, which finds el already cleared
+    if (el) leave(el); // a focused input that goes away fires focusout, which finds el already cleared
   }
 }

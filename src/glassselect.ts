@@ -15,6 +15,7 @@
 // own focus logic. Mouse: a press on the list does not take the focus either.
 
 import './glassselect.css';
+import { attachDrop, type Drop } from './droplight';
 
 export interface ListEntry {
   label: string;
@@ -102,6 +103,7 @@ export function enhanceSelect(select: HTMLSelectElement): void {
   sync();
 
   let list: HTMLDivElement | null = null;
+  let drop: Drop | null = null;
   let active = -1;
   let typed = '';
   let typedAt = 0;
@@ -112,10 +114,41 @@ export function enhanceSelect(select: HTMLSelectElement): void {
     if (!list) return;
     const el = list;
     list = null;
+    drop?.moveTo(null); // the water drop goes first, or it stays visible as a pill inside the shrinking box
+    drop = null;
     button.setAttribute('aria-expanded', 'false');
     button.removeAttribute('aria-activedescendant');
-    el.classList.remove('open');
-    window.setTimeout(() => el.remove(), 180);
+    el.classList.remove('open', 'settled');
+    el.classList.add('closing');
+    if (geometry) {
+      // The entry just chosen is the one that lands on the button, and the button may have a new size
+      // (a longer label), so the box folds into the button as it is NOW, not as it was when the list opened.
+      for (const item of el.querySelectorAll<HTMLElement>('.gs-item')) {
+        item.setAttribute('aria-selected', String(Number(item.dataset.index) === select.selectedIndex));
+      }
+      el.style.borderRadius = geometry.from.radius;
+      el.style.minWidth = '0'; // set to the old button's width when it opened: it would stop the box shrinking into a narrower button
+      // The button can still change after the choice is made (the page reacts to the change and may
+      // relayout: a new label, other items beside it), so for the length of the fold the box keeps
+      // following the button's real box; a moving target is a smooth turn, never a snap at the end.
+      let last = '';
+      const started = performance.now();
+      const follow = (): void => {
+        if (!el.isConnected) return;
+        const r = button.getBoundingClientRect();
+        const key = [r.left, r.top, r.width, r.height].map((n) => Math.round(n * 2)).join(',');
+        if (key !== last) {
+          last = key;
+          apply(el, { top: r.top, left: r.left, width: r.width, height: r.height });
+          setShift(el, textShift(el, chosenItem(el)));
+        }
+        if (performance.now() - started < 440) requestAnimationFrame(follow);
+      };
+      follow();
+      button.classList.add('gs-folding');
+      window.setTimeout(() => button.classList.remove('gs-folding'), 230);
+    }
+    window.setTimeout(() => el.remove(), 460);
     document.removeEventListener('pointerdown', onOutside, true);
     window.removeEventListener('resize', close);
     window.removeEventListener('blur', close);
@@ -151,30 +184,76 @@ export function enhanceSelect(select: HTMLSelectElement): void {
       item.classList.toggle('active', on);
       if (on) {
         item.scrollIntoView({ block: 'nearest' });
+        if (list.classList.contains('settled')) drop?.moveTo(item);
         button.setAttribute('aria-activedescendant', item.id);
       }
     }
   };
 
-  const place = (el: HTMLElement): void => {
+  /** The list's box: where it ends up, and the button's box it grows out of. */
+  /**
+   * How far the entries must move so that `item`'s text sits exactly over the button's own text while
+   * the box is the button's box: the chosen entry IS the button's label, and the list opens (and folds)
+   * around it instead of a new thing appearing.
+   */
+  const textShift = (el: HTMLElement, item: HTMLElement | null): { dx: number; dy: number } => {
+    if (!item) return { dx: 0, dy: 0 };
+    const r = button.getBoundingClientRect();
+    const labelLeft = label.getBoundingClientRect().left;
+    const rowCentre = el.clientTop + item.offsetTop - el.scrollTop + item.offsetHeight / 2;
+    const textLeft = el.clientLeft + item.offsetLeft + parseFloat(getComputedStyle(item).paddingLeft || '0');
+    return { dx: labelLeft - r.left - textLeft, dy: r.height / 2 - rowCentre };
+  };
+  const setShift = (el: HTMLElement, s: { dx: number; dy: number }): void => {
+    el.style.setProperty('--gs-dx', `${Math.round(s.dx * 10) / 10}px`);
+    el.style.setProperty('--gs-dy', `${Math.round(s.dy * 10) / 10}px`);
+  };
+  const chosenItem = (el: HTMLElement): HTMLElement | null => el.querySelector<HTMLElement>(`.gs-item[data-index="${select.selectedIndex}"]`);
+
+  interface Geometry {
+    to: { top: number; left: number; width: number; height: number };
+    from: { top: number; left: number; width: number; height: number; radius: string };
+  }
+  let geometry: Geometry | null = null;
+  const apply = (el: HTMLElement, box: { top: number; left: number; width: number; height: number }): void => {
+    el.style.top = `${box.top}px`;
+    el.style.left = `${box.left}px`;
+    el.style.width = `${box.width}px`;
+    el.style.height = `${box.height}px`;
+  };
+
+  /**
+   * The list IS the button grown: its box starts as the button's box (same place, size and corner
+   * radius) and glides to the list's box, with the entries fading in on top. The chosen entry ends up
+   * over the button when the window allows it; a button near the top of the window cannot have the
+   * entries above it, so there the list hangs from the button and grows downward.
+   */
+  const place = (el: HTMLElement): Geometry => {
     const r = button.getBoundingClientRect();
     const margin = 8;
     el.style.minWidth = `${Math.round(r.width)}px`;
     el.style.maxHeight = `${Math.max(120, Math.min(300, window.innerHeight - margin * 2))}px`;
     const height = el.offsetHeight;
-    const below = window.innerHeight - r.bottom - margin;
-    const above = r.top - margin;
-    const up = height > below && above > below;
-    el.classList.toggle('up', up);
-    el.style.top = `${Math.round(up ? Math.max(margin, r.top - 4 - height) : Math.min(r.bottom + 4, window.innerHeight - margin - height))}px`;
-    el.style.left = `${Math.round(Math.max(margin, Math.min(r.left, window.innerWidth - margin - el.offsetWidth)))}px`;
+    const width = el.offsetWidth;
+    const chosen = el.querySelector<HTMLElement>(`.gs-item[data-index="${select.selectedIndex}"]`);
+    if (chosen) el.scrollTop = Math.max(0, chosen.offsetTop - el.clientHeight / 2 + chosen.offsetHeight / 2);
+    const rowCentre = chosen ? el.clientTop + chosen.offsetTop - el.scrollTop + chosen.offsetHeight / 2 : 0;
+    const centred = r.top + r.height / 2 - rowCentre;
+    const wanted = centred < margin ? Math.max(margin, r.top - 5) : centred;
+    const top = Math.round(Math.max(margin, Math.min(wanted, window.innerHeight - margin - height)));
+    const left = Math.round(Math.max(margin, Math.min(r.left, window.innerWidth - margin - width)));
+    el.style.setProperty('--gs-inner-w', `${width - 12}px`); // entries keep their final width while the box grows
+    return {
+      to: { top, left, width, height },
+      from: { top: r.top, left: r.left, width: r.width, height: r.height, radius: getComputedStyle(button).borderRadius },
+    };
   };
 
   const open = (): void => {
     if (list || select.disabled || select.options.length === 0) return;
     openList?.close();
     const el = document.createElement('div');
-    el.className = 'gs-list';
+    el.className = 'gs-list placing'; // no transitions while it is being set up
     el.setAttribute('role', 'listbox');
     el.addEventListener('pointerdown', (e) => e.preventDefault()); // keep the focus on the button
     let group: string | null = null;
@@ -205,10 +284,29 @@ export function enhanceSelect(select: HTMLSelectElement): void {
     });
     document.body.append(el);
     list = el;
+    drop = attachDrop(el, '.gs-item', { manual: true });
     button.setAttribute('aria-expanded', 'true');
-    place(el);
+    const g = place(el);
+    geometry = g;
+    apply(el, g.from); // starts as the button
+    el.style.borderRadius = g.from.radius;
+    setShift(el, textShift(el, chosenItem(el))); // with the chosen entry's text over the button's text
+    void el.offsetWidth; // the start state is in place...
+    el.classList.remove('placing'); // ...and from here changes are animated
     highlight(select.selectedIndex);
-    requestAnimationFrame(() => el.classList.add('open'));
+    requestAnimationFrame(() => {
+      if (list !== el) return;
+      el.classList.add('open');
+      apply(el, g.to); // grows into the list
+      el.style.borderRadius = '';
+      setShift(el, { dx: 0, dy: 0 });
+      window.setTimeout(() => {
+        if (list !== el) return;
+        el.classList.add('settled'); // scrolling is allowed once it has grown
+        const item = el.querySelector<HTMLElement>('.gs-item.active');
+        if (item) drop?.moveTo(item); // the drop appears when the list is there
+      }, 400);
+    });
     document.addEventListener('pointerdown', onOutside, true);
     window.addEventListener('resize', close);
     window.addEventListener('blur', close);

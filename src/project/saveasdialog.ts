@@ -3,6 +3,7 @@
 // resolves with the folder the project will be written to (the folder does not
 // exist yet unless the name is one that does), or null when cancelled.
 
+import { leave } from '../leave';
 import { folderNameProblem, previewPath } from './foldername';
 import type { FolderHost, PickedFolder } from './folderhost';
 
@@ -76,7 +77,7 @@ export async function askSaveLocation(host: FolderHost, suggestedName: string): 
     };
     const finish = (value: PickedFolder | null): void => {
       window.removeEventListener('keydown', onKey, true);
-      backdrop.remove();
+      leave(backdrop);
       resolve(value);
     };
     // While open, keys belong to the dialog, not the editor underneath.

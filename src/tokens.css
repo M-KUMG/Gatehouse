@@ -38,6 +38,8 @@
   /* Motion (used by motion.css and the hover effects): a springy ease, how far a pressed
      button sinks, and how long the short fades take. */
   --gh-ease-spring: cubic-bezier(0.2, 0.9, 0.3, 1.35);
+  --gh-ease-glide: cubic-bezier(0.22, 1, 0.36, 1); /* smooth settle, no overshoot: panels that slide or grow */
+  --gh-glide: 380ms;
   --gh-press-scale: 0.93; /* small buttons */
   --gh-press-scale-wide: 0.985; /* wide ones (section headers, example buttons) */
   --gh-fade-fast: 140ms;

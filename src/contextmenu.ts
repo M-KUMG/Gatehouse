@@ -4,6 +4,7 @@
 // on scroll or zoom, when the window loses focus, and after a choice. The arrow
 // keys move through it, Enter or Space picks. UI-only: nothing here is saved.
 
+import { attachDrop } from './droplight';
 import { formatHint, type MenuItemId, type MenuModel } from './contextmenumodel';
 import { isMacPlatform } from './shortcuts';
 
@@ -20,6 +21,7 @@ export class ContextMenu {
     el.setAttribute('role', 'menu');
     el.hidden = true;
     document.body.appendChild(el);
+    attachDrop(el, '.context-menu-item');
 
     // A press anywhere outside the menu closes it (the press itself still does its own job).
     document.addEventListener(
