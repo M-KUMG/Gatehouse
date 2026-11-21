@@ -1,5 +1,6 @@
 import { PARTS } from './parts';
 import { partImageUrl } from './sprites';
+import { TipBubble } from './tipbubble';
 
 const ICON_CELL = 12; // pixels per grid cell in menu icons
 const ICON_BOX = { w: 72, h: 48 }; // .palette-icon; big parts (boards) are scaled down to fit
@@ -39,12 +40,17 @@ export function createPalette(
 
   const list = document.createElement('div');
   list.className = 'palette-list';
+  list.addEventListener('scroll', () => bubble.hide());
   panel.appendChild(list);
+
+  const bubble = new TipBubble('left');
 
   for (const part of PARTS) {
     const item = document.createElement('div');
     item.className = 'palette-item';
-    item.title = `Drag ${part.name} onto the grid`;
+    // Tiles show only the icon; the name shows in a bubble while the mouse is over the tile.
+    item.setAttribute('role', 'button');
+    item.setAttribute('aria-label', `${part.name}: drag onto the grid`);
 
     const icon = document.createElement('img');
     icon.src = partImageUrl(part);
@@ -57,11 +63,11 @@ export function createPalette(
     iconBox.className = 'palette-icon';
     iconBox.appendChild(icon);
 
-    const label = document.createElement('span');
-    label.textContent = part.name;
-
-    item.append(iconBox, label);
+    item.append(iconBox);
+    item.addEventListener('pointerenter', () => bubble.show(item, part.name));
+    item.addEventListener('pointerleave', () => bubble.hide());
     item.addEventListener('pointerdown', (e) => {
+      bubble.hide(); // out of the way while the part is dragged onto the grid
       if (e.button === 0) onGrab(part.id, e);
     });
     list.appendChild(item);
@@ -86,6 +92,7 @@ export function createPalette(
   const setOpen = (open: boolean): void => {
     panel.classList.toggle('closed', !open);
     toggle.textContent = open ? '›' : '‹';
+    bubble.hide();
   };
   toggle.addEventListener('click', () => setOpen(panel.classList.contains('closed')));
   setOpen(window.innerWidth > NARROW_SCREEN);

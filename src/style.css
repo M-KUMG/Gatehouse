@@ -110,23 +110,86 @@ html, body {
   min-height: 0;
   flex: 0 1 auto;
   display: grid;
+  /* Icon-only tiles, two per row; the name shows in a bubble on hover. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
 .palette-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
   padding: 8px;
   border: 1px solid var(--gh-border);
   border-radius: 6px;
   background: var(--gh-bg-raised);
   cursor: grab;
   touch-action: none;
+  transition:
+    transform 180ms cubic-bezier(0.2, 0.9, 0.3, 1.35),
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .palette-item:hover {
   border-color: var(--gh-border-strong);
+  transform: translateY(-2px) scale(1.04);
+}
+
+.palette-item:active {
+  transform: scale(0.97);
+}
+
+.palette-item .palette-icon img {
+  transition: transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1.35);
+}
+
+.palette-item:hover .palette-icon img {
+  transform: scale(1.1);
+}
+
+/* Name bubble beside a hovered tile (see tipbubble.ts). Sits above dockview's
+   floating windows. It slides out from the tile it belongs to. */
+.tip-bubble {
+  position: fixed;
+  z-index: 1300;
+  display: none;
+  padding: 5px 11px;
+  color: var(--gh-text-strong);
+  font: 12px var(--gh-font-ui);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(8px) scale(0.92);
+  transform-origin: right center;
+  transition:
+    opacity 140ms ease,
+    transform 180ms cubic-bezier(0.2, 0.9, 0.3, 1.35);
+}
+
+.tip-bubble[data-side='right'] {
+  transform: translateX(-8px) scale(0.92);
+  transform-origin: left center;
+}
+
+.tip-bubble.visible {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .palette-item,
+  .palette-item .palette-icon img,
+  .tip-bubble {
+    transition: opacity 120ms ease;
+  }
+
+  .palette-item:hover,
+  .palette-item:active,
+  .palette-item:hover .palette-icon img {
+    transform: none;
+  }
 }
 
 .palette-icon {

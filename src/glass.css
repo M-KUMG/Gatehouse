@@ -45,6 +45,7 @@ body::before {
 .board-chip,
 .build-card,
 .dialog,
+.tip-bubble,
 .windows-menu-list {
   background: var(--gh-glass-sheen), var(--gh-panel-glass);
   -webkit-backdrop-filter: var(--gh-glass-blur);
@@ -58,6 +59,11 @@ body::before {
 .toast,
 .windows-menu-list {
   border-radius: var(--gh-radius-lg);
+}
+
+.tip-bubble {
+  border-radius: var(--gh-radius-pill);
+  box-shadow: var(--gh-glass-rim), 0 6px 18px rgba(0, 0, 0, 0.4);
 }
 
 .zoom-readout,
@@ -249,6 +255,7 @@ body::before {
   .board-chip,
   .build-card,
   .dialog,
+  .tip-bubble,
   .windows-menu-list,
   #palette,
   .tool-button,
