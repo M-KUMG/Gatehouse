@@ -246,9 +246,11 @@ html, body {
   outline-offset: 1px;
 }
 
-/* Welcome card in the middle of an empty grid (welcome.ts). The wrapper lets
-   mouse events through to the grid; only the card itself catches them. It steps
-   aside while a part is being dragged in, so the drop lands on the grid. */
+/* Welcome card in the middle of an empty grid (welcome.ts). The wrapper and the
+   card's own background and text let mouse events through to the grid, so the
+   grid can still be dragged, zoomed and drawn on under it; only the buttons
+   catch the mouse. It steps aside while a part is being dragged in, so the drop
+   lands on the grid. */
 .welcome {
   position: absolute;
   inset: 0;
@@ -272,8 +274,14 @@ html, body {
   padding: 24px 22px 18px;
   color: var(--gh-text-soft);
   font: 13px/1.45 var(--gh-font-ui);
-  pointer-events: auto;
+  pointer-events: none;
+  user-select: none;
   animation: welcome-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.welcome-close,
+.welcome-action {
+  pointer-events: auto;
 }
 
 @keyframes welcome-in {

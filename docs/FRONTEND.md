@@ -14,7 +14,7 @@ Read this before touching the UI. `docs/PLAN.md` is the project's memory (status
 
 **Zoom:** the buttons, keys and "fit" go through `Editor.zoomBy / zoomTo / zoomFit`, which animate with `CameraTween` (camerafit.ts has the maths). Do not set `camera.zoom` directly for a user action: use the tween so it is smooth and gets cancelled by a press or the wheel. Zoom is camera state, never project data, and never an undo step.
 
-**Welcome card:** `src/welcome.ts` shows on an empty grid; its rule is in `welcomemodel.ts`. It must keep `pointer-events: none` on the wrapper and hide while `html.gh-placing` is set, otherwise a part dropped over it is refused (the drop test is `elementFromPoint === canvas`). If an example is renamed, update the two lookups in `main.ts`.
+**Welcome card:** `src/welcome.ts` shows on an empty grid; its rule is in `welcomemodel.ts`. The wrapper AND the card must keep `pointer-events: none` (only the buttons set it back to `auto`), otherwise the card blocks panning, zooming and selecting on the grid beneath it; it also hides while `html.gh-placing` is set, otherwise a part dropped over it is refused (the drop test is `elementFromPoint === canvas`). Any overlay placed over the grid should follow the same rule. If an example is renamed, update the two lookups in `main.ts`.
 
 **Parts search:** the menu's search box filters through `src/partsearch.ts` (word-start matching over name, id, section name). A new part is found automatically once it has a name and a category. New searchable things (e.g. examples) go through `searchNamed`.
 

@@ -32,7 +32,7 @@ export interface ScreenRect {
   bottom: number;
 }
 
-/** Draws the grid and the scene. Owns the camera, wheel zoom and middle-mouse panning. */
+/** Draws the grid and the scene. Owns the camera, wheel zoom and panning (middle or right mouse button drag). */
 export class GridView {
   readonly selected = new Set<number>();
   readonly selectedWires = new Set<number>();
@@ -58,6 +58,9 @@ export class GridView {
 
   private readonly ctx: CanvasRenderingContext2D;
   private panning = false;
+  /** Mouse button that started the pan (1 middle, 2 right) and whether the pointer has moved since. */
+  private panButton = 1;
+  private panMoved = false;
   private lastX = 0;
   private lastY = 0;
   private frame = 0;
@@ -82,6 +85,11 @@ export class GridView {
     canvas.addEventListener('pointercancel', this.onPointerUp);
     // Stop the browser's middle-click autoscroll.
     canvas.addEventListener('auxclick', (e) => e.preventDefault());
+    // A right-button drag pans the grid: no context menu when it ends (a plain right click still gets one).
+    canvas.addEventListener('contextmenu', (e) => {
+      if (this.panButton === 2 && this.panMoved) e.preventDefault();
+      this.panMoved = false;
+    });
     // Not passive: Ctrl+wheel must not zoom the page.
     canvas.addEventListener('wheel', this.handleWheel, { passive: false });
     // The canvas fills the centre area, which changes size with the window,
@@ -187,8 +195,10 @@ export class GridView {
   };
 
   private onPointerDown = (e: PointerEvent): void => {
-    if (e.button !== 1) return; // middle mouse button only
+    if (e.button !== 1 && e.button !== 2) return; // middle or right mouse button (the left one edits)
     e.preventDefault();
+    this.panButton = e.button;
+    this.panMoved = false;
     this.panning = true;
     this.lastX = e.clientX;
     this.lastY = e.clientY;
@@ -199,6 +209,7 @@ export class GridView {
 
   private onPointerMove = (e: PointerEvent): void => {
     if (!this.panning) return;
+    this.panMoved = true;
     // Dragging the grid right means the camera moves left in world space.
     this.camera.x -= (e.clientX - this.lastX) / this.camera.zoom;
     this.camera.y -= (e.clientY - this.lastY) / this.camera.zoom;
@@ -208,7 +219,7 @@ export class GridView {
   };
 
   private onPointerUp = (e: PointerEvent): void => {
-    if (!this.panning || (e.type === 'pointerup' && e.button !== 1)) return;
+    if (!this.panning || (e.type === 'pointerup' && e.button !== this.panButton)) return;
     this.panning = false;
     if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
     this.canvas.style.cursor = '';
