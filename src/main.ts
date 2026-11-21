@@ -36,6 +36,11 @@ import { TransportBar } from './transport';
 // feedback, fades) goes after it. It only adds motion.
 import './glass.css';
 import './motion.css';
+import './solid.css'; // the Solid look (graphics setting), only active under data-graphics="solid"
+import { initGraphics } from './graphics';
+import { createGraphicsMenu } from './layout/graphicsmenu';
+
+initGraphics(); // before the interface is built, so it never shows the wrong look first
 
 const app = document.getElementById('app');
 const dock = document.getElementById('dock');
@@ -182,6 +187,7 @@ const controller = new ProjectController(
 );
 const bar = controller.fileBar.element;
 bar.insertBefore(createWindowsMenu(layout), bar.querySelector('.project-name'));
+bar.insertBefore(createGraphicsMenu(), bar.querySelector('.project-name'));
 // The two small bars on the grid can be grabbed and moved (position saved per user, not in the project).
 makeDraggable({ id: 'file', bar, area: editorArea, label: 'file bar' });
 makeDraggable({ id: 'transport', bar: transport.element, area: editorArea, label: 'run controls' });

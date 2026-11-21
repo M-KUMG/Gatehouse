@@ -1,0 +1,110 @@
+/* The "Solid" look (graphics.ts): the same interface with no transparency and no
+   blur. Loaded after glass.css and motion.css; everything is under
+   :root[data-graphics='solid'], so nothing changes in the Glass look.
+
+   Most of it is tokens: opaque surfaces, no sheen, a flat rim and a quieter
+   shadow. The rest switches off every blur (one rule for all of them, so a new
+   glass surface needs nothing here) and flattens the colourful backdrop. */
+
+:root[data-graphics='solid'] {
+  /* Surfaces: the same dark steps, opaque. */
+  --gh-bg-deep: #14171e;
+  --gh-bg-app: #0d0f14;
+  --gh-bg-panel: #1b1f28;
+  --gh-bg-subtle: rgba(255, 255, 255, 0.05);
+  --gh-bg-raised: #2a2f3b;
+  --gh-panel-glass: #1d212b;
+  --gh-panel-glass-strong: #181b24;
+  --gh-group-glass: #151820;
+
+  /* Lines a little stronger, since there is no glow to separate surfaces. */
+  --gh-border: rgba(255, 255, 255, 0.16);
+  --gh-border-strong: rgba(255, 255, 255, 0.34);
+
+  /* The glass recipe, flattened: no blur, no sheen, no light on the rim. */
+  --gh-glass-blur: none;
+  --gh-glass-blur-light: none;
+  --gh-glass-sheen: linear-gradient(transparent, transparent);
+  --gh-glass-edge: rgba(255, 255, 255, 0.2);
+  --gh-glass-rim: 0 0 0 0 transparent;
+  --gh-glass-drop: 0 6px 18px rgba(0, 0, 0, 0.35);
+  --gh-glass-hover: #353b49;
+}
+
+/* No blur anywhere, whatever the rule that asked for it. */
+:root[data-graphics='solid'] *,
+:root[data-graphics='solid'] *::before,
+:root[data-graphics='solid'] *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* A flat dark backdrop instead of the colour glow. */
+:root[data-graphics='solid'] {
+  background: #0d0f14;
+}
+
+:root[data-graphics='solid'] body::before {
+  background: #0d0f14;
+}
+
+:root[data-graphics='solid'] .dialog-backdrop,
+:root[data-graphics='solid'] .shortcut-backdrop {
+  background: rgba(4, 6, 12, 0.62);
+}
+
+/* Small highlights lose their glow; the buttons keep a plain lift. */
+:root[data-graphics='solid'] .tool-button,
+:root[data-graphics='solid'] #palette-toggle,
+:root[data-graphics='solid'] .palette-item,
+:root[data-graphics='solid'] .palette-example,
+:root[data-graphics='solid'] .palette-cat-head,
+:root[data-graphics='solid'] .welcome-action,
+:root[data-graphics='solid'] .help-button,
+:root[data-graphics='solid'] .transport-speed,
+:root[data-graphics='solid'] .dialog-button,
+:root[data-graphics='solid'] .serial-button,
+:root[data-graphics='solid'] .bo-button {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+:root[data-graphics='solid'] .tool-button:hover:not(:disabled) {
+  background: #3a6fb0;
+  box-shadow: none;
+}
+
+:root[data-graphics='solid'] .tool-button.danger:hover:not(:disabled) {
+  background: #a8403b;
+  box-shadow: none;
+}
+
+:root[data-graphics='solid'] .dialog-button.primary,
+:root[data-graphics='solid'] .welcome-action.primary,
+:root[data-graphics='solid'] .serial-follow {
+  background: #2f6fb8;
+}
+
+/* The water drop is a plain light patch in this look. */
+:root[data-graphics='solid'] .gh-drop {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
+:root[data-graphics='solid'] .gh-drop::before {
+  display: none;
+}
+
+:root[data-graphics='solid'] .gh-drop.gh-drop-over {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* The drop preview of a window being moved: a solid outline card. */
+:root[data-graphics='solid'] .gh-drop-ghost {
+  background: rgba(78, 161, 255, 0.22);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-graphics='solid'] .gh-dock .dv-floating-titlebar::after {
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: none;
+}
