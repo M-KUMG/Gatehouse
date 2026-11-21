@@ -46,6 +46,7 @@ body::before {
 .build-card,
 .dialog,
 .tip-bubble,
+.welcome-card,
 .windows-menu-list {
   background: var(--gh-glass-sheen), var(--gh-panel-glass);
   -webkit-backdrop-filter: var(--gh-glass-blur);
@@ -75,7 +76,8 @@ body::before {
   border-radius: var(--gh-radius-md);
 }
 
-.dialog {
+.dialog,
+.welcome-card {
   border-radius: calc(var(--gh-radius-lg) + 4px);
 }
 
@@ -101,6 +103,7 @@ body::before {
 .palette-item,
 .palette-example,
 .palette-cat-head,
+.welcome-action,
 .transport-speed,
 .dialog-button,
 .serial-button,
@@ -133,6 +136,7 @@ body::before {
 .palette-item:hover,
 .palette-example:hover,
 .palette-cat-head:hover,
+.welcome-action:not(.primary):hover,
 #palette-toggle:hover,
 .serial-button:hover:not(:disabled),
 .bo-button:hover:not(:disabled),
@@ -154,6 +158,7 @@ body::before {
 }
 
 .dialog-button.primary,
+.welcome-action.primary,
 .serial-follow {
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 60%), rgba(78, 161, 255, 0.55);
   border-color: rgba(255, 255, 255, 0.45);
@@ -341,6 +346,8 @@ body::before {
   .palette-item,
   .palette-example,
   .palette-cat-head,
+  .welcome-card,
+  .welcome-action,
   .transport-speed,
   .dialog-button,
   .serial-button,

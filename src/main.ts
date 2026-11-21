@@ -26,6 +26,7 @@ import { renameBoard } from './project/boardfiles';
 import { ProjectController } from './project/controller';
 import { Project } from './project/project';
 import { openSimWorker } from './sim/worker/client';
+import { Welcome } from './welcome';
 import { Simulation, buildNetlist } from './simulation';
 import { TransportBar } from './transport';
 // Last on purpose: the glass look overrides the plain styles above.
@@ -224,6 +225,17 @@ view.renderListeners.push(() => project.checkForChanges());
 view.renderListeners.push(() => controller.history.settle());
 editor.onUndo = () => controller.history.undo();
 editor.onRedo = () => controller.history.redo();
+// A card in the middle of an empty grid with ways to get started; gone as soon as anything is on the grid.
+const startExample = EXAMPLES.find((ex) => ex.name === 'LED + switch');
+const blinkExample = EXAMPLES.find((ex) => ex.name === 'Uno blink');
+const welcome = new Welcome(editorArea, [
+  { name: 'Add an Arduino board', hint: 'Place an Uno in the middle of the grid', run: () => void editor.placeAtCentre('uno') },
+  ...(startExample ? [{ name: 'Try a simple circuit', hint: startExample.hint, run: () => editor.loadExample(startExample.state) }] : []),
+  ...(blinkExample ? [{ name: 'Run the blinking board', hint: blinkExample.hint, run: () => editor.loadExample(blinkExample.state) }] : []),
+  { name: 'Open a project…', hint: 'Load a .gth file you saved earlier', run: () => void controller.open() },
+]);
+view.renderListeners.push(() => welcome.update(scene.parts.length, scene.wires.length));
+welcome.update(scene.parts.length, scene.wires.length);
 // Foldable column on the right of the grid, inside the Circuit panel.
 createPalette(
   circuitView,
