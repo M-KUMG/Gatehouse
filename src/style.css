@@ -565,7 +565,9 @@ html, body {
   padding: calc(5px * var(--gh-menu-scale)) calc(11px * var(--gh-menu-scale));
   color: var(--gh-text-strong);
   font: calc(12px * var(--gh-menu-scale)) var(--gh-font-ui);
-  white-space: nowrap;
+  /* One line for names; longer hints (and titles with line breaks) wrap. */
+  max-width: min(320px, calc(100vw - 16px));
+  white-space: pre-line;
   pointer-events: none;
   opacity: 0;
   transform: translateX(8px) scale(0.92);
@@ -578,6 +580,17 @@ html, body {
 .tip-bubble[data-side='right'] {
   transform: translateX(-8px) scale(0.92);
   transform-origin: left center;
+}
+
+/* Under a control the bubble slides down out of it, over a control it slides up. */
+.tip-bubble[data-side='below'] {
+  transform: translateY(-6px) scale(0.94);
+  transform-origin: center top;
+}
+
+.tip-bubble[data-side='above'] {
+  transform: translateY(6px) scale(0.94);
+  transform-origin: center bottom;
 }
 
 .tip-bubble.visible {

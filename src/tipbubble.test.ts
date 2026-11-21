@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { placeBubble } from './tipbubble';
+import { placeBubble, preferredVerticalSide } from './tipbubble';
 
 const viewport = { width: 1000, height: 600 };
 const bubble = { width: 120, height: 28 };
@@ -32,5 +32,36 @@ describe('placeBubble', () => {
     const p = placeBubble({ left: 100, top: 200, width: 90, height: 60 }, bubble, viewport, 'right');
     expect(p.side).toBe('right');
     expect(p.x).toBe(100 + 90 + 10);
+  });
+});
+
+describe('placeBubble above and below', () => {
+  const button = { left: 300, top: 100, width: 30, height: 30 };
+
+  it('goes below the anchor, centred horizontally', () => {
+    const p = placeBubble(button, bubble, viewport, 'below', 8);
+    expect(p).toEqual({ x: 300 + 15 - 60, y: 100 + 30 + 8, side: 'below' });
+  });
+
+  it('goes above the anchor when asked', () => {
+    const p = placeBubble({ ...button, top: 300 }, bubble, viewport, 'above', 8);
+    expect(p).toEqual({ x: 255, y: 300 - 8 - 28, side: 'above' });
+  });
+
+  it('flips to the other side when there is no room', () => {
+    expect(placeBubble({ ...button, top: 10 }, bubble, viewport, 'above').side).toBe('below');
+    expect(placeBubble({ ...button, top: 570 }, bubble, viewport, 'below').side).toBe('above');
+  });
+
+  it('is kept inside the viewport horizontally', () => {
+    expect(placeBubble({ ...button, left: 0 }, bubble, viewport, 'below').x).toBe(6);
+    expect(placeBubble({ ...button, left: 990 }, bubble, viewport, 'below').x).toBe(1000 - 6 - 120);
+  });
+});
+
+describe('preferredVerticalSide', () => {
+  it('prefers below, but above for controls in the lower third', () => {
+    expect(preferredVerticalSide({ left: 0, top: 20, width: 30, height: 30 }, viewport)).toBe('below');
+    expect(preferredVerticalSide({ left: 0, top: 500, width: 30, height: 30 }, viewport)).toBe('above');
   });
 });

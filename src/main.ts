@@ -26,6 +26,7 @@ import { renameBoard } from './project/boardfiles';
 import { ProjectController } from './project/controller';
 import { Project } from './project/project';
 import { openSimWorker } from './sim/worker/client';
+import { installTooltips } from './tooltips';
 import { Welcome } from './welcome';
 import { Simulation, buildNetlist } from './simulation';
 import { TransportBar } from './transport';
@@ -225,6 +226,8 @@ view.renderListeners.push(() => project.checkForChanges());
 view.renderListeners.push(() => controller.history.settle());
 editor.onUndo = () => controller.history.undo();
 editor.onRedo = () => controller.history.redo();
+// Every control with a title gets the glass tooltip instead of the browser's plain one.
+installTooltips();
 // A card in the middle of an empty grid with ways to get started; gone as soon as anything is on the grid.
 const startExample = EXAMPLES.find((ex) => ex.name === 'LED + switch');
 const blinkExample = EXAMPLES.find((ex) => ex.name === 'Uno blink');
