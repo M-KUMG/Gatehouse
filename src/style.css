@@ -362,6 +362,14 @@ html, body {
   outline-offset: 2px;
 }
 
+/* The two lines inside a button must never be wider than the button, whatever the browser's
+   flex rules say (Electron's Chromium let a long hint run out of the card): cap them. */
+.welcome-action-name,
+.welcome-action-hint {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .welcome-action-name {
   color: var(--gh-text-bright);
   font-weight: 600;
