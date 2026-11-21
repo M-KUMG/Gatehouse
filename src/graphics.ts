@@ -1,4 +1,4 @@
-// The graphics setting: how the interface is drawn. 'glass' is the liquid glass
+// The graphics setting: how the interface is drawn. 'glass' is the glass
 // look (translucent panels with blur); 'solid' has no transparency and no blur
 // (solid.css): easier to read on a projector, lighter on weak graphics cards.
 // A choice is kept in the browser (localStorage), and applied as
@@ -15,7 +15,7 @@ export interface GraphicsChoice {
 }
 
 export const GRAPHICS_MODES: readonly GraphicsChoice[] = [
-  { id: 'glass', label: 'Glass', hint: 'Liquid glass: translucent panels with blur' },
+  { id: 'glass', label: 'Glass', hint: 'Translucent panels with blur' },
   { id: 'solid', label: 'Solid', hint: 'No transparency or blur: easier to read and lighter on the graphics card' },
 ];
 

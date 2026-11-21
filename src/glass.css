@@ -1,4 +1,4 @@
-/* Liquid glass: the look of the whole app.
+/* Glass: the look of the whole app.
 
    Loaded after every other stylesheet (last import in main.ts), so the rules
    here win over the plain ones at equal specificity. Colours, blur and shape

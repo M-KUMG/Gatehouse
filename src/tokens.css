@@ -4,7 +4,7 @@
    (grid.ts, wireview.ts, art/*.ts) and are not covered yet. */
 :root {
   /* Surfaces, darkest to lightest. All are translucent on purpose: the app is
-     "liquid glass", so what sits behind a surface shows through it (see
+     "glass", so what sits behind a surface shows through it (see
      glass.css for the blur, highlights and the ambient backdrop). */
   --gh-bg-deep: rgba(12, 14, 20, 0.5); /* window contents (editor, console, explorer) */
   --gh-bg-app: rgba(6, 8, 12, 0.4); /* wells: inputs, dropdowns, code blocks */
