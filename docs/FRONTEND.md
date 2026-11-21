@@ -12,6 +12,8 @@ Read this before touching the UI. `docs/PLAN.md` is the project's memory (status
 
 **Parts menu:** `src/palette.ts` builds foldable sections from `src/partcategories.ts`. A NEW PART must be added to a category there (the test `partcategories.test.ts` fails otherwise). Folding is pure CSS (`.palette-cat.open` switches the body's `grid-template-rows` between 0fr and 1fr); do not animate `height` by measuring.
 
+**Zoom:** the buttons, keys and "fit" go through `Editor.zoomBy / zoomTo / zoomFit`, which animate with `CameraTween` (camerafit.ts has the maths). Do not set `camera.zoom` directly for a user action: use the tween so it is smooth and gets cancelled by a press or the wheel. Zoom is camera state, never project data, and never an undo step.
+
 **Welcome card:** `src/welcome.ts` shows on an empty grid; its rule is in `welcomemodel.ts`. It must keep `pointer-events: none` on the wrapper and hide while `html.gh-placing` is set, otherwise a part dropped over it is refused (the drop test is `elementFromPoint === canvas`). If an example is renamed, update the two lookups in `main.ts`.
 
 **Parts search:** the menu's search box filters through `src/partsearch.ts` (word-start matching over name, id, section name). A new part is found automatically once it has a name and a category. New searchable things (e.g. examples) go through `searchNamed`.

@@ -9,7 +9,10 @@
 import { isOnReset, selectedBoard, toolbarButtons } from './boardcontrols';
 import { BoardStatusChip } from './boardstatus';
 import { clickPart, isOnKnob, knobPosition, knobPositionAt, setKnob, setPressed } from './controls';
-import type { GridView } from './grid';
+import { CameraTween } from './cameratween';
+import { expandRect, fitTarget, stepZoom, viewOf } from './camerafit';
+import { cellBoxToWorld, type WorldRect } from './camerareveal';
+import { GRID_SIZE, type GridView } from './grid';
 import { isTap, type WireTap } from './junctions';
 import {
   boundsOf, boxesOverlap, footprint, isPinEnd, type FlipAxis, type GridPoint, type PinRef, type PlacedPart, type ProjectState, type Scene,
@@ -22,7 +25,7 @@ import { Placer } from './placing';
 import { Readout, describeJunction, describePart, describePin, describeWire, type ReadoutText } from './readout';
 import { Selection } from './selection';
 import type { Simulation } from './simulation';
-import { Toolbar, createStatusLine, createZoomReadout } from './toolbar';
+import { Toolbar, createStatusLine, createZoomControls } from './toolbar';
 import { ValueEditor } from './valueedit';
 import { WireTool, pinRadius, wireGrab } from './wiring';
 
@@ -104,6 +107,7 @@ export class Editor {
   private readonly valueEditor = new ValueEditor();
   private readonly nameEditor = new NameEditor();
   private readonly updateZoomReadout: () => void;
+  private readonly cameraTween: CameraTween;
   private readonly setStatus: (text: string) => void;
   private drag: Moving | Marquee | Turning | Tapping | null = null;
   private pressed: PlacedPart | null = null; // push button held down by the mouse
@@ -174,11 +178,21 @@ export class Editor {
       const board = selectedBoard(this.selection.parts());
       if (board) this.onOpenBuildOutput?.(board.id);
     };
-    this.updateZoomReadout = createZoomReadout(
-      overlayParent,
-      () => view.camera.zoom,
-      () => view.setZoom(1),
+    // Smooth zoom for the zoom buttons, the 0 / F / + / - keys and "fit"; a press or the wheel on the grid ends it.
+    this.cameraTween = new CameraTween(
+      view.camera,
+      () => ({ width: canvas.clientWidth, height: canvas.clientHeight }),
+      () => view.cameraChanged(),
     );
+    for (const type of ['pointerdown', 'wheel']) canvas.addEventListener(type, () => this.cameraTween.cancel(), { capture: true, passive: true });
+    this.updateZoomReadout = createZoomControls(overlayParent, {
+      getZoom: () => view.camera.zoom,
+      hasContent: () => this.scene.parts.length > 0,
+      zoomIn: () => this.zoomBy(1),
+      zoomOut: () => this.zoomBy(-1),
+      reset: () => this.zoomTo(1),
+      fit: () => this.zoomFit(),
+    });
 
     view.renderListeners.push(this.positionOverlays);
     view.onCameraChange = this.onCameraChange;
@@ -193,6 +207,38 @@ export class Editor {
     this.closePopups();
     this.selection.clear();
     this.placer.start(typeId, e);
+  }
+
+  // ---- Zoom (buttons, keys): smooth, around the middle of the grid ----
+
+  private canvasSize(): { width: number; height: number } {
+    return { width: this.view.canvas.clientWidth, height: this.view.canvas.clientHeight };
+  }
+
+  /** One zoom level in (1) or out (-1). */
+  zoomBy(direction: 1 | -1): void {
+    this.zoomTo(stepZoom(this.view.camera.zoom, direction));
+  }
+
+  /** Smoothly to `zoom`, keeping the middle of the grid where it is. */
+  zoomTo(zoom: number): void {
+    const size = this.canvasSize();
+    const here = viewOf(this.view.camera, size);
+    if (Math.abs(here.zoom - zoom) < 0.0005) return;
+    this.cameraTween.to({ ...here, zoom });
+  }
+
+  /** Smoothly show everything on the grid (parts, wire corners and junctions) with room around it. */
+  zoomFit(): void {
+    const box = boundsOf(this.scene.parts);
+    if (!box) return;
+    let rect: WorldRect = cellBoxToWorld(box, GRID_SIZE);
+    const points: { x: number; y: number }[] = [];
+    for (const wire of this.scene.wires) for (const p of wire.waypoints) points.push({ x: p.col * GRID_SIZE, y: p.row * GRID_SIZE });
+    for (const j of this.scene.junctions) points.push({ x: j.col * GRID_SIZE, y: j.row * GRID_SIZE });
+    rect = expandRect(rect, points);
+    const target = fitTarget(rect, this.canvasSize());
+    if (target) this.cameraTween.to(target);
   }
 
   /** Add a new part in the middle of the visible grid and select it (the keyboard way to use the parts menu). */
@@ -652,6 +698,14 @@ export class Editor {
     } else if (key === 'r' && !mod && !e.altKey) {
       if (this.placer.active) this.placer.rotate();
       else this.rotateSelected();
+    } else if (!mod && !e.altKey && (e.key === '+' || e.key === '=')) {
+      this.zoomBy(1);
+    } else if (!mod && !e.altKey && (e.key === '-' || e.key === '_')) {
+      this.zoomBy(-1);
+    } else if (!mod && !e.altKey && e.key === '0') {
+      this.zoomTo(1);
+    } else if (key === 'f' && !mod && !e.altKey) {
+      this.zoomFit();
     } else if ((key === 'h' || key === 'v') && !mod && !e.altKey) {
       const axis: FlipAxis = key === 'h' ? 'h' : 'v';
       if (this.placer.active) this.placer.flip(axis);

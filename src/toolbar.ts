@@ -3,6 +3,7 @@
 // console and Rename. Also the small readouts along the bottom edge.
 
 import type { BoardToolbar, ToolbarButtons } from './boardcontrols';
+import { MAX_ZOOM, MIN_ZOOM } from './camera';
 import type { ScreenRect } from './grid';
 
 const GAP = 8; // between the selection and the toolbar
@@ -171,18 +172,70 @@ function button(title: string, icon: string, onClick: () => void, extraClass?: s
   return b;
 }
 
-/** "100%" label in the bottom-left corner of `parent`; clicking it resets the zoom. */
-export function createZoomReadout(parent: HTMLElement, getZoom: () => number, reset: () => void): () => void {
-  const el = document.createElement('button');
-  el.type = 'button';
-  el.className = 'zoom-readout';
-  el.title = 'Zoom (mouse wheel). Click to reset to 100%';
-  el.addEventListener('click', reset);
-  parent.appendChild(el);
+export interface ZoomActions {
+  getZoom: () => number;
+  /** True when there is something on the grid to fit (the fit button is off otherwise). */
+  hasContent: () => boolean;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  /** Back to 100%. */
+  reset: () => void;
+  /** Show everything on the grid. */
+  fit: () => void;
+}
+
+const ZOOM_ICONS = {
+  out: svg('<path d="M5 12h14"/>'),
+  in: svg('<path d="M5 12h14M12 5v14"/>'),
+  // Four corner brackets: "everything in view".
+  fit: svg('<path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/>'),
+};
+
+/**
+ * Zoom controls in the bottom-left corner of `parent`: zoom out, the zoom level
+ * (a click goes back to 100%), zoom in, and fit everything. Returns a function
+ * to call after every frame; it updates the level and which buttons are enabled.
+ */
+export function createZoomControls(parent: HTMLElement, actions: ZoomActions): () => void {
+  const group = document.createElement('div');
+  group.className = 'zoom-controls';
+  group.setAttribute('role', 'group');
+  group.setAttribute('aria-label', 'Zoom');
+
+  const zoomButton = (title: string, icon: string, onClick: () => void): HTMLButtonElement => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'zoom-button';
+    b.title = title;
+    b.setAttribute('aria-label', title);
+    b.innerHTML = icon;
+    b.addEventListener('click', onClick);
+    return b;
+  };
+
+  const out = zoomButton('Zoom out (−)', ZOOM_ICONS.out, actions.zoomOut);
+  const level = document.createElement('button');
+  level.type = 'button';
+  level.className = 'zoom-readout';
+  level.title = 'Zoom level (mouse wheel zooms too). Click to reset to 100% (0)';
+  level.addEventListener('click', actions.reset);
+  const zoomIn = zoomButton('Zoom in (+)', ZOOM_ICONS.in, actions.zoomIn);
+  const divider = document.createElement('span');
+  divider.className = 'zoom-divider';
+  divider.setAttribute('aria-hidden', 'true');
+  const fit = zoomButton('Fit everything in view (F)', ZOOM_ICONS.fit, actions.fit);
+
+  group.append(out, level, zoomIn, divider, fit);
+  parent.appendChild(group);
+
   let shown = '';
   return () => {
-    const text = `${Math.round(getZoom() * 100)}%`;
-    if (text !== shown) el.textContent = shown = text;
+    const zoom = actions.getZoom();
+    const text = `${Math.round(zoom * 100)}%`;
+    if (text !== shown) level.textContent = shown = text;
+    out.disabled = zoom <= MIN_ZOOM + 0.001;
+    zoomIn.disabled = zoom >= MAX_ZOOM - 0.001;
+    fit.disabled = !actions.hasContent();
   };
 }
 

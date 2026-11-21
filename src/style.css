@@ -679,27 +679,76 @@ html, body {
   color: var(--gh-on-accent);
 }
 
-/* Zoom level in the bottom-left corner of the grid; click resets to 100%. */
-.zoom-readout {
+/* Zoom controls in the bottom-left corner of the grid (toolbar.ts): zoom out,
+   the level (a click resets to 100%), zoom in, and fit everything. */
+.zoom-controls {
   position: absolute;
   left: 10px;
   bottom: 10px;
   z-index: 5;
-  min-width: 48px;
-  padding: 3px 8px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
   border: 1px solid var(--gh-border);
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--gh-panel-glass);
   color: var(--gh-text-muted);
   font: 12px var(--gh-font-ui);
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
   user-select: none;
 }
 
-.zoom-readout:hover {
+.zoom-button,
+.zoom-readout {
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.zoom-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  padding: 0;
+  color: var(--gh-text-muted);
+}
+
+.zoom-readout {
+  min-width: 48px;
+  padding: 0 6px;
   color: var(--gh-text);
-  border-color: var(--gh-border-strong);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.zoom-button:hover:not(:disabled),
+.zoom-readout:hover {
+  background: var(--gh-bg-raised);
+  color: var(--gh-text-bright);
+}
+
+.zoom-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.zoom-button:focus-visible,
+.zoom-readout:focus-visible {
+  outline: 2px solid var(--gh-accent);
+  outline-offset: 1px;
+}
+
+.zoom-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: var(--gh-border);
 }
 
 /* Example circuit buttons under the parts list. */
@@ -726,13 +775,13 @@ html, body {
   border-color: var(--gh-accent);
 }
 
-/* Simulation status along the bottom edge of the grid, right of the zoom readout. */
+/* Simulation status along the bottom edge of the grid, right of the zoom controls. */
 .status-line {
   position: absolute;
-  left: 72px;
+  left: 167px;
   bottom: 10px;
   z-index: 5;
-  max-width: calc(100% - 92px);
+  max-width: calc(100% - 187px);
   padding: 3px 8px;
   border: 1px solid var(--gh-border);
   border-radius: 4px;

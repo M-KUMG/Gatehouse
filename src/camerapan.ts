@@ -17,13 +17,13 @@ export interface PanClock {
   now(): number;
 }
 
-const browserClock: PanClock = {
+export const browserClock: PanClock = {
   request: (callback) => requestAnimationFrame(callback),
   cancel: (handle) => cancelAnimationFrame(handle),
   now: () => performance.now(),
 };
 
-function prefersReducedMotion(): boolean {
+export function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 

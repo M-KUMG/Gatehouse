@@ -37,7 +37,7 @@ body::before {
 
 .file-bar,
 .transport-bar,
-.zoom-readout,
+.zoom-controls,
 .status-line,
 .readout,
 .value-editor,
@@ -67,7 +67,10 @@ body::before {
   box-shadow: var(--gh-glass-rim), 0 6px 18px rgba(0, 0, 0, 0.4);
 }
 
-.zoom-readout,
+.zoom-controls {
+  border-radius: var(--gh-radius-lg);
+}
+
 .status-line,
 .readout,
 .value-editor,
@@ -330,7 +333,7 @@ body::before {
 
   .file-bar,
   .transport-bar,
-  .zoom-readout,
+  .zoom-controls,
   .status-line,
   .readout,
   .value-editor,
