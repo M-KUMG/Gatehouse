@@ -56,6 +56,7 @@
 import { solveCircuit, solveStep, type PartResult, type PinDrive, type SimInput, type SimResult, type TransientState } from '../sim';
 import { ADAPTIVE_DEFAULTS, AdaptiveStepper } from '../sim/adaptive';
 import { signalMaxStep } from '../sim/signal';
+import { secondaryId } from '../sim/transformer';
 import type { StepObserver } from '../scope/analog';
 import type { BoardElectrical, BoardEmulator, DriveCode, IoPinDef, SerialBytes, SliceResult } from './board';
 import { AVERAGE_ABOVE, MAX_STEPS_PER_SLICE, isReactive, stepSeconds } from './timestep';
@@ -147,7 +148,9 @@ function keepStored(circuit: SimInput, stored: TransientState['stored']): Transi
   const out: TransientState['stored'] = {};
   for (const { id, model } of circuit.components) {
     const s = stored[id];
-    if (s && (model.kind === 'capacitor' || model.kind === 'inductor' || model.kind === 'relay' || model.kind === 'motor')) out[id] = { ...s };
+    if (s && (model.kind === 'capacitor' || model.kind === 'inductor' || model.kind === 'relay' || model.kind === 'motor' || model.kind === 'transformer')) out[id] = { ...s };
+    const s2 = model.kind === 'transformer' ? stored[secondaryId(id)] : undefined;
+    if (s2) out[secondaryId(id)] = { ...s2 };
   }
   return out;
 }

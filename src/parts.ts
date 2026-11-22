@@ -20,6 +20,7 @@ import { BATTERY_9V_ART } from './art/battery9v';
 import { DIODE_ART } from './art/diode';
 import { GROUND_ART } from './art/ground';
 import { LED_ART, LED_BURNED_SVG, drawLedGlow, ledColorSvg } from './art/led';
+import { AC_PARTS } from './acparts';
 import { IC_PARTS } from './icparts';
 import { isLedColor, ledColorOf, ledModelOf } from './ledcolor';
 import { POT_ART, POT_KNOB, drawPotPointer } from './art/pot';
@@ -79,11 +80,15 @@ export interface PartState {
   amp?: number;
   offset?: number;
   duty?: number;
+  /** AC supply only: the frequency in Hz (`value` is its RMS voltage). */
+  freq?: number;
+  /** Bulbs: the rated voltage (RMS); transformer: the primary voltage (`value` is its secondary voltage). */
+  volts?: number;
 }
 
 /** One more editable field in a part's popup beside its main `value` (a function generator's waveform, amplitude, ...). */
 export interface ExtraField {
-  key: 'wave' | 'amp' | 'offset' | 'duty' | 'limit';
+  key: 'wave' | 'amp' | 'offset' | 'duty' | 'limit' | 'freq' | 'volts';
   label: string;
   unit: string;
   min: number;
@@ -571,6 +576,8 @@ export const PARTS: readonly PartType[] = [
   },
   // 555 timer and dual op-amp: see icparts.ts.
   ...IC_PARTS,
+  // AC supply, mains outlet, transformer and light bulbs: see acparts.ts.
+  ...AC_PARTS,
   // Ideal logic gates (no supply pins): gate-not ... gate-xnor, see gateparts.ts.
   ...GATE_PARTS,
   {

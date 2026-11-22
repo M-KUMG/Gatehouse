@@ -47,6 +47,7 @@ export function isReactive(input: SimInput): boolean {
     c.model.kind === 'capacitor' || c.model.kind === 'inductor' || c.model.kind === 'halfdriver' || c.model.kind === 'gate'
     || c.model.kind === 'timer555' || c.model.kind === 'opamp'
     || c.model.kind === 'signal' || c.model.kind === 'relay' || c.model.kind === 'motor'
+    || c.model.kind === 'acsource' || c.model.kind === 'bulb' || c.model.kind === 'ledbulb' || c.model.kind === 'transformer'
   ));
 }
 

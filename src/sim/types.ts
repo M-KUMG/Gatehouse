@@ -28,7 +28,21 @@ export type ComponentModel =
   /** Brushed DC motor (src/sim/motor.ts): armature R and L, back-EMF constant ke (V s/rad, also the torque constant), friction b, rotor inertia, constant load torque. Pins: pos, neg. */
   | { kind: 'motor'; ohms: number; henries: number; ke: number; friction: number; inertia: number; load: number }
   /** Bench power supply with a current limit (src/sim/supply.ts): the set voltage up to `limit` amps, then constant current. Pins: pos, neg. */
-  | { kind: 'supply'; volts: number; limit: number }
+  | { kind: 'supply'; volts: number; limit: number; ac?: { vrms: number; freq: number } }
+  /**
+   * AC voltage source, RMS volts with a sine of `freq` hertz, delivering at most `limit` amps RMS (src/sim/acsource.ts).
+   * The mains outlet and the variable AC supply. Pins: pos, neg.
+   */
+  | { kind: 'acsource'; vrms: number; freq: number; limit: number }
+  /** Incandescent mains bulb: a tungsten filament whose resistance follows its temperature (src/sim/bulb.ts). Pins: a, b. */
+  | { kind: 'bulb'; volts: number; watts: number }
+  /** Mains LED bulb: a rectifier and driver in front of an LED string, dissipating `watts` at `volts` RMS (src/sim/bulb.ts). Pins: a, b. */
+  | { kind: 'ledbulb'; volts: number; watts: number }
+  /**
+   * Transformer of two coupled windings (src/sim/transformer.ts): rated primary and secondary volts and VA.
+   * Pins: p1, p2 (primary), s1, s2 (secondary); p1 and s1 are the dotted ends.
+   */
+  | { kind: 'transformer'; primaryVolts: number; secondaryVolts: number; va: number }
   /** Two-terminal current limiter, i = amps * tanh(v / (0.05 ohm * amps)) from a to b; part of a supply's expansion. Pins: a, b. */
   | { kind: 'limiter'; amps: number }
   | { kind: 'relay'; coilVolts: number; coilOhms: number; coilHenries: number; pullAmps: number; dropAmps: number }

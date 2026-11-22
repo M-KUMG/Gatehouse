@@ -32,6 +32,7 @@
 
 import type { Integration, ReactiveState } from './reactive';
 import { solveSettled, type LogicState, type WarmStart } from './solve';
+import { secondaryId } from './transformer';
 import type { SimInput, SimResult } from './types';
 
 export type { Integration, ReactiveState } from './reactive';
@@ -96,7 +97,9 @@ export function solveStep(
   const held: Record<number, ReactiveState> = {};
   for (const { id, model } of input.components) {
     const prev = state.stored[id];
-    if (prev && (model.kind === 'capacitor' || model.kind === 'inductor' || model.kind === 'relay' || model.kind === 'motor')) held[id] = { ...prev };
+    if (prev && (model.kind === 'capacitor' || model.kind === 'inductor' || model.kind === 'relay' || model.kind === 'motor' || model.kind === 'transformer')) held[id] = { ...prev };
+    const prev2 = model.kind === 'transformer' ? state.stored[secondaryId(id)] : undefined;
+    if (prev2) held[secondaryId(id)] = { ...prev2 };
   }
   return { result, state: withLogic({ time, stored: held }, state.logic) };
 }

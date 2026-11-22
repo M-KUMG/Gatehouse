@@ -394,6 +394,98 @@ export const EXAMPLES: readonly Example[] = [
     },
   },
   {
+    // 230 V outlet (L above N) -> switch -> incandescent 60 W bulb -> N. No ground: the circuit floats, the AC source needs none.
+    name: 'Mains lamp',
+    hint: 'A 230 V mains outlet, a mains switch and a 60 W incandescent bulb. Press Start (top right), then click the switch: the '
+      + 'cold filament draws several times its running current for a moment (the switch-on surge), heats up in a few '
+      + 'hundredths of a second and glows warm white. Click the bulb to see its filament temperature in the Scope.',
+    state: {
+      version: 4,
+      parts: [
+        part(1, 'outlet', 0, 2),
+        part(2, 'mainsswitch', 8, 3),
+        part(3, 'bulb', 16, 0),
+      ],
+      wires: [
+        wire(10, '1.pos', '2.a', [[4, 4]]),
+        wire(11, '2.b', '3.a', [[12, 8], [17, 8]]),
+        wire(12, '3.b', '1.neg', [[19, 9], [6, 9], [6, 5]]),
+      ],
+      junctions: [],
+    },
+  },
+  {
+    // The same 230 V into a 60 W incandescent bulb and a 9 W LED bulb: about the same light for a seventh of the power.
+    name: '60 W bulb vs 9 W LED bulb',
+    hint: 'Two mains outlets, the same 230 V: a 60 W incandescent bulb and a 9 W LED bulb that gives about the same light. '
+      + 'Press Start and hover or click each bulb: the incandescent one turns most of its power into heat in the '
+      + 'filament (its temperature is in the Scope), the LED bulb draws current only near the mains peaks. '
+      + 'Click a bulb and change its power to compare.',
+    state: {
+      version: 4,
+      parts: [
+        part(1, 'outlet', 0, 8),
+        part(2, 'bulb', 8, 0),
+        part(3, 'outlet', 14, 8),
+        part(4, 'ledbulb', 22, 0),
+      ],
+      wires: [
+        wire(10, '1.pos', '2.a', [[9, 9]]),
+        wire(11, '1.neg', '2.b', [[11, 11]]),
+        wire(12, '3.pos', '4.a', [[23, 9]]),
+        wire(13, '3.neg', '4.b', [[25, 11]]),
+      ],
+      junctions: [],
+    },
+  },
+  {
+    // 230 V outlet -> transformer 230 V : 12 V (50 VA) -> a 12 V 20 W incandescent bulb on the secondary.
+    name: 'Transformer 230 V to 12 V',
+    hint: 'A 50 VA transformer steps the 230 V mains down to 12 V for a 12 V, 20 W incandescent bulb. The two sides are '
+      + 'not connected to each other: only the magnetic field carries the power. Press Start, then click the transformer '
+      + 'to see both voltages and currents in the Scope: the secondary voltage is 1/19 of the primary and the secondary '
+      + 'current 19 times the primary current. Change the secondary voltage or the bulb to try other loads.',
+    state: {
+      version: 4,
+      parts: [
+        part(1, 'outlet', 0, 2),
+        part(2, 'transformer', 8, 2),
+        part(3, 'bulb', 18, 4, 0, { value: 20, volts: 12 }),
+      ],
+      wires: [
+        wire(10, '1.pos', '2.p1'),
+        wire(11, '1.neg', '2.p2', [[6, 5], [6, 6]]),
+        wire(12, '2.s1', '3.a', [[16, 3], [16, 12], [19, 12]]),
+        wire(13, '2.s2', '3.b', [[15, 6], [15, 13], [21, 13]]),
+      ],
+      junctions: [],
+    },
+  },
+  {
+    // 9 V rms, 50 Hz -> Schottky diode -> 220 uF smoothing capacitor in parallel with a 1 kohm load (12 mA at 12 V: well within the resistor's 0.25 W). No ground needed.
+    name: 'AC rectifier',
+    hint: 'A 9 V (RMS) AC supply at 50 Hz, a diode and a 220 µF capacitor with a 1 kΩ load. The diode lets only the '
+      + 'positive half of each wave through, the capacitor fills the gaps, so the load sees a nearly steady DC of about '
+      + '12 V. Press Start and open the capacitor in the Scope to watch the ripple; try 47 µF, or change the load.',
+    state: {
+      version: 4,
+      parts: [
+        part(1, 'acsource', 0, 2, 0, { value: 9, freq: 50, limit: 2 }),
+        part(2, 'schottky', 8, 2),
+        part(3, 'ecap', 14, 3, 90, { value: 220e-6 }),
+        part(4, 'resistor', 18, 3, 90, { value: 1000 }),
+      ],
+      wires: [
+        wire(10, '1.pos', '2.anode'),
+        wire(11, '2.cathode', '3.pos'),
+        wire(12, '3.pos', '4.a'),
+        wire(13, '3.neg', '4.b'),
+        wire(14, '1.neg', '3.neg', [[6, 9], [15, 9]]),
+      ],
+      junctions: [],
+    },
+  },
+  {
     name: 'Uno blink',
     hint: 'Arduino Uno with the Blink program: pin 13 → 220 Ω → LED → GND. Select the board and press Run.',
     state: {

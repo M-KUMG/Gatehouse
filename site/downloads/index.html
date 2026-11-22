@@ -11,19 +11,26 @@
        the block below (docs/PLAN.md, "Main site"). A platform with no "files" is shown greyed out as Coming soon. -->
   <script>
     window.GATEHOUSE_DOWNLOADS = {
-      version: '0.2.0',
+      version: '0.2.1',
+      // What is new in this version (one line each), shown above the downloads.
+      notes: [
+        'AC: a variable AC power supply (set volts RMS, frequency and current limit) and a 230 V mains outlet',
+        'New parts: incandescent light bulb, LED light bulb (any wattage), a transformer and a mains-rated switch',
+        'Four new examples: Mains lamp, 60 W vs 9 W bulb, Transformer 230 V to 12 V and AC rectifier',
+      ],
+      allReleasesUrl: 'https://github.com/M-KUMG/Gatehouse/releases',
       homeUrl: '../',
       repoUrl: 'https://github.com/M-KUMG/Gatehouse',
       platforms: [
         {
           name: 'Windows',
           detail: 'Windows 10 or 11, 64-bit · installer (.exe)',
-          fileName: 'Gatehouse-Setup-0.2.0.exe',
-          size: '87 MB', // shown under the buttons; empty hides it
-          sha256: '60b9cf001c174e5f92d93c2a2873dee5837a360409f2c1679f19a24df727590b', // of the installer (Get-FileHash); empty hides it
+          fileName: 'Gatehouse-Setup-0.2.1.exe',
+          size: '91 MB', // shown under the buttons; empty hides it
+          sha256: '796cbf85add1a20e4c4cf4ac2b26090ddcb3f0d918f2427f25ba5035e94488be', // of the installer (Get-FileHash); empty hides it
           files: [
-            { label: 'Download from our server', url: 'Gatehouse-Setup-0.2.0.exe' },
-            { label: 'Download from GitHub', url: 'https://github.com/M-KUMG/Gatehouse/releases/download/v0.2.0/Gatehouse-Setup-0.2.0.exe' },
+            { label: 'Download from our server', url: 'Gatehouse-Setup-0.2.1.exe' },
+            { label: 'Download from GitHub', url: 'https://github.com/M-KUMG/Gatehouse/releases/download/v0.2.1/Gatehouse-Setup-0.2.1.exe' },
           ],
         },
         { name: 'Linux', detail: 'Coming soon' },
@@ -234,6 +241,34 @@
       font-size: 0.95em;
     }
 
+    .news {
+      width: min(720px, 100%);
+      padding: 16px 22px;
+      border: 1px solid var(--edge);
+      border-radius: 22px;
+      background: var(--glass);
+      -webkit-backdrop-filter: blur(14px) saturate(1.3);
+      backdrop-filter: blur(14px) saturate(1.3);
+      animation: rise 700ms var(--ease) 60ms both;
+    }
+
+    .news h2 {
+      margin: 0 0 6px;
+      font-size: 1rem;
+      font-weight: 650;
+    }
+
+    .news ul {
+      margin: 0;
+      padding-left: 20px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .news[hidden] {
+      display: none;
+    }
+
     .note {
       width: min(720px, 100%);
       margin: 0;
@@ -288,6 +323,11 @@
       <p class="tagline" id="version"></p>
     </section>
 
+    <section class="news" id="news" hidden>
+      <h2>New in this version</h2>
+      <ul id="news-list"></ul>
+    </section>
+
     <ul class="list" id="list"></ul>
 
     <p class="note">
@@ -298,7 +338,7 @@
   </main>
 
   <footer>
-    <a id="home" href="#">Back to the main page</a> · <a id="repo" href="#">GitHub</a>
+    <a id="home" href="#">Back to the main page</a> · <a id="all" href="#">All releases and notes</a> · <a id="repo" href="#">GitHub</a>
     <p class="privacy">No cookies and no tracking on this page.</p>
   </footer>
 
@@ -318,6 +358,15 @@
       document.getElementById('version').textContent = 'Version ' + g.version + ' · free and open source (MIT)';
       document.getElementById('home').href = g.homeUrl;
       document.getElementById('repo').href = g.repoUrl;
+      document.getElementById('all').href = g.allReleasesUrl;
+
+      if (g.notes && g.notes.length) {
+        var news = document.getElementById('news-list');
+        g.notes.forEach(function (line) {
+          news.appendChild(el('li', '', line));
+        });
+        document.getElementById('news').hidden = false;
+      }
 
       var list = document.getElementById('list');
       g.platforms.forEach(function (p) {

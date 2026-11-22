@@ -17,6 +17,7 @@ export interface PartCategory {
 export const CATEGORIES: readonly PartCategory[] = [
   { id: 'boards', name: 'Arduino boards', ids: ['uno', 'nano'] },
   { id: 'power', name: 'Power & sources', ids: ['battery', 'battery9v', 'psu', 'siggen', 'ground'] },
+  { id: 'ac', name: 'AC & mains', ids: ['acsource', 'outlet', 'mainsswitch', 'transformer', 'bulb', 'ledbulb'] },
   { id: 'passive', name: 'Passive parts', ids: ['resistor', 'capacitor', 'ecap', 'inductor', 'pot', 'ldr', 'ntc'] },
   { id: 'diodes', name: 'Diodes', ids: ['diode', 'zener', 'schottky'] },
   { id: 'transistors', name: 'Transistors', ids: ['bjt', 'pnp', 'nmos', 'pmos', 'igbt', 'pigbt'] },

@@ -8,6 +8,7 @@ import { ledBrightness } from './sim/inspect';
 import { buzzerState, zenerRegion } from './sim/partinspect';
 import { RGB_CHANNELS } from './sim/rgbled';
 import { TIMER_RESET_VOLTS } from './sim/timer555';
+import { T_AMBIENT } from './sim/bulb';
 import { SEVENSEG_SEGMENTS } from './sim/sevenseg';
 
 /** Signal diode: forward drop and current, or the reverse voltage it blocks. */
@@ -58,6 +59,34 @@ export function opampReadout(r: PartResult): string[] {
   return [
     `OUT1 ${formatSI(v['abs.o1'] ?? 0, 'V')} (${word(1)})`,
     `OUT2 ${formatSI(v['abs.o2'] ?? 0, 'V')} (${word(2)})`,
+  ];
+}
+
+/** AC supply and mains outlet: the voltage and current now (the waveform's instant), the RMS setting and the limit state. */
+export function acsourceReadout(r: PartResult): string[] {
+  const v = r.volts ?? {};
+  const limiting = (v.cc ?? 0) >= 0.5 ? ' · at its current limit' : '';
+  return [`${formatSI(r.voltage, 'V')} · ${formatSI(r.current, 'A')} now`, `${formatSI(v['ac.vrms'] ?? 0, 'V')} rms · ${formatSI(v['ac.freq'] ?? 0, 'Hz')}${limiting}`];
+}
+
+/** Incandescent bulb: voltage and current now, brightness and the filament's temperature. */
+export function bulbReadout(r: PartResult): string[] {
+  const v = r.volts ?? {};
+  const temp = (v['filament.temp'] ?? T_AMBIENT) - 273.15;
+  return [`${formatSI(r.voltage, 'V')} · ${formatSI(r.current, 'A')} now`, `Light ${Math.round(100 * (v.light ?? 0))} % · filament ${Math.round(temp)} °C`];
+}
+
+/** LED bulb: voltage and current now, the average power and the brightness. */
+export function ledbulbReadout(r: PartResult): string[] {
+  const v = r.volts ?? {};
+  return [`${formatSI(r.voltage, 'V')} · ${formatSI(r.current, 'A')} now`, `${formatSI(v['power.avg'] ?? 0, 'W')} average · light ${Math.round(100 * (v.light ?? 0))} %`];
+}
+
+/** Transformer: primary and secondary voltage and current at this instant. */
+export function transformerReadout(r: PartResult): string[] {
+  return [
+    `Primary ${formatSI(r.voltage, 'V')} · ${formatSI(r.pins.p1 ?? 0, 'A')}`,
+    `Secondary ${formatSI(r.volts?.sec ?? 0, 'V')} · ${formatSI(r.pins.s1 ?? 0, 'A')}`,
   ];
 }
 

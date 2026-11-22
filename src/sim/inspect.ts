@@ -42,6 +42,7 @@
 //     'rating' text, 'ok' or the warning text ("Ic 130 mA exceeds its
 //     100 mA rating."). Potentiometer: the power of each half of the track.
 
+import { acsourceQuantities, bulbQuantities, ledbulbQuantities, transformerQuantities } from './acinspect';
 import { driverQuantities } from './driverinspect';
 import { opampQuantities, timerQuantities } from './icinspect';
 import { buzzerQuantities, rgbledQuantities, sevensegQuantities, zenerQuantities } from './partinspect';
@@ -211,6 +212,14 @@ function mainQuantities(
         volts('set', 'Set voltage', model.volts), amps('limit', 'Current limit', model.limit),
         text('mode', 'Mode', (r.volts?.cc ?? 0) >= 0.5 ? 'constant current (limiting)' : 'constant voltage'),
       ];
+    case 'acsource':
+      return acsourceQuantities(model, r);
+    case 'bulb':
+      return bulbQuantities(model, r);
+    case 'ledbulb':
+      return ledbulbQuantities(model, r);
+    case 'transformer':
+      return transformerQuantities(model, r);
     case 'motor': {
       const w = r.volts?.['mech.omega'] ?? 0;
       return [
@@ -429,7 +438,12 @@ export function defaultPlot(model: ComponentModel): string[] {
     case 'relay':
       return ['vcoil', 'icoil'];
     case 'supply':
+    case 'acsource':
+    case 'bulb':
+    case 'ledbulb':
       return ['v', 'i'];
+    case 'transformer':
+      return ['vp', 'vs'];
     case 'motor':
       return ['rpm', 'i'];
     default:

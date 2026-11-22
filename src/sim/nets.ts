@@ -1,6 +1,7 @@
 // Groups terminals into nets (electrical nodes) with union-find.
 
 import { OPAMP_PINS } from './opamp';
+import { TRANSFORMER_PINS } from './transformer';
 import { TIMER_PINS } from './timer555';
 import type { ComponentModel, Reference, SimInput, Terminal } from './types';
 
@@ -10,6 +11,10 @@ export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readon
   relay: ['coil1', 'coil2', 'com', 'no', 'nc'],
   motor: ['pos', 'neg'],
   supply: ['pos', 'neg'],
+  acsource: ['pos', 'neg'],
+  bulb: ['a', 'b'],
+  ledbulb: ['a', 'b'],
+  transformer: TRANSFORMER_PINS,
   limiter: ['a', 'b'],
   signal: ['pos', 'neg'],
   resistor: ['a', 'b'],

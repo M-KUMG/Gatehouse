@@ -42,6 +42,7 @@
 // Everything is plain arithmetic on the solver's output: the same inputs and
 // calls give the same step sequence (deterministic).
 
+import { secondaryId, transformerParams } from './transformer';
 import { solveStep, type TransientState } from './transient';
 import type { SimInput, SimResult } from './types';
 
@@ -110,6 +111,12 @@ function reactivesOf(input: SimInput): Reactive[] {
     else if (m.kind === 'inductor') out.push({ id, kind: 'inductor', henries: Math.max(m.henries, 1e-15) });
     else if (m.kind === 'motor') out.push({ id, kind: 'inductor', henries: Math.max(m.henries, 1e-15) }); // its armature
     else if (m.kind === 'relay') out.push({ id, kind: 'inductor', henries: Math.max(m.coilHenries, 1e-15) }); // its coil
+    else if (m.kind === 'transformer') {
+      // Both windings: the primary under the part's id, the secondary under its helper id (transformer.ts).
+      const p = transformerParams(m);
+      out.push({ id, kind: 'inductor', henries: p.l1 });
+      out.push({ id: secondaryId(id), kind: 'inductor', henries: p.l2 });
+    }
   }
   return out;
 }

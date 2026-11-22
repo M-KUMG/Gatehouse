@@ -10,6 +10,7 @@
 // solve at `input.time ?? 0`. Steps must stay short against the period:
 // `signalMaxStep` is the limit the bridge applies.
 
+import { acPeakAmps, acVolts } from './acsource';
 import { motorMaxStep } from './motor';
 import type { ComponentModel, SimInput } from './types';
 
@@ -46,16 +47,24 @@ export function signalVolts(m: SignalModel, t: number): number {
   return m.offset + m.amp * w;
 }
 
-/** `input` with every signal source replaced by a battery at its value for time `t` (the same object when there is none). */
+/**
+ * `input` with every signal source replaced by a battery at its value for time `t`, and every AC source by a
+ * current-limited supply at its value (the same object when there is none).
+ */
 export function resolveSignals(input: SimInput, t: number): SimInput {
-  if (!input.components.some((c) => c.model.kind === 'signal')) return input;
+  if (!input.components.some((c) => c.model.kind === 'signal' || c.model.kind === 'acsource')) return input;
   return {
     ...input,
-    components: input.components.map((c) => (
-      c.model.kind === 'signal'
-        ? { ...c, model: { kind: 'battery' as const, volts: signalVolts(c.model, t), rInternal: Math.max(c.model.rOut, 1e-6) } }
-        : c
-    )),
+    components: input.components.map((c) => {
+      const m = c.model;
+      if (m.kind === 'signal') {
+        return { ...c, model: { kind: 'battery' as const, volts: signalVolts(m, t), rInternal: Math.max(m.rOut, 1e-6) } };
+      }
+      if (m.kind === 'acsource') {
+        return { ...c, model: { kind: 'supply' as const, volts: acVolts(m, t), limit: acPeakAmps(m), ac: { vrms: m.vrms, freq: m.freq } } };
+      }
+      return c;
+    }),
   };
 }
 
@@ -63,6 +72,10 @@ export function resolveSignals(input: SimInput, t: number): SimInput {
 export function signalMaxStep(input: SimInput): number {
   let limit = motorMaxStep(input); // a motor's shaft speed also has to be followed
   for (const { model: m } of input.components) {
+    if (m.kind === 'acsource') {
+      if (m.freq > 0) limit = Math.min(limit, 1 / (m.freq * 50));
+      continue;
+    }
     if (m.kind !== 'signal' || !(m.freq > 0)) continue;
     const per = m.wave === 'square' || m.wave === 'sawtooth' ? 100 : 50;
     limit = Math.min(limit, 1 / (m.freq * per));

@@ -8,6 +8,10 @@
 
 import { bjtResult, makeBjt, stampBjt, updateBjt, type Bjt } from './bjt';
 import {
+  DEFAULT_BULB_LOGIC, DEFAULT_LEDBULB_LOGIC, bulbResults, decideBulb, decideLedBulb, expandBulbs, isBulbLogic, isLedBulbLogic,
+  ledBulbCurve, ledBulbParams, sameBulb, sameLedBulb, type BulbLogic, type LedBulbLogic,
+} from './bulb';
+import {
   GMIN, POT_END_OHMS, SWITCH_CLOSED_OHMS, SWITCH_OPEN_OHMS, VT,
   criticalVoltage, limitJunction,
 } from './devices';
@@ -41,6 +45,9 @@ import { expandSupplies, limiterCurve, supplyResults } from './supply';
 import { DEFAULT_MOTOR_LOGIC, decideMotor, expandMotors, isMotorLogic, motorResults, sameMotor, type MotorLogic } from './motor';
 import { DEFAULT_RELAY_LOGIC, decideRelay, expandRelays, isRelayLogic, relayResults, type RelayLogic } from './relay';
 import { breakdownOf, diodeCurrent, diodeStep, type DiodeCurve } from './zener';
+import {
+  coupledCompanion, secondaryId, transformerParams, transformerResult, type TransformerModel, type TransformerParams,
+} from './transformer';
 
 const MAX_ITERATIONS = 200;
 /** Output resistance of a board's supply rails (USB 5 V, 3.3 V regulator). */
@@ -113,6 +120,15 @@ interface Igbt {
   polarity: 1 | -1;
   mos: Mosfet; bjt: Bjt;
 }
+/**
+ * A transformer's two windings as coupled inductors (transformer.ts): winding k runs from `ak` through its copper
+ * resistance to `innerK` and on the ideal winding to `bk`; the companion currents are i = ieq + G v.
+ */
+interface Coupled {
+  part: number; model: TransformerModel; p: TransformerParams;
+  a1: number; b1: number; inner1: number; a2: number; b2: number; inner2: number;
+  g11: number; g12: number; g22: number; ieq1: number; ieq2: number;
+}
 interface Elements {
   resistors: Resistor[];
   sources: Source[];
@@ -130,6 +146,8 @@ interface Elements {
   opamps: OpampElement[];
   /** Controlled current sources into `out` from the reference: gm (v[p] - v[n]), with a conductance g from `out` to the reference. */
   vccs: { out: number; p: number; n: number; gm: number; g: number }[];
+  /** Transformers: their windings (see Coupled). */
+  coupled: Coupled[];
   /** `pins`: the model's two pin names (a, b; pos, neg for a polarized capacitor). */
   reactives: (Reactive & { kind: 'capacitor' | 'inductor'; pins: readonly string[] })[];
   drives: Drive[];
@@ -153,7 +171,7 @@ function buildElements(
   logic?: Readonly<LogicState>,
 ): Elements {
   const el: Elements = {
-    resistors: [], sources: [], diodes: [], bjts: [], mosfets: [], igbts: [], drivers: [], gates: [], timers: [], opamps: [], vccs: [], reactives: [], drives: [],
+    resistors: [], sources: [], diodes: [], bjts: [], mosfets: [], igbts: [], drivers: [], gates: [], timers: [], opamps: [], vccs: [], coupled: [], reactives: [], drives: [],
     nodes: netCount,
   };
   const resistor = (part: number, pinA: string, pinB: string, ohms: number): void => {
@@ -331,6 +349,27 @@ function buildElements(
         });
         break;
       }
+      case 'ledbulb': {
+        // A symmetric curve between a and b (bulb.ts), like the buzzer's.
+        const curve = ledBulbParams(m);
+        el.diodes.push({
+          part: id, anode: netOf(id, 'a'), cathode: netOf(id, 'b'), inner: netOf(id, 'a'),
+          is: 0, nvt: VT, vCrit: Infinity, v: 0, curve: (v) => ledBulbCurve(curve, v), pins: ['a', 'b'],
+        });
+        break;
+      }
+      case 'transformer': {
+        // Two coupled inductors, each behind its own copper resistance (transformer.ts).
+        const p = transformerParams(m);
+        const a1 = netOf(id, 'p1');
+        const a2 = netOf(id, 's1');
+        el.coupled.push({
+          part: id, model: m, p, a1, b1: netOf(id, 'p2'), inner1: seriesNode(el, a1, p.r1),
+          a2, b2: netOf(id, 's2'), inner2: seriesNode(el, a2, p.r2),
+          ...coupledCompanion(p, step, step?.stored[id], step?.stored[secondaryId(id)]),
+        });
+        break;
+      }
       case 'board': {
         const gnd = netOf(id, 'gnd');
         for (const [pin, volts] of Object.entries(m.rails)) {
@@ -476,6 +515,15 @@ function stampDevices(el: Elements, stamp: Stamp, scale: number): void {
   for (const q of el.bjts) stampBjt(q, stamp);
   for (const q of el.mosfets) stampMosfet(q, stamp);
   for (const r of el.reactives) stampReactive(scale === 1 ? r : { ...r, ieq: r.ieq * scale }, stamp);
+  const { addGm } = stamp;
+  for (const c of el.coupled) {
+    addG(c.inner1, c.b1, c.g11);
+    addG(c.inner2, c.b2, c.g22);
+    addGm(c.inner1, c.b1, c.inner2, c.b2, c.g12);
+    addGm(c.inner2, c.b2, c.inner1, c.b1, c.g12);
+    addI(c.inner1, c.b1, c.ieq1 * scale);
+    addI(c.inner2, c.b2, c.ieq2 * scale);
+  }
 }
 
 /** The devices' linearization points (all the state Newton's method carries besides the node voltages). */
@@ -721,7 +769,10 @@ export function solveWith(
   const supplied = expandSupplies(resolveSignals(rawInput, time));
   const expanded = expandRelays(supplied.input, logic);
   const motored = expandMotors(expanded.input, logic);
-  const out = solveCore(motored.input, step, time, warm, logic);
+  // An incandescent bulb becomes a resistor at its filament's present temperature (bulb.ts).
+  const lit = expandBulbs(motored.input, logic);
+  const out = solveCore(lit.input, step, time, warm, logic);
+  bulbResults(out.result, rawInput, logic);
   if (motored.motors.length > 0) motorResults(out.result, motored.motors);
   if (expanded.relays.length > 0) relayResults(out.result, expanded.relays);
   if (supplied.supplies.length > 0) supplyResults(out.result, supplied.supplies);
@@ -808,12 +859,18 @@ function solveCore(
       // In DC an ideal inductor has 0 V across it (the 1 mOhm is only there to keep the matrix regular).
       stored[r.part] = { volts: !step && r.kind === 'inductor' ? 0 : v, amps: r.g * v + r.ieq };
     }
+    for (const c of el.coupled) {
+      const v1 = volt(c.inner1) - volt(c.b1);
+      const v2 = volt(c.inner2) - volt(c.b2);
+      stored[c.part] = { volts: step ? v1 : 0, amps: c.g11 * v1 + c.g12 * v2 + c.ieq1 };
+      stored[secondaryId(c.part)] = { volts: step ? v2 : 0, amps: c.g12 * v1 + c.g22 * v2 + c.ieq2 };
+    }
   }
   return { result, stored, warm: next };
 }
 
 /** Logic state of one part with one: a half-bridge driver (driver.ts) or a logic gate (gates.ts). */
-export type PartLogic = DriverLogic | GateLogic | RelayLogic | MotorLogic | TimerLogic | OpampLogic;
+export type PartLogic = DriverLogic | GateLogic | RelayLogic | MotorLogic | TimerLogic | OpampLogic | BulbLogic | LedBulbLogic;
 
 /** Logic state of every logic part by component id (kept in TransientState.logic). */
 export type LogicState = Record<number, PartLogic>;
@@ -855,6 +912,24 @@ function logicRules(input: SimInput): LogicRule[] {
         initial: (s) => (isMotorLogic(s) ? s : DEFAULT_MOTOR_LOGIC),
         decide: (p, _v, r, dt) => decideMotor(p as MotorLogic, r.parts[id]?.current ?? 0, dt, m),
         same: (a, b) => sameMotor(a as MotorLogic, b as MotorLogic),
+        fallback: (_last, next) => next,
+      });
+    } else if (m.kind === 'bulb') {
+      // The filament temperature follows the power it receives (implicit step); the rounds repeat until it settles.
+      rules.push({
+        id, gate: false,
+        initial: (s) => (isBulbLogic(s) ? s : DEFAULT_BULB_LOGIC),
+        decide: (p, _v, r, dt) => decideBulb(p as BulbLogic, r.parts[id]?.power ?? 0, dt, m),
+        same: (a, b) => sameBulb(a as BulbLogic, b as BulbLogic),
+        fallback: (_last, next) => next,
+      });
+    } else if (m.kind === 'ledbulb') {
+      // The average power the light follows (a first-order average of the instantaneous power).
+      rules.push({
+        id, gate: false,
+        initial: (s) => (isLedBulbLogic(s) ? s : DEFAULT_LEDBULB_LOGIC),
+        decide: (p, _v, r, dt) => decideLedBulb(p as LedBulbLogic, r.parts[id]?.power ?? 0, dt),
+        same: (a, b) => sameLedBulb(a as LedBulbLogic, b as LedBulbLogic),
         fallback: (_last, next) => next,
       });
     } else if (m.kind === 'relay') {
@@ -1032,6 +1107,13 @@ function collectResults(
     const i = r.g * (volt(r.inner) - volt(r.b)) + r.ieq;
     const v = volt(r.a) - volt(r.b);
     parts[r.part] = { voltage: v, current: i, power: v * i, pins: { [r.pins[0]]: i, [r.pins[1]]: -i } };
+  }
+  for (const c of el.coupled) {
+    const v1 = volt(c.inner1) - volt(c.b1);
+    const v2 = volt(c.inner2) - volt(c.b2);
+    const i1 = c.g11 * v1 + c.g12 * v2 + c.ieq1;
+    const i2 = c.g12 * v1 + c.g22 * v2 + c.ieq2;
+    parts[c.part] = transformerResult(c.model, volt(c.a1) - volt(c.b1), volt(c.a2) - volt(c.b2), i1, i2);
   }
 }
 

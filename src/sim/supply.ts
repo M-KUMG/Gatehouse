@@ -83,7 +83,11 @@ export function supplyResults(result: SimResult, supplies: readonly { id: number
       current: i,
       power: v * i,
       pins: { pos: -i, neg: i },
-      volts: { cc: Math.abs(i) >= SUPPLY_CC_FRACTION * m.limit ? 1 : 0, setpoint: m.volts },
+      volts: {
+        cc: Math.abs(i) >= SUPPLY_CC_FRACTION * m.limit ? 1 : 0, setpoint: m.volts,
+        // An AC source (acsource.ts) carries its settings along for the readout.
+        ...(m.ac ? { 'ac.vrms': m.ac.vrms, 'ac.freq': m.ac.freq } : {}),
+      },
     };
     result.parts[id] = out;
     delete result.parts[limiterId(id)];
