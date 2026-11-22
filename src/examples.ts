@@ -486,6 +486,31 @@ export const EXAMPLES: readonly Example[] = [
     },
   },
   {
+    // 12 V rms, 50 Hz -> bridge rectifier -> 470 uF capacitor in parallel with a 470 ohm load (about 34 mA at 16 V). No ground needed.
+    name: 'Bridge rectifier',
+    hint: 'A 12 V (RMS) AC supply into a bridge rectifier (four diodes): both halves of each wave are turned the same way '
+      + 'up, so the output pulses 100 times a second, and the 470 µF capacitor smooths it to about 15 V. Press Start and '
+      + 'look at the capacitor in the Scope. Open the bridge and lower its current rating to 0.01 A to see it overheat.',
+    state: {
+      version: 4,
+      parts: [
+        part(1, 'acsource', 0, 2, 0, { value: 12, freq: 50, limit: 2 }),
+        part(2, 'bridge', 8, 2),
+        part(3, 'ecap', 14, 3, 90, { value: 470e-6, volts: 25 }),
+        part(4, 'resistor', 18, 3, 90, { value: 470 }),
+      ],
+      wires: [
+        wire(10, '1.pos', '2.ac1'),
+        wire(11, '1.neg', '2.ac2'),
+        wire(12, '2.pos', '3.pos'),
+        wire(13, '3.pos', '4.a'),
+        wire(14, '3.neg', '4.b'),
+        wire(15, '2.neg', '3.neg', [[12, 9], [15, 9]]),
+      ],
+      junctions: [],
+    },
+  },
+  {
     name: 'Uno blink',
     hint: 'Arduino Uno with the Blink program: pin 13 → 220 Ω → LED → GND. Select the board and press Run.',
     state: {

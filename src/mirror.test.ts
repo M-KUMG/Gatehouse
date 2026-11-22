@@ -146,7 +146,7 @@ const linkTexts = (s: Scene): string[] =>
 describe('which parts are mirrorable', () => {
   it('is data on the part types: the asymmetric parts only, never a board', () => {
     expect(PARTS.filter(canMirror).map((t) => t.id).sort()).toEqual([
-      'acsource', 'battery9v', 'bjt', 'bulb', 'gate-and', 'gate-nand', 'gate-nor', 'gate-or', 'gate-xnor', 'gate-xor', 'igbt',
+      'acsource', 'battery9v', 'bjt', 'bridge', 'bulb', 'changeover', 'gate-and', 'gate-nand', 'gate-nor', 'gate-or', 'gate-xnor', 'gate-xor', 'igbt',
       'led', 'ledbulb', 'motor', 'nmos', 'outlet', 'pigbt', 'pmos', 'pnp', 'pot', 'psu', 'relay', 'rgbled', 'siggen', 'transformer',
     ]);
     for (const type of PARTS) if (type.board) expect(canMirror(type), type.id).toBe(false);

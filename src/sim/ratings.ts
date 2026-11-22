@@ -46,6 +46,11 @@ export function polarizedCapStress(volts: number, rated: number): Stress {
   return OK;
 }
 
+/** A non-polarized capacitor at `volts` (either sign) with a rated voltage: warned near the rating, burns above it. */
+export function plainCapStress(volts: number, rated: number): Stress {
+  return polarizedCapStress(Math.abs(volts), rated);
+}
+
 /** IGBT limits: collector-emitter breakdown, pulsed and continuous collector current, gate-emitter voltage. */
 export interface IgbtRatings {
   vceMax: number;

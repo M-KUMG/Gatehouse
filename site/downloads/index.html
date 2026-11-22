@@ -11,12 +11,12 @@
        the block below (docs/PLAN.md, "Main site"). A platform with no "files" is shown greyed out as Coming soon. -->
   <script>
     window.GATEHOUSE_DOWNLOADS = {
-      version: '0.2.1',
+      version: '0.2.2',
       // What is new in this version (one line each), shown above the downloads.
       notes: [
-        'AC: a variable AC power supply (set volts RMS, frequency and current limit) and a 230 V mains outlet',
-        'New parts: incandescent light bulb, LED light bulb (any wattage), a transformer and a mains-rated switch',
-        'Four new examples: Mains lamp, 60 W vs 9 W bulb, Transformer 230 V to 12 V and AC rectifier',
+        'New parts: a bridge rectifier (settable current and voltage rating) and a changeover (SPDT) mains switch',
+        'Capacitors have a settable voltage rating, printed on the part',
+        'Fixes: an LED bulb alone no longer fails, and a relay is no longer burned by its own switch-off spike',
       ],
       allReleasesUrl: 'https://github.com/M-KUMG/Gatehouse/releases',
       homeUrl: '../',
@@ -25,12 +25,12 @@
         {
           name: 'Windows',
           detail: 'Windows 10 or 11, 64-bit · installer (.exe)',
-          fileName: 'Gatehouse-Setup-0.2.1.exe',
+          fileName: 'Gatehouse-Setup-0.2.2.exe',
           size: '91 MB', // shown under the buttons; empty hides it
-          sha256: '796cbf85add1a20e4c4cf4ac2b26090ddcb3f0d918f2427f25ba5035e94488be', // of the installer (Get-FileHash); empty hides it
+          sha256: '822ad66c6f2836fbf8a4fa666eed8c1bb73412df69017e904d998d1c1675804c', // of the installer (Get-FileHash); empty hides it
           files: [
-            { label: 'Download from our server', url: 'Gatehouse-Setup-0.2.1.exe' },
-            { label: 'Download from GitHub', url: 'https://github.com/M-KUMG/Gatehouse/releases/download/v0.2.1/Gatehouse-Setup-0.2.1.exe' },
+            { label: 'Download from our server', url: 'Gatehouse-Setup-0.2.2.exe' },
+            { label: 'Download from GitHub', url: 'https://github.com/M-KUMG/Gatehouse/releases/download/v0.2.2/Gatehouse-Setup-0.2.2.exe' },
           ],
         },
         { name: 'Linux', detail: 'Coming soon' },

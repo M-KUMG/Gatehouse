@@ -45,6 +45,7 @@ const STRESS: Record<string, (v: number) => PartResult> = {
   'switch:I': (v) => result({ current: v }),
   'button:I': (v) => result({ current: -v }),
   'mainsswitch:I': (v) => result({ current: v }),
+  'changeover:I': (v) => result({ current: v }),
   // Basic parts (basicparts.ts).
   'zener:P': (v) => result({ power: v, voltage: -5.1, current: -v / 5.1 }),
   'zener:If': (v) => result({ current: v, voltage: 0.9 }),

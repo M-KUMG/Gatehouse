@@ -42,14 +42,14 @@
 //     'rating' text, 'ok' or the warning text ("Ic 130 mA exceeds its
 //     100 mA rating."). Potentiometer: the power of each half of the track.
 
-import { acsourceQuantities, bulbQuantities, ledbulbQuantities, transformerQuantities } from './acinspect';
+import { acsourceQuantities, bridgeQuantities, bulbQuantities, changeoverQuantities, ledbulbQuantities, transformerQuantities } from './acinspect';
 import { driverQuantities } from './driverinspect';
 import { opampQuantities, timerQuantities } from './icinspect';
 import { buzzerQuantities, rgbledQuantities, sevensegQuantities, zenerQuantities } from './partinspect';
 import { gateQuantities } from './gateinspect';
 import { level1 } from './mosfet';
 import { modelPins, terminalKey } from './nets';
-import { dielectricVolts, igbtStress, polarizedCapStress } from './ratings';
+import { dielectricVolts, igbtStress, plainCapStress, polarizedCapStress } from './ratings';
 import { partSpec, specStress } from './specs';
 import type { ComponentModel, PartResult, SimResult } from './types';
 
@@ -220,6 +220,10 @@ function mainQuantities(
       return ledbulbQuantities(model, r);
     case 'transformer':
       return transformerQuantities(model, r);
+    case 'bridge':
+      return bridgeQuantities(model, r);
+    case 'changeover':
+      return changeoverQuantities(model, r);
     case 'motor': {
       const w = r.volts?.['mech.omega'] ?? 0;
       return [
@@ -283,11 +287,9 @@ function capacitor(model: ModelOf<'capacitor'>, r: PartResult): Quantity[] {
     volts('v', 'V', r.voltage), amps('i', 'I', r.current), watts('p', 'P', r.power),
     num('q', 'Q', 'charge', 'C', model.farads * vc), num('e', 'E', 'energy', 'J', 0.5 * model.farads * vc * vc),
   ];
-  if (model.polarized && model.ratedVolts !== undefined) {
-    out.push(
-      num('esr', 'ESR', 'resistance', 'Ω', model.esr ?? 0), volts('rated', 'Rated V', model.ratedVolts),
-      text('state', 'State', polarizedCapStress(vc, model.ratedVolts).short),
-    );
+  if (model.ratedVolts !== undefined) {
+    const stress = model.polarized ? polarizedCapStress(vc, model.ratedVolts) : plainCapStress(vc, model.ratedVolts);
+    out.push(num('esr', 'ESR', 'resistance', 'Ω', model.esr ?? 0), volts('rated', 'Rated V', model.ratedVolts), text('state', 'State', stress.short));
   }
   return out;
 }
@@ -444,6 +446,10 @@ export function defaultPlot(model: ComponentModel): string[] {
       return ['v', 'i'];
     case 'transformer':
       return ['vp', 'vs'];
+    case 'bridge':
+      return ['v', 'i'];
+    case 'changeover':
+      return ['i', 'v'];
     case 'motor':
       return ['rpm', 'i'];
     default:

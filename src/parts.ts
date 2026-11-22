@@ -9,11 +9,11 @@ import { RELAY_ART, drawRelayContacts, relaySvg } from './art/relay';
 import { MOTOR_ART, drawMotorFan, motorSvg } from './art/motor';
 import { MOTOR_BURN_AMPS, MOTOR_DEFAULT, MOTOR_WARN_AMPS } from './sim/motor';
 import {
-  RELAY_COIL_VOLTS, RELAY_CONTACT_BURN_AMPS, RELAY_CONTACT_WARN_AMPS, RELAY_DEFAULT_VOLTS, contactAmps, relayModel,
+  RELAY_COILS, RELAY_COIL_VOLTS, RELAY_CONTACT_BURN_AMPS, RELAY_CONTACT_WARN_AMPS, RELAY_DEFAULT_VOLTS, contactAmps, relayModel,
 } from './sim/relay';
 import { SIGNAL_MAX_HZ, SIGNAL_MIN_HZ, SIGNAL_OUT_OHMS, SIGNAL_WAVES, type SignalWave } from './sim/signal';
-import { CAPACITOR_ART } from './art/capacitor';
-import { ECAP_ART, ECAP_BURNED_SVG } from './art/ecap';
+import { CAPACITOR_ART, capacitorArt } from './art/capacitor';
+import { ECAP_ART, ecapArt } from './art/ecap';
 import { INDUCTOR_ART } from './art/inductor';
 import { BATTERY_ART } from './art/battery';
 import { BATTERY_9V_ART } from './art/battery9v';
@@ -43,7 +43,7 @@ import type { BoardSpec } from './mcu/board';
 import { NANO_SPEC, UNO_SPEC } from './mcu/avr/uno';
 import { parseBoardId } from './project/boardidparse';
 import { ledBrightness } from './sim/inspect';
-import { dielectricVolts, igbtStress, polarizedCapStress, type Stress } from './sim/ratings';
+import { dielectricVolts, igbtStress, plainCapStress, polarizedCapStress, type Stress } from './sim/ratings';
 import { partSpec, specStress } from './sim/specs';
 import {
   BC547, BC557, D1N4148, GENERIC_IGBT, GENERIC_PIGBT, LOGIC_NMOS, POWER_PMOS, type ComponentModel, type PartResult,
@@ -184,15 +184,26 @@ export const DEFAULT_PSU_LIMIT = 1;
 export const PSU_MAX_AMPS = 20;
 export const PSU_MIN_AMPS = 0.001;
 /** A relay against its ratings: the coil's voltage and the contacts' current (null while fine). */
+/**
+ * The coil's voltage as the winding feels it: the current through it times its resistance. The terminal voltage is
+ * not used for the ratings: when the switch feeding a coil opens, the coil's own inductive kick (L di/dt, thousands
+ * of volts for a moment, a spark at a real switch) shows on it, and that does not damage a relay; only a lasting
+ * overvoltage does, and that drives a proportionally larger current.
+ */
+function coilVolts(r: PartResult, nominal: number): number {
+  return Math.abs(r.current) * (RELAY_COILS[nominal] ?? RELAY_COILS[RELAY_DEFAULT_VOLTS]);
+}
+
 function relayWarning(r: PartResult, nominal: number): string | null {
-  const v = Math.abs(r.voltage);
+  const v = coilVolts(r, nominal);
   if (v > 1.3 * nominal) return `Coil at ${v.toFixed(1)} V, rated ${nominal} V.`;
   const i = contactAmps(r);
   return i > RELAY_CONTACT_WARN_AMPS ? `Contacts carry ${i.toFixed(1)} A, rated ${RELAY_CONTACT_WARN_AMPS} A.` : null;
 }
 
 function relayBurn(r: PartResult, nominal: number): string | null {
-  if (Math.abs(r.voltage) > 2 * nominal) return `coil overvoltage (${Math.abs(r.voltage).toFixed(1)} V, rated ${nominal} V)`;
+  const v = coilVolts(r, nominal);
+  if (v > 2 * nominal) return `coil overvoltage (${v.toFixed(1)} V, rated ${nominal} V)`;
   const i = contactAmps(r);
   return i > RELAY_CONTACT_BURN_AMPS ? `contacts burned by ${i.toFixed(1)} A (rated ${RELAY_CONTACT_WARN_AMPS} A)` : null;
 }
@@ -216,11 +227,14 @@ const DEFAULT_HENRIES = 10e-3;
 const REACTIVE_SERIES_OHMS = 0.01;
 export const LED_WARN_AMPS = 0.03;
 const DEFAULT_ECAP_FARADS = 100e-6;
-/**
- * Rated voltage of the electrolytic capacitor. A constant of the part type
- * for now; it becomes data (and editable) in the component library (PLAN step 10).
- */
+/** Rated voltage of the electrolytic capacitor when none is set (settable per part: `volts`). */
 export const ECAP_RATED_VOLTS = 16;
+/** Rated voltage of the ordinary (ceramic) capacitor when none is set. */
+export const CAP_RATED_VOLTS = 50;
+export const CAP_MIN_RATED_VOLTS = 1;
+export const CAP_MAX_RATED_VOLTS = 1000;
+const ratedOf = (s: PartState, fallback: number): number => (typeof s.volts === 'number' && Number.isFinite(s.volts) ? s.volts : fallback);
+const RATED_FIELD = { key: 'volts', label: 'Rated voltage', unit: 'V', min: CAP_MIN_RATED_VOLTS, max: CAP_MAX_RATED_VOLTS } as const;
 
 /**
  * Typical ESR of a general-purpose aluminium electrolytic: 5 ohm / sqrt(C in
@@ -234,7 +248,12 @@ export function ecapEsr(farads: number): number {
 /** The electrolytic capacitor against its ratings (polarity and rated voltage, see sim/ratings.ts). */
 function ecapStress(r: PartResult, s: PartState): Stress {
   const esr = ecapEsr(s.value ?? DEFAULT_ECAP_FARADS);
-  return polarizedCapStress(dielectricVolts(r.voltage, r.current, esr), ECAP_RATED_VOLTS);
+  return polarizedCapStress(dielectricVolts(r.voltage, r.current, esr), ratedOf(s, ECAP_RATED_VOLTS));
+}
+
+/** The ordinary capacitor against its rated voltage (either polarity). */
+function capStress(r: PartResult, s: PartState): Stress {
+  return plainCapStress(dielectricVolts(r.voltage, r.current, REACTIVE_SERIES_OHMS), ratedOf(s, CAP_RATED_VOLTS));
 }
 
 /** An IGBT against its ratings, in its own frame (a P-IGBT's values with the signs turned round). */
@@ -429,8 +448,13 @@ export const PARTS: readonly PartType[] = [
     pins: [{ id: 'a', name: '1', x: 0, y: 1 }, { id: 'b', name: '2', x: 4, y: 1 }],
     defaults: { value: DEFAULT_FARADS },
     value: { label: 'Capacitance', unit: 'F', min: 1e-12, max: 1 },
+    fields: [RATED_FIELD],
     readout: reactiveReadout,
-    sim: (s) => ({ kind: 'capacitor', farads: s.value ?? DEFAULT_FARADS, esr: REACTIVE_SERIES_OHMS }),
+    warnWhen: (r, s) => warnText(capStress(r, s)),
+    burnWhen: (r, s) => burnText(capStress(r, s)),
+    // The rating printed on the body; burned: charred and open, like the electrolytic.
+    variant: (s) => (s.burned || ratedOf(s, CAP_RATED_VOLTS) !== CAP_RATED_VOLTS ? capacitorArt(ratedOf(s, CAP_RATED_VOLTS), s.burned === true) : null),
+    sim: (s) => (s.burned ? { kind: 'open' } : { kind: 'capacitor', farads: s.value ?? DEFAULT_FARADS, esr: REACTIVE_SERIES_OHMS, ratedVolts: ratedOf(s, CAP_RATED_VOLTS) }),
   },
   {
     // Polarized: pos (+) and neg (\u2212) on the centre line, so a 180-degree turn swaps them (not mirrorable).
@@ -438,15 +462,16 @@ export const PARTS: readonly PartType[] = [
     pins: [{ id: 'pos', name: 'Positive (+)', x: 0, y: 1 }, { id: 'neg', name: 'Negative (\u2212, stripe)', x: 4, y: 1 }],
     defaults: { value: DEFAULT_ECAP_FARADS },
     value: { label: 'Capacitance', unit: 'F', min: 1e-12, max: 1 },
+    fields: [RATED_FIELD],
     readout: ecapReadout,
     warnWhen: (r, s) => warnText(ecapStress(r, s)),
     burnWhen: (r, s) => burnText(ecapStress(r, s)),
     // Burned: open (a vented can holds no charge and conducts nothing), like the LED.
-    variant: (s) => (s.burned ? { key: 'burned', svg: ECAP_BURNED_SVG } : null),
+    variant: (s) => (s.burned || ratedOf(s, ECAP_RATED_VOLTS) !== ECAP_RATED_VOLTS ? ecapArt(ratedOf(s, ECAP_RATED_VOLTS), s.burned === true) : null),
     sim: (s) => {
       if (s.burned) return { kind: 'open' };
       const farads = s.value ?? DEFAULT_ECAP_FARADS;
-      return { kind: 'capacitor', farads, esr: ecapEsr(farads), polarized: true, ratedVolts: ECAP_RATED_VOLTS };
+      return { kind: 'capacitor', farads, esr: ecapEsr(farads), polarized: true, ratedVolts: ratedOf(s, ECAP_RATED_VOLTS) };
     },
   },
   {

@@ -150,6 +150,10 @@ export const PART_SPECS: Readonly<Record<string, PartSpec>> = {
     source: 'wall light switch: 10 A at 230 V; contacts welded or burned at 16 A (instantaneous values, so a lamp\'s switch-on surge counts)',
     limits: [{ label: 'I', what: 'too much current through the contacts', unit: 'A', rated: 10, warnAbove: 10, burnAbove: 16, measure: (r) => Math.abs(r.current) }],
   },
+  changeover: {
+    source: 'wall changeover (two-way) switch: 10 A at 230 V; contacts welded or burned at 16 A (instantaneous values)',
+    limits: [{ label: 'I', what: 'too much current through the contacts', unit: 'A', rated: 10, warnAbove: 10, burnAbove: 16, measure: (r) => Math.abs(r.current) }],
+  },
   zener: {
     // Breakdown is its normal use: no reverse-voltage limit, the power limits it.
     source: '1N4733A: Pd 1 W (warned above 80 %, burned at 2 x); forward current about 200 mA (Vf 1.2 V max there)',

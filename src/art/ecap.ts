@@ -21,7 +21,10 @@ const defs = `
 </linearGradient>
 <clipPath id="can"><path d="${CAN}"/></clipPath>`;
 
-function ecapSvg(burned: boolean): string {
+/** The rating as printed on the can: 16 -> "16V". */
+const label = (volts: number): string => `${Number.isInteger(volts) ? volts : volts.toFixed(1)}V`;
+
+function ecapSvg(burned: boolean, volts = 16): string {
   const sleeve = burned ? '#1d1a1a' : '#1f3d78';
   const stripe = burned ? '#4a4240' : '#c9d4e4';
   const print = burned ? '#6b6260' : '#dfe6f0';
@@ -38,7 +41,7 @@ ${hLead(66, 80, 20)}
   <rect x="21.4" y="6" width="1" height="28" fill="#fff" fill-opacity=".18"/>
 </g>
 <path d="M26 14.5H31M28.5 12V17" stroke="${print}" stroke-width="1.3" stroke-linecap="round"/>
-<text x="46" y="17.6" font-family="Arial, Helvetica, sans-serif" font-size="6.2" font-weight="bold" fill="${print}" text-anchor="middle">16V</text>
+<text x="46" y="17.6" font-family="Arial, Helvetica, sans-serif" font-size="6.2" font-weight="bold" fill="${print}" text-anchor="middle">${label(volts)}</text>
 ${burned ? `<path d="M62 8L56 15L60 19L53 26" fill="none" stroke="#000" stroke-opacity=".75" stroke-width="1.1"/>
 <ellipse cx="40" cy="20" rx="26" ry="12" fill="#000" fill-opacity=".25"/>
 <path d="M68 12Q72 20 68 28" fill="none" stroke="#2b2522" stroke-width="2.4"/>` : ''}
@@ -50,3 +53,15 @@ ${burned ? `<path d="M62 8L56 15L60 19L53 26" fill="none" stroke="#000" stroke-o
 export const ECAP_ART: PartArt = { cols: 4, rows: 2, svg: ecapSvg(false) };
 /** Burned out: charred sleeve, crack and a bulged bottom. */
 export const ECAP_BURNED_SVG = ecapSvg(true);
+
+const cache = new Map<string, string>();
+/** The can with another rated voltage printed on it (cached per voltage). */
+export function ecapArt(volts: number, burned: boolean): { key: string; svg: string } {
+  const key = burned ? (volts === 16 ? 'burned' : `burned${volts}`) : `v${volts}`;
+  let svg = cache.get(key);
+  if (!svg) {
+    svg = ecapSvg(burned, volts);
+    cache.set(key, svg);
+  }
+  return { key, svg };
+}

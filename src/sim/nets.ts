@@ -14,6 +14,8 @@ export const MODEL_PINS: Record<Exclude<ComponentModel['kind'], 'board'>, readon
   acsource: ['pos', 'neg'],
   bulb: ['a', 'b'],
   ledbulb: ['a', 'b'],
+  bridge: ['ac1', 'ac2', 'pos', 'neg'],
+  changeover: ['com', 'no', 'nc'],
   transformer: TRANSFORMER_PINS,
   limiter: ['a', 'b'],
   signal: ['pos', 'neg'],

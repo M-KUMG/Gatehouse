@@ -148,6 +148,9 @@ export interface LedBulbParams {
 
 const ramp = (x: number): number => 0.5 * (x + Math.sqrt(x * x + 1));
 
+/** The ramp past the threshold, shifted so that it is exactly 0 at 0 V: the curve is odd and continuous there (a bulb alone, with nothing to pin its voltage, must settle at 0 V). */
+const lifted = (v: number, vth: number): number => ramp(v - vth) - ramp(-vth);
+
 const params = new Map<string, LedBulbParams>();
 
 /** Threshold and series resistance for which a sine of `volts` RMS dissipates `watts` (computed once per pair). */
@@ -162,7 +165,7 @@ export function ledBulbParams(m: LedBulbModel): LedBulbParams {
   let sum = 0;
   for (let k = 0; k < steps; k++) {
     const v = Math.abs(peak * Math.sin((2 * Math.PI * (k + 0.5)) / steps));
-    sum += v * ramp(v - vth);
+    sum += v * lifted(v, vth);
   }
   const made = { vth, rs: sum / steps / Math.max(m.watts, 1e-3) };
   params.set(key, made);
@@ -173,7 +176,7 @@ export function ledBulbParams(m: LedBulbModel): LedBulbParams {
 export function ledBulbCurve(p: LedBulbParams, v: number): { i: number; g: number } {
   const x = Math.abs(v) - p.vth;
   const sign = v < 0 ? -1 : 1;
-  return { i: (sign * ramp(x)) / p.rs, g: (0.5 * (1 + x / Math.sqrt(x * x + 1))) / p.rs };
+  return { i: (sign * lifted(Math.abs(v), p.vth)) / p.rs, g: (0.5 * (1 + x / Math.sqrt(x * x + 1))) / p.rs };
 }
 
 // ---- Results ------------------------------------------------------------------------------------------------------

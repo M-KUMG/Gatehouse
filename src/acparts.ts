@@ -9,12 +9,16 @@ import {
   ACSOURCE_ART, BULB_ART, LEDBULB_ART, OUTLET_ART, TRANSFORMER_ART, acHzLabel, acVoltsLabel, acsourceSvg, bulbSvg, drawAcLamp, drawBulbGlow,
   drawLedBulbGlow, ledbulbSvg, transformerSvg,
 } from './art/ac';
-import { MAINS_SWITCH_ART, MAINS_SWITCH_ON_SVG } from './art/mainsswitch';
-import { acsourceReadout, bulbReadout, ledbulbReadout, transformerReadout } from './devicereadouts';
+import { BRIDGE_ART, bridgeArt } from './art/bridge';
+import { CHANGEOVER_ART, CHANGEOVER_ON_SVG, MAINS_SWITCH_ART, MAINS_SWITCH_ON_SVG } from './art/mainsswitch';
+import { acsourceReadout, bridgeReadout, changeoverReadout, bulbReadout, ledbulbReadout, transformerReadout } from './devicereadouts';
 import type { PartState, PartType } from './parts';
 import {
   AC_DEFAULT_AMPS, AC_DEFAULT_HZ, AC_DEFAULT_VOLTS, AC_MAX_AMPS, AC_MAX_HZ, AC_MAX_VOLTS, AC_MIN_AMPS, AC_MIN_HZ, OUTLET,
 } from './sim/acsource';
+import {
+  BRIDGE_DEFAULT_AMPS, BRIDGE_DEFAULT_VOLTS, BRIDGE_MAX_AMPS, BRIDGE_MAX_VOLTS, BRIDGE_MIN_AMPS, BRIDGE_MIN_VOLTS, bridgeStress, type BridgeModel,
+} from './sim/mainsparts';
 import {
   BULB_DEFAULT_VOLTS, BULB_DEFAULT_WATTS, BULB_MAX_VOLTS, BULB_MAX_WATTS, BULB_MIN_VOLTS, LEDBULB_DEFAULT_WATTS, bulbStress, T_AMBIENT,
   type BulbModel, type LedBulbModel,
@@ -37,6 +41,8 @@ export const ledbulbModelOf = (s: PartState): LedBulbModel => ({ kind: 'ledbulb'
 export const transformerModelOf = (s: PartState): TransformerModel => ({
   kind: 'transformer', primaryVolts: ok(s.volts, TRANSFORMER_DEFAULT_PRIMARY), secondaryVolts: ok(s.value, TRANSFORMER_DEFAULT_SECONDARY), va: TRANSFORMER_VA,
 });
+
+export const bridgeModelOf = (s: PartState): BridgeModel => ({ kind: 'bridge', volts: ok(s.volts, BRIDGE_DEFAULT_VOLTS), amps: ok(s.value, BRIDGE_DEFAULT_AMPS) });
 
 const warn = (st: ReturnType<typeof bulbStress>): string | null => (st.level === 'ok' ? null : st.reason);
 const burn = (st: ReturnType<typeof bulbStress>): string | null => (st.level === 'burn' ? st.reason : null);
@@ -79,6 +85,35 @@ export const AC_PARTS: readonly PartType[] = [
     control: 'toggle',
     variant: (s) => (s.closed ? { key: 'on', svg: MAINS_SWITCH_ON_SVG } : null),
     sim: (s) => ({ kind: 'switch', closed: s.closed === true }),
+  },
+  {
+    // A wall two-way switch (SPDT): the common pin goes to NC at rest and to NO when switched (specs.ts: 10 A).
+    id: 'changeover', name: 'Mains switch (changeover, SPDT)', ...CHANGEOVER_ART, mirrorable: true,
+    pins: [{ id: 'com', name: 'COM (common)', x: 0, y: 2 }, { id: 'nc', name: 'NC (normally closed)', x: 4, y: 1 }, { id: 'no', name: 'NO (normally open)', x: 4, y: 3 }],
+    defaults: { closed: false },
+    control: 'toggle',
+    readout: changeoverReadout,
+    variant: (s) => (s.closed ? { key: 'on', svg: CHANGEOVER_ON_SVG } : null),
+    sim: (s) => ({ kind: 'changeover', no: s.closed === true }),
+  },
+  {
+    // Four diodes in a diamond; rated by reverse voltage (the voltage field) and average output current (the value).
+    id: 'bridge', name: 'Bridge rectifier', ...BRIDGE_ART, mirrorable: true,
+    pins: [
+      { id: 'ac1', name: 'AC 1 (~)', x: 0, y: 1 }, { id: 'ac2', name: 'AC 2 (~)', x: 0, y: 3 },
+      { id: 'pos', name: 'DC + (output)', x: 4, y: 1 }, { id: 'neg', name: 'DC − (output)', x: 4, y: 3 },
+    ],
+    defaults: { value: BRIDGE_DEFAULT_AMPS, volts: BRIDGE_DEFAULT_VOLTS },
+    value: { label: 'Rated current (average)', unit: 'A', min: BRIDGE_MIN_AMPS, max: BRIDGE_MAX_AMPS },
+    fields: [{ key: 'volts', label: 'Rated reverse voltage', unit: 'V', min: BRIDGE_MIN_VOLTS, max: BRIDGE_MAX_VOLTS }],
+    readout: bridgeReadout,
+    warnWhen: (r, s) => warn(bridgeStress(bridgeModelOf(s), r)),
+    burnWhen: (r, s) => burn(bridgeStress(bridgeModelOf(s), r)),
+    variant: (s) => {
+      const m = bridgeModelOf(s);
+      return s.burned || m.volts !== BRIDGE_DEFAULT_VOLTS || m.amps !== BRIDGE_DEFAULT_AMPS ? bridgeArt(m.volts, m.amps, s.burned === true) : null;
+    },
+    sim: (s) => (s.burned ? { kind: 'open' } : bridgeModelOf(s)),
   },
   {
     id: 'transformer', name: 'Transformer', ...TRANSFORMER_ART, mirrorable: true,

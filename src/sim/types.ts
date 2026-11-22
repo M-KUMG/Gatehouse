@@ -38,6 +38,10 @@ export type ComponentModel =
   | { kind: 'bulb'; volts: number; watts: number }
   /** Mains LED bulb: a rectifier and driver in front of an LED string, dissipating `watts` at `volts` RMS (src/sim/bulb.ts). Pins: a, b. */
   | { kind: 'ledbulb'; volts: number; watts: number }
+  /** Full bridge rectifier of four diodes, rated `volts` (reverse voltage per diode) and `amps` (average output current) (src/sim/mainsparts.ts). Pins: ac1, ac2, pos, neg. */
+  | { kind: 'bridge'; volts: number; amps: number }
+  /** Single-pole double-throw switch: com joined to `no` when `no` is true, else to `nc` (src/sim/mainsparts.ts). Pins: com, no, nc. */
+  | { kind: 'changeover'; no: boolean }
   /**
    * Transformer of two coupled windings (src/sim/transformer.ts): rated primary and secondary volts and VA.
    * Pins: p1, p2 (primary), s1, s2 (secondary); p1 and s1 are the dotted ends.

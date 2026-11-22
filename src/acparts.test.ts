@@ -9,7 +9,7 @@ import { Project } from './project/project';
 import { readProject } from './project/read';
 import type { PartResult } from './sim';
 
-const IDS = ['acsource', 'outlet', 'mainsswitch', 'transformer', 'bulb', 'ledbulb'];
+const IDS = ['acsource', 'outlet', 'mainsswitch', 'changeover', 'transformer', 'bridge', 'bulb', 'ledbulb'];
 
 describe('AC and mains parts', () => {
   it('are in their own menu section, in this order', () => {

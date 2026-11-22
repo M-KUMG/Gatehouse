@@ -138,7 +138,8 @@ describe('relay part', () => {
     expect(type.sim!({ burned: true })).toEqual({ kind: 'open' });
   });
   it('warns above 1.3 x the coil voltage and burns above 2 x; contacts above 3 A / 10 A', () => {
-    const r = (voltage: number, com = 0) => ({ voltage, current: 0, power: 0, pins: { com } });
+    // The coil is judged by its current (voltage / 70 ohm here), not by its terminal voltage (an inductive kick is not an overvoltage).
+    const r = (voltage: number, com = 0) => ({ voltage, current: voltage / 70, power: 0, pins: { com } });
     expect(partWarning(type, r(5), {})).toBeNull();
     expect(partWarning(type, r(7), {})).toMatch(/Coil/);
     expect(burnReason(type, r(9), {})).toBeNull();

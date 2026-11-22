@@ -4,6 +4,7 @@
 
 import { bulbHotOhms, bulbOhms, bulbStress, T_AMBIENT, type BulbModel, type LedBulbModel } from './bulb';
 import type { Quantity } from './inspect';
+import { bridgeStress, type BridgeModel, type ChangeoverModel } from './mainsparts';
 import { transformerParams, transformerStress, TRANSFORMER_VA, type TransformerModel } from './transformer';
 import type { PartResult } from './types';
 import type { AcSourceModel } from './acsource';
@@ -71,5 +72,30 @@ export function transformerQuantities(model: TransformerModel, r: PartResult): Q
     num('rateds', 'Secondary rating', 'voltage', 'V', model.secondaryVolts),
     num('va', 'Rating', 'power', 'VA', TRANSFORMER_VA),
     text('state', 'State', stress.level === 'ok' ? 'ok' : stress.short),
+  ];
+}
+
+export function bridgeQuantities(model: BridgeModel, r: PartResult): Quantity[] {
+  const stress = bridgeStress(model, r);
+  return [
+    num('v', 'V out', 'voltage', 'V', r.voltage),
+    num('i', 'I out', 'current', 'A', r.current),
+    num('p', 'P lost', 'power', 'W', r.power),
+    num('vac', 'V in (AC)', 'voltage', 'V', r.volts?.ac ?? 0),
+    num('iavg', 'I out (average)', 'current', 'A', r.volts?.['i.avg'] ?? 0),
+    num('ipk', 'Largest diode current', 'current', 'A', r.volts?.['i.peak'] ?? 0),
+    num('vr', 'Largest reverse voltage', 'voltage', 'V', r.volts?.vr ?? 0),
+    num('ratedv', 'Rated voltage', 'voltage', 'V', model.volts),
+    num('rateda', 'Rated current (average)', 'current', 'A', model.amps),
+    text('state', 'State', stress.level === 'ok' ? 'ok' : stress.short),
+  ];
+}
+
+export function changeoverQuantities(model: ChangeoverModel, r: PartResult): Quantity[] {
+  return [
+    num('i', 'I', 'current', 'A', r.current),
+    num('v', 'V across the contact', 'voltage', 'V', r.voltage),
+    num('p', 'P', 'power', 'W', r.power),
+    text('state', 'Position', model.no ? 'common joined to NO' : 'common joined to NC'),
   ];
 }

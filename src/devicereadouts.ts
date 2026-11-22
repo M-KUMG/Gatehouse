@@ -82,6 +82,17 @@ export function ledbulbReadout(r: PartResult): string[] {
   return [`${formatSI(r.voltage, 'V')} · ${formatSI(r.current, 'A')} now`, `${formatSI(v['power.avg'] ?? 0, 'W')} average · light ${Math.round(100 * (v.light ?? 0))} %`];
 }
 
+/** Bridge rectifier: the DC output now, the AC input and the average current its heating follows. */
+export function bridgeReadout(r: PartResult): string[] {
+  const v = r.volts ?? {};
+  return [`Out ${formatSI(r.voltage, 'V')} · ${formatSI(r.current, 'A')}`, `In ${formatSI(v.ac ?? 0, 'V')} · ${formatSI(v['i.avg'] ?? 0, 'A')} average`];
+}
+
+/** Changeover switch: where the common pin is joined, and the current through it. */
+export function changeoverReadout(r: PartResult): string[] {
+  return [`COM to ${(r.volts?.pos ?? 0) >= 0.5 ? 'NO' : 'NC'}`, `${formatSI(r.current, 'A')}`];
+}
+
 /** Transformer: primary and secondary voltage and current at this instant. */
 export function transformerReadout(r: PartResult): string[] {
   return [

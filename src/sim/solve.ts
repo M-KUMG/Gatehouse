@@ -43,6 +43,9 @@ import { SEVENSEG_SEGMENTS } from './sevenseg';
 import { resolveSignals } from './signal';
 import { expandSupplies, limiterCurve, supplyResults } from './supply';
 import { DEFAULT_MOTOR_LOGIC, decideMotor, expandMotors, isMotorLogic, motorResults, sameMotor, type MotorLogic } from './motor';
+import {
+  DEFAULT_BRIDGE_LOGIC, decideBridge, expandMains, isBridgeLogic, mainsResults, sameBridge, type BridgeLogic,
+} from './mainsparts';
 import { DEFAULT_RELAY_LOGIC, decideRelay, expandRelays, isRelayLogic, relayResults, type RelayLogic } from './relay';
 import { breakdownOf, diodeCurrent, diodeStep, type DiodeCurve } from './zener';
 import {
@@ -771,7 +774,10 @@ export function solveWith(
   const motored = expandMotors(expanded.input, logic);
   // An incandescent bulb becomes a resistor at its filament's present temperature (bulb.ts).
   const lit = expandBulbs(motored.input, logic);
-  const out = solveCore(lit.input, step, time, warm, logic);
+  // A bridge rectifier becomes four diodes, a changeover switch two switches (mainsparts.ts).
+  const mains = expandMains(lit.input);
+  const out = solveCore(mains.input, step, time, warm, logic);
+  if (mains.parts.length > 0) mainsResults(out.result, mains.parts, logic);
   bulbResults(out.result, rawInput, logic);
   if (motored.motors.length > 0) motorResults(out.result, motored.motors);
   if (expanded.relays.length > 0) relayResults(out.result, expanded.relays);
@@ -870,7 +876,7 @@ function solveCore(
 }
 
 /** Logic state of one part with one: a half-bridge driver (driver.ts) or a logic gate (gates.ts). */
-export type PartLogic = DriverLogic | GateLogic | RelayLogic | MotorLogic | TimerLogic | OpampLogic | BulbLogic | LedBulbLogic;
+export type PartLogic = DriverLogic | GateLogic | RelayLogic | MotorLogic | TimerLogic | OpampLogic | BulbLogic | LedBulbLogic | BridgeLogic;
 
 /** Logic state of every logic part by component id (kept in TransientState.logic). */
 export type LogicState = Record<number, PartLogic>;
@@ -930,6 +936,15 @@ function logicRules(input: SimInput): LogicRule[] {
         initial: (s) => (isLedBulbLogic(s) ? s : DEFAULT_LEDBULB_LOGIC),
         decide: (p, _v, r, dt) => decideLedBulb(p as LedBulbLogic, r.parts[id]?.power ?? 0, dt),
         same: (a, b) => sameLedBulb(a as LedBulbLogic, b as LedBulbLogic),
+        fallback: (_last, next) => next,
+      });
+    } else if (m.kind === 'bridge') {
+      // The average output current its heating follows (a first-order average; a static solve takes the present value).
+      rules.push({
+        id, gate: false,
+        initial: (s) => (isBridgeLogic(s) ? s : DEFAULT_BRIDGE_LOGIC),
+        decide: (p, _v, r, dt) => decideBridge(p as BridgeLogic, r.parts[id]?.current ?? 0, dt),
+        same: (a, b) => sameBridge(a as BridgeLogic, b as BridgeLogic),
         fallback: (_last, next) => next,
       });
     } else if (m.kind === 'relay') {

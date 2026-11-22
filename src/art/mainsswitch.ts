@@ -32,3 +32,31 @@ ${hLead(62, 80, 20, 3)}
 
 export const MAINS_SWITCH_ART: PartArt = { cols: 4, rows: 2, svg: svgDoc(4, 2, defs, body(false)) };
 export const MAINS_SWITCH_ON_SVG = svgDoc(4, 2, defs, body(true));
+
+// ---- Changeover (SPDT) ----------------------------------------------------------------------------------------------
+// The same wall switch with three leads: COM on the left (0, 40), NC on the right at the top (80, 20) and NO on the
+// right at the bottom (80, 60), 4 x 4 cells. The rocker's pressed half and the green dot show where COM is joined.
+
+function changeoverBody(no: boolean): string {
+  const upper = no ? '#ffffff' : '#bfbcb1';
+  const lower = no ? '#bfbcb1' : '#ffffff';
+  return `
+${hLead(0, 18, 40, 3)}
+${hLead(62, 80, 20, 3)}
+${hLead(62, 80, 60, 3)}
+<rect x="17" y="6" width="46" height="68" rx="4" fill="url(#msPlate)" stroke="#7a776d" stroke-width=".8"/>
+<rect x="27" y="14" width="26" height="52" rx="3" fill="url(#msRock)" stroke="#8f8c81" stroke-width=".8"/>
+<rect x="28" y="15" width="24" height="25" rx="2" fill="${upper}" fill-opacity=".85"/>
+<rect x="28" y="40" width="24" height="25" rx="2" fill="${lower}" fill-opacity=".85"/>
+<path d="M28 40h24" stroke="#8f8c81" stroke-width=".8"/>
+<circle cx="40" cy="${no ? 54 : 27}" r="1.9" fill="#4fcf6a"/>
+<g font-family="Arial, Helvetica, sans-serif" font-size="4.6" font-weight="bold" fill="#6a675e" text-anchor="middle">
+  <text x="22" y="40.8" font-size="4">COM</text>
+  <text x="58" y="22">NC</text>
+  <text x="58" y="62">NO</text>
+  <text x="40" y="11">10 A 230 V</text>
+</g>`;
+}
+
+export const CHANGEOVER_ART: PartArt = { cols: 4, rows: 4, svg: svgDoc(4, 4, defs, changeoverBody(false)) };
+export const CHANGEOVER_ON_SVG = svgDoc(4, 4, defs, changeoverBody(true));

@@ -28,7 +28,7 @@ describe('capacitor and inductor parts', () => {
   });
 
   it('simulate with the default values and a small series resistance', () => {
-    expect(getPart('capacitor')!.sim!({ ...getPart('capacitor')!.defaults })).toEqual({ kind: 'capacitor', farads: 100e-9, esr: 0.01 });
+    expect(getPart('capacitor')!.sim!({ ...getPart('capacitor')!.defaults })).toEqual({ kind: 'capacitor', farads: 100e-9, esr: 0.01, ratedVolts: 50 });
     expect(getPart('inductor')!.sim!({ ...getPart('inductor')!.defaults })).toEqual({ kind: 'inductor', henries: 0.01, dcr: 0.01 });
     expect(getPart('capacitor')!.sim!({ value: 4.7e-6 })).toMatchObject({ farads: 4.7e-6 });
   });
