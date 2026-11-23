@@ -1,0 +1,101 @@
+[
+  {
+    "name": "CFR-25JB-52-100R",
+    "hint": "Yageo carbon film · 100 Ω · 0.25 W",
+    "datasheet": "https://yageogroup.com/content/datasheet/asset/file/YAGEO-CFR_DATASHEET",
+    "settings": {
+      "value": 100,
+      "ratedWatts": 0.25
+    }
+  },
+  {
+    "name": "CFR-25JB-52-220R",
+    "hint": "Yageo carbon film · 220 Ω · 0.25 W",
+    "datasheet": "https://yageogroup.com/content/datasheet/asset/file/YAGEO-CFR_DATASHEET",
+    "settings": {
+      "value": 220,
+      "ratedWatts": 0.25
+    }
+  },
+  {
+    "name": "CFR-25JB-52-330R",
+    "hint": "Yageo carbon film · 330 Ω · 0.25 W",
+    "datasheet": "https://yageogroup.com/content/datasheet/asset/file/YAGEO-CFR_DATASHEET",
+    "settings": {
+      "value": 330,
+      "ratedWatts": 0.25
+    }
+  },
+  {
+    "name": "CFR-25JB-52-470R",
+    "hint": "Yageo carbon film · 470 Ω · 0.25 W",
+    "datasheet": "https://yageogroup.com/content/datasheet/asset/file/YAGEO-CFR_DATASHEET",
+    "settings": {
+      "value": 470,
+      "ratedWatts": 0.25
+    }
+  },
+  {
+    "name": "CFR-25JB-52-1K",
+    "hint": "Yageo carbon film · 1 kΩ · 0.25 W",
+    "datasheet": "https://yageogroup.com/content/datasheet/asset/file/YAGEO-CFR_DATASHEET",
+    "settings": {
+      "value": 1000,
+      "ratedWatts": 0.25
+    }
+  },
+  {
+    "name": "CFR-25JB-52-4K7",
+    "hint": "Yageo carbon film · 4.7 kΩ · 0.25 W",
+    "datasheet": "https://yageogroup.com/content/datasheet/asset/file/YAGEO-CFR_DATASHEET",
+    "settings": {
+      "value": 4700,
+      "ratedWatts": 0.25
+    }
+  },
+  {
+    "name": "CFR-25JB-52-10K",
+    "hint": "Yageo carbon film · 10 kΩ · 0.25 W",
+    "datasheet": "https://yageogroup.com/content/datasheet/asset/file/YAGEO-CFR_DATASHEET",
+    "settings": {
+      "value": 10000,
+      "ratedWatts": 0.25
+    }
+  },
+  {
+    "name": "CFR-25JB-52-100K",
+    "hint": "Yageo carbon film · 100 kΩ · 0.25 W",
+    "datasheet": "https://yageogroup.com/content/datasheet/asset/file/YAGEO-CFR_DATASHEET",
+    "settings": {
+      "value": 100000,
+      "ratedWatts": 0.25
+    }
+  },
+  {
+    "name": "CFR-50JB-52-100R",
+    "hint": "Yageo carbon film · 100 Ω · 0.5 W",
+    "datasheet": "https://yageogroup.com/content/datasheet/asset/file/YAGEO-CFR_DATASHEET",
+    "settings": {
+      "value": 100,
+      "ratedWatts": 0.5
+    }
+  },
+  {
+    "name": "CFR-50JB-52-1K",
+    "hint": "Yageo carbon film · 1 kΩ · 0.5 W",
+    "datasheet": "https://yageogroup.com/content/datasheet/asset/file/YAGEO-CFR_DATASHEET",
+    "settings": {
+      "value": 1000,
+      "ratedWatts": 0.5
+    }
+  },
+  {
+    "name": "CFR-50JB-52-10K",
+    "hint": "Yageo carbon film · 10 kΩ · 0.5 W",
+    "datasheet": "https://yageogroup.com/content/datasheet/asset/file/YAGEO-CFR_DATASHEET",
+    "settings": {
+      "value": 10000,
+      "ratedWatts": 0.5
+    }
+  }
+]

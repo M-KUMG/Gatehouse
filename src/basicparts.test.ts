@@ -337,6 +337,14 @@ describe('photoresistor (LDR)', () => {
     expect(t.sim!({})).toEqual({ kind: 'resistor', ohms: ldrOhms(100), lux: 100 });
   });
 
+  it('uses the selected resistance and gamma without changing the light level', () => {
+    const t = getPart('ldr')!;
+    const { sim, part } = across('ldr', ['a', 'b'], { lux: 100, ldrOhmsAt10Lux: 16_000, ldrGamma: 0.5, ratedWatts: 0.09 }, { series: 10_000 });
+    const ohms = 16_000 / Math.sqrt(10);
+    expect(sim.partResult(part.id)?.voltage).toBeCloseTo(9 * ohms / (10_001.5 + ohms), 4);
+    expect(t.sim!(part.state ?? {})).toMatchObject({ kind: 'resistor', lux: 100, ratedWatts: 0.09 });
+  });
+
   it('divides like its resistance, shows lux and R in the inspector, R in the readout', () => {
     const { sim, part } = across('ldr', ['a', 'b'], { lux: 10 }, { series: 10_000 });
     const r = sim.partResult(part.id)!;
@@ -568,6 +576,15 @@ describe('NTC thermistor', () => {
     expect(t.sim!({ temp: 50 })).toEqual({ kind: 'resistor', ohms: ntcOhms(50), temp: 50 });
     expect(t.sim!({})).toEqual({ kind: 'resistor', ohms: 10_000, temp: 25 });
     expect(canMirror(t)).toBe(false);
+  });
+
+  it('uses the selected R25 and beta without changing the temperature', () => {
+    const t = getPart('ntc')!;
+    const state = { thermistorOhms: 20_000, thermistorBeta: 3991, ratedWatts: 0.05 };
+    expect(t.sim!(state)).toEqual({ kind: 'resistor', ohms: 20_000, temp: 25, ratedWatts: 0.05 });
+    const hot = t.sim!({ ...state, temp: 85 });
+    expect(hot).toMatchObject({ kind: 'resistor', temp: 85 });
+    expect(hot.kind === 'resistor' && hot.ohms).toBeCloseTo(2124, 0);
   });
 
   it('divides like its resistance, shows the temperature and R in the inspector, R in the readout', () => {

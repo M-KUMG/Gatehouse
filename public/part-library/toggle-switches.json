@@ -1,0 +1,26 @@
+[
+  {
+    "name": "A11AB",
+    "hint": "NKK logic-level SPST · 100 mA maximum, 0.4 VA",
+    "datasheet": "https://www.nkkswitches.com/pdf/Atoggles.pdf",
+    "settings": {
+      "contactAmps": 0.1
+    }
+  },
+  {
+    "name": "M2011S2A1W01",
+    "hint": "NKK miniature SPST · 4 A at 30 V DC",
+    "datasheet": "https://www.nkkswitches.com/wp-content/themes/impress-blank/search/inc/part.php?part_no=M2011S2A1W01",
+    "settings": {
+      "contactAmps": 4
+    }
+  },
+  {
+    "name": "S1A",
+    "hint": "NKK panel-mount SPST · 15 A AC, 20 A DC",
+    "datasheet": "https://www.nkkswitches.com/wp-content/themes/impress-blank/search/inc/part.php?part_no=S1A",
+    "settings": {
+      "contactAmps": 20
+    }
+  }
+]

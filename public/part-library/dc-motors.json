@@ -1,0 +1,46 @@
+[
+  {
+    "name": "FA-130RA-18100",
+    "hint": "Mabuchi · 3 V, 12,300 rpm unloaded",
+    "datasheet": "https://product.mabuchi-motor.com/detail.html?id=10",
+    "settings": {
+      "value": 3,
+      "motorNoLoadRpm": 12300,
+      "motorNoLoadAmps": 0.15,
+      "motorStallAmps": 2.1
+    }
+  },
+  {
+    "name": "RF-130CH-12250",
+    "hint": "Mabuchi · 6 V, 8,100 rpm unloaded",
+    "datasheet": "https://product.mabuchi-motor.com/detail.html?id=72",
+    "settings": {
+      "value": 6,
+      "motorNoLoadRpm": 8100,
+      "motorNoLoadAmps": 0.036,
+      "motorStallAmps": 0.7
+    }
+  },
+  {
+    "name": "FF-130SH-14230",
+    "hint": "Mabuchi · 6 V, 7,400 rpm unloaded",
+    "datasheet": "https://product.mabuchi-motor.com/detail.html?id=25",
+    "settings": {
+      "value": 6,
+      "motorNoLoadRpm": 7400,
+      "motorNoLoadAmps": 0.05,
+      "motorStallAmps": 1.03
+    }
+  },
+  {
+    "name": "RC-260RA-18130",
+    "hint": "Mabuchi · 6 V, 13,400 rpm unloaded",
+    "datasheet": "https://product.mabuchi-motor.com/detail.html?id=83",
+    "settings": {
+      "value": 6,
+      "motorNoLoadRpm": 13400,
+      "motorNoLoadAmps": 0.13,
+      "motorStallAmps": 2.55
+    }
+  }
+]

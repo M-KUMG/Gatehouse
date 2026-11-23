@@ -41,7 +41,7 @@ export type ComponentModel =
   /** Full bridge rectifier of four diodes, rated `volts` (reverse voltage per diode) and `amps` (average output current) (src/sim/mainsparts.ts). Pins: ac1, ac2, pos, neg. */
   | { kind: 'bridge'; volts: number; amps: number }
   /** Single-pole double-throw switch: com joined to `no` when `no` is true, else to `nc` (src/sim/mainsparts.ts). Pins: com, no, nc. */
-  | { kind: 'changeover'; no: boolean }
+  | { kind: 'changeover'; no: boolean; ratedContactAmps?: number }
   /**
    * Transformer of two coupled windings (src/sim/transformer.ts): rated primary and secondary volts and VA.
    * Pins: p1, p2 (primary), s1, s2 (secondary); p1 and s1 are the dotted ends.
@@ -57,11 +57,11 @@ export type ComponentModel =
    * temperature in degrees Celsius (an NTC thermistor) the ohms were computed
    * from (the part inspector shows it).
    */
-  | { kind: 'resistor'; ohms: number; lux?: number; temp?: number }
+  | { kind: 'resistor'; ohms: number; lux?: number; temp?: number; ratedWatts?: number }
   /** Tiny resistance when closed, huge when open. Pins: a, b. */
-  | { kind: 'switch'; closed: boolean }
+  | { kind: 'switch'; closed: boolean; ratedContactAmps?: number }
   /** Track of `ohms` between a and b; the wiper w sits at `position` (0 = at a, 1 = at b). */
-  | { kind: 'pot'; ohms: number; position: number }
+  | { kind: 'pot'; ohms: number; position: number; ratedWatts?: number }
   /**
    * Shockley diode with series resistance. Pins: anode, cathode. Optional
    * reverse breakdown (a Zener, see zener.ts): the junction conducts
@@ -74,7 +74,7 @@ export type ComponentModel =
    * `ohmsOff` below `vOff`, `ohmsOn` (parallel to ohmsOff) above `vOn`,
    * smoothstep in between; reverse voltage sees ohmsOff only. Pins: pos, neg.
    */
-  | { kind: 'buzzer'; vOff: number; vOn: number; ohmsOff: number; ohmsOn: number }
+  | { kind: 'buzzer'; vOff: number; vOn: number; ohmsOff: number; ohmsOn: number; ratedMaxVolts?: number }
   /**
    * Common-cathode 7-segment display: eight LEDs (diode parameters is, n,
    * rs), one from each segment pin to com. Pins: a, b, c, d, e, f, g, dp, com.

@@ -1,0 +1,47 @@
+[
+  {
+    "name": "PTV09A-4020F-B102",
+    "hint": "Bourns linear · 1 kΩ · 50 mW",
+    "datasheet": "https://www.bourns.com/pdfs/PTV09.pdf",
+    "settings": {
+      "value": 1000,
+      "ratedWatts": 0.05
+    }
+  },
+  {
+    "name": "PTV09A-4020F-B502",
+    "hint": "Bourns linear · 5 kΩ · 50 mW",
+    "datasheet": "https://www.bourns.com/pdfs/PTV09.pdf",
+    "settings": {
+      "value": 5000,
+      "ratedWatts": 0.05
+    }
+  },
+  {
+    "name": "PTV09A-4020F-B103",
+    "hint": "Bourns linear · 10 kΩ · 50 mW",
+    "datasheet": "https://www.bourns.com/pdfs/PTV09.pdf",
+    "settings": {
+      "value": 10000,
+      "ratedWatts": 0.05
+    }
+  },
+  {
+    "name": "PTV09A-4020F-B503",
+    "hint": "Bourns linear · 50 kΩ · 50 mW",
+    "datasheet": "https://www.bourns.com/pdfs/PTV09.pdf",
+    "settings": {
+      "value": 50000,
+      "ratedWatts": 0.05
+    }
+  },
+  {
+    "name": "PTV09A-4020F-B104",
+    "hint": "Bourns linear · 100 kΩ · 50 mW",
+    "datasheet": "https://www.bourns.com/pdfs/PTV09.pdf",
+    "settings": {
+      "value": 100000,
+      "ratedWatts": 0.05
+    }
+  }
+]

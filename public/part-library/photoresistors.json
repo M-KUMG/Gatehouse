@@ -1,0 +1,42 @@
+[
+  {
+    "name": "PDV-P9001",
+    "hint": "Advanced Photonix CdS · 4–11 kΩ at 10 lx, midpoint used",
+    "datasheet": "https://www.advancedphotonix.com/media/pages/our-products/light-dependent-resistor-ldr/pdv-p9001/32a1cb20a0-1718287430/ds-pdv-p9001.pdf",
+    "settings": {
+      "ldrOhmsAt10Lux": 7500,
+      "ldrGamma": 0.65,
+      "ratedWatts": 0.09
+    }
+  },
+  {
+    "name": "PDV-P5001",
+    "hint": "Advanced Photonix CdS · 8–16 kΩ at 10 lx, midpoint used",
+    "datasheet": "https://www.advancedphotonix.com/media/pages/our-products/light-dependent-resistor-ldr/pdv-p5001/1c319591ec-1718287429/ds-pdv-p5001.pdf",
+    "settings": {
+      "ldrOhmsAt10Lux": 12000,
+      "ldrGamma": 0.6,
+      "ratedWatts": 0.4
+    }
+  },
+  {
+    "name": "PDV-P8102",
+    "hint": "Advanced Photonix CdS · 9–20 kΩ at 10 lx, midpoint used",
+    "datasheet": "https://www.advancedphotonix.com/media/pages/our-products/light-dependent-resistor-ldr/pdv-p8102/b809a5a299-1718287430/pdv-p8102.pdf",
+    "settings": {
+      "ldrOhmsAt10Lux": 14500,
+      "ldrGamma": 0.7,
+      "ratedWatts": 0.1
+    }
+  },
+  {
+    "name": "PDV-P8103",
+    "hint": "Advanced Photonix CdS · 16–33 kΩ at 10 lx, midpoint used",
+    "datasheet": "https://www.advancedphotonix.com/wp-content/uploads/2015/07/DS-PDV-P8103.pdf",
+    "settings": {
+      "ldrOhmsAt10Lux": 24500,
+      "ldrGamma": 0.75,
+      "ratedWatts": 0.09
+    }
+  }
+]

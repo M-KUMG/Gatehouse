@@ -1,41 +1,44 @@
-import { loadDiodeCatalog, type DiodeFamily, type DiodePreset } from './diodepresets';
 import { attachDrop } from './droplight';
+import { loadPartCatalog, type PartCatalog, type PartPreset } from './partpresets';
 import { searchNamed } from './partsearch';
+import type { PartType } from './parts';
 
 /** Search stays local to the bottom of the editor. Focus remains in the search field. */
-export function diodePresetSearch(family: DiodeFamily, current: string | undefined, apply: (preset: DiodePreset) => void): HTMLDivElement {
+export function partPresetSearch(type: PartType, catalog: PartCatalog, current: string | undefined,
+  apply: (preset: PartPreset) => boolean): HTMLDivElement {
   const row = document.createElement('div');
-  row.className = 'diode-preset-search';
+  row.className = 'part-preset-search';
 
   const input = document.createElement('input');
   input.type = 'search';
   input.spellcheck = false;
   input.autocomplete = 'off';
-  const label = { diode: 'diode', schottky: 'Schottky', zener: 'Zener' }[family];
+  const { label } = catalog;
+  const listId = `${type.id}-preset-options`;
   input.setAttribute('role', 'combobox');
   input.setAttribute('aria-label', `Search ${label} presets`);
   input.setAttribute('aria-autocomplete', 'list');
-  input.setAttribute('aria-controls', 'diode-preset-options');
+  input.setAttribute('aria-controls', listId);
   input.placeholder = current ?? `Search ${label} presets`;
 
   const fold = document.createElement('div');
-  fold.className = 'diode-preset-fold';
+  fold.className = 'part-preset-fold';
   const inner = document.createElement('div');
   const list = document.createElement('div');
-  list.className = 'diode-preset-options';
-  list.id = 'diode-preset-options';
+  list.className = 'part-preset-options';
+  list.id = listId;
   list.setAttribute('role', 'listbox');
   list.setAttribute('aria-label', `${label} presets`);
   const status = document.createElement('div');
-  status.className = 'diode-preset-status';
+  status.className = 'part-preset-status';
   status.setAttribute('role', 'status');
   inner.append(list, status);
   fold.append(inner);
   row.append(input, fold);
 
   const drop = attachDrop(list, '.gs-item', { manual: true });
-  let catalog: DiodePreset[] | undefined;
-  let matches: DiodePreset[] = [];
+  let presets: PartPreset[] | undefined;
+  let matches: PartPreset[] = [];
   let active = -1;
   let open = false;
   let loading = false;
@@ -59,26 +62,26 @@ export function diodePresetSearch(family: DiodeFamily, current: string | undefin
     if (!next) highlight(-1);
   };
 
-  const choose = (preset: DiodePreset): void => {
+  const choose = (preset: PartPreset): void => {
+    if (!apply(preset)) return;
     current = preset.name;
     input.value = '';
     input.placeholder = preset.name;
     setOpen(false);
-    apply(preset);
   };
 
   const render = (): void => {
     highlight(-1);
-    matches = catalog ? searchNamed(catalog, input.value) : [];
+    matches = presets ? searchNamed(presets, input.value) : [];
     const options = matches.map((preset, index) => {
       const option = document.createElement('div');
       option.className = 'gs-item';
-      option.id = `diode-preset-option-${index}`;
+      option.id = `${listId}-${index}`;
       option.setAttribute('role', 'option');
       option.setAttribute('aria-selected', String(current === preset.name));
       option.textContent = preset.name;
       const hint = document.createElement('span');
-      hint.className = 'diode-preset-hint';
+      hint.className = 'part-preset-hint';
       hint.textContent = preset.hint;
       option.append(hint);
       option.addEventListener('pointerenter', () => highlight(index));
@@ -87,20 +90,20 @@ export function diodePresetSearch(family: DiodeFamily, current: string | undefin
       return option;
     });
     list.replaceChildren(...options);
-    status.textContent = loading ? 'Loading presets…' : !catalog ? 'Diode presets are unavailable. Search again to retry.'
-      : matches.length === 0 ? 'No matching diode presets.' : '';
+    status.textContent = loading ? 'Loading presets…' : !presets ? 'Presets are unavailable. Search again to retry.'
+      : matches.length === 0 ? `No matching ${label} presets.` : '';
     status.hidden = status.textContent === '';
   };
 
   const show = (): void => {
     setOpen(true);
-    if (catalog || loading) {
+    if (presets || loading) {
       render();
       return;
     }
     loading = true;
     render();
-    void loadDiodeCatalog(family).then((data) => { catalog = data; }, () => undefined).finally(() => {
+    void loadPartCatalog(type, catalog).then((data) => { presets = data; }, () => undefined).finally(() => {
       loading = false;
       if (open) render();
     });

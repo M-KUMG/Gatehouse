@@ -6,8 +6,8 @@
 import { PSU_ART, drawPsuLamp, psuLabel, psuSvg } from './art/psu';
 import { SIGGEN_ART, siggenSvg } from './art/siggen';
 import { RELAY_ART, drawRelayContacts, relaySvg } from './art/relay';
-import { MOTOR_ART, drawMotorFan, motorSvg } from './art/motor';
-import { MOTOR_BURN_AMPS, MOTOR_DEFAULT, MOTOR_WARN_AMPS } from './sim/motor';
+import { MOTOR_PART } from './motorpart';
+import { contactRatingField } from './switchrating';
 import {
   RELAY_COIL_VOLTS, RELAY_CONTACT_BURN_AMPS, RELAY_CONTACT_WARN_AMPS, RELAY_DEFAULT_VOLTS,
   contactAmps, relayCoilSettings, relayModel, type RelayCoilSettings,
@@ -19,7 +19,8 @@ import { INDUCTOR_ART } from './art/inductor';
 import { BATTERY_ART } from './art/battery';
 import { BATTERY_9V_ART } from './art/battery9v';
 import { DIODE_ART } from './art/diode';
-import { DIODE_FIELDS, diodeModel, isDiodeFamily, type DiodeField, type DiodeSettings } from './diodepresets';
+import { DIODE_CATALOGS, DIODE_FIELDS, diodeModel, type DiodeField, type DiodeSettings } from './diodepresets';
+import { partPresetName, type PartCatalog } from './partpresets';
 import { GROUND_ART } from './art/ground';
 import { LED_ART, LED_BURNED_SVG, drawLedGlow, ledColorSvg } from './art/led';
 import { AC_PARTS } from './acparts';
@@ -55,6 +56,8 @@ import {
 export interface PartState extends RelayCoilSettings, Partial<DiodeSettings> {
   /** The part number used to fill a diode's editable settings. */
   diodePreset?: string;
+  /** The part number used to fill another component's editable settings. */
+  partPreset?: string;
   /** Switches and buttons: contact closed. */
   closed?: boolean;
   /** Potentiometer wiper, 0..1. */
@@ -88,11 +91,27 @@ export interface PartState extends RelayCoilSettings, Partial<DiodeSettings> {
   freq?: number;
   /** Bulbs: the rated voltage (RMS); transformer: the primary voltage (`value` is its secondary voltage). */
   volts?: number;
+  ratedWatts?: number;
+  dcr?: number;
+  ldrOhmsAt10Lux?: number;
+  ldrGamma?: number;
+  thermistorOhms?: number;
+  thermistorBeta?: number;
+  transformerVa?: number;
+  motorNoLoadRpm?: number;
+  motorNoLoadAmps?: number;
+  motorStallAmps?: number;
+  buzzerMinVolts?: number;
+  buzzerMaxVolts?: number;
+  buzzerRatedAmps?: number;
+  contactAmps?: number;
 }
 
 /** One more editable field in a part's popup beside its main `value` (a function generator's waveform, amplitude, ...). */
 export interface ExtraField {
-  key: 'wave' | 'amp' | 'offset' | 'duty' | 'limit' | 'freq' | 'volts' | keyof RelayCoilSettings | DiodeField;
+  key: 'wave' | 'amp' | 'offset' | 'duty' | 'limit' | 'freq' | 'volts' | keyof RelayCoilSettings | DiodeField
+    | 'ratedWatts' | 'dcr' | 'ldrOhmsAt10Lux' | 'ldrGamma' | 'thermistorOhms' | 'thermistorBeta' | 'transformerVa'
+    | 'motorNoLoadRpm' | 'motorNoLoadAmps' | 'motorStallAmps' | 'buzzerMinVolts' | 'buzzerMaxVolts' | 'buzzerRatedAmps' | 'contactAmps';
   label: string;
   unit: string;
   min: number;
@@ -132,6 +151,8 @@ export interface PartType {
   colorable?: boolean;
   /** More fields in the same popup (the popup then stays open after each change; see valueedit.ts). */
   fields?: readonly ExtraField[];
+  /** Searchable manufacturer presets for this part's editable settings. */
+  catalog?: PartCatalog;
   /** Validate relationships between settings after a single edit or loading a project. */
   validateSettings?(state: PartState): string | null;
   /** Mouse behavior: closed while held, flips on click, or has a knob to turn. */
@@ -158,7 +179,7 @@ export interface PartType {
   /** Live drawing on top of the artwork; the canvas is in art units, unrotated. */
   overlay?(ctx: CanvasRenderingContext2D, state: PartState, result: PartResult | undefined, partId?: number): void;
   /** Hover text lines for the simulated values (default: chosen from the pins, see src/readout.ts). */
-  readout?(result: PartResult): string[];
+  readout?(result: PartResult, state?: PartState): string[];
   /** Electrical model; its pin names are this part's pin ids. */
   sim?(state: PartState): ComponentModel;
   /**
@@ -242,6 +263,7 @@ export const CAP_MIN_RATED_VOLTS = 1;
 export const CAP_MAX_RATED_VOLTS = 1000;
 const ratedOf = (s: PartState, fallback: number): number => (typeof s.volts === 'number' && Number.isFinite(s.volts) ? s.volts : fallback);
 const RATED_FIELD = { key: 'volts', label: 'Rated voltage', unit: 'V', min: CAP_MIN_RATED_VOLTS, max: CAP_MAX_RATED_VOLTS } as const;
+const POWER_FIELD = { key: 'ratedWatts', label: 'Power rating', unit: 'W', min: 0.001, max: 100, defaultValue: () => 0.25 } as const;
 
 /**
  * Typical ESR of a general-purpose aluminium electrolytic: 5 ohm / sqrt(C in
@@ -402,18 +424,7 @@ export const PARTS: readonly PartType[] = [
       return { kind: 'signal', wave: g.wave, freq: g.freq, amp: g.amp, offset: g.offset, duty: g.duty, rOut: SIGNAL_OUT_OHMS };
     },
   },
-  {
-    id: 'motor', name: 'DC motor (6 V)', ...MOTOR_ART, mirrorable: true,
-    pins: [{ id: 'pos', name: '+', x: 0, y: 1 }, { id: 'neg', name: '−', x: 0, y: 2 }],
-    // Current above 1.5 A warns (stall is 2 A at 6 V), above 10 A burns it out (see sim/motor.ts).
-    warnAbove: MOTOR_WARN_AMPS,
-    burnAbove: MOTOR_BURN_AMPS,
-    variant: (s) => (s.burned ? { key: 'burned', svg: motorSvg(true) } : null),
-    overlay: (ctx, s, r, id) => {
-      if (!s.burned && r) drawMotorFan(ctx, id ?? -1, r.volts?.['mech.omega'] ?? 0);
-    },
-    sim: (s) => (s.burned ? { kind: 'open' } : MOTOR_DEFAULT),
-  },
+  MOTOR_PART,
   {
     id: 'relay', name: 'Relay (SPDT)', ...RELAY_ART, mirrorable: true,
     pins: [
@@ -424,6 +435,7 @@ export const PARTS: readonly PartType[] = [
     defaults: { value: RELAY_DEFAULT_VOLTS },
     // The nominal coil voltage picks the winding (3, 5, 6, 9, 12 or 24 V; see sim/relay.ts).
     value: { label: 'Coil voltage', unit: 'V', min: RELAY_COIL_VOLTS[0], max: RELAY_COIL_VOLTS[RELAY_COIL_VOLTS.length - 1], options: RELAY_COIL_VOLTS },
+    catalog: { file: 'relays.json', label: 'relay', keys: ['value', 'coilOhms', 'pullVolts', 'releaseVolts'] },
     fields: [
       { key: 'coilOhms', label: 'Coil resistance', unit: 'Ω', min: 0.001, max: 1e6, defaultValue: (s) => relayDefaults(s).coilOhms },
       { key: 'pullVolts', label: 'Pull-in voltage', unit: 'V', min: 0.001, max: 1000, defaultValue: (s) => relayDefaults(s).pullVolts },
@@ -456,8 +468,11 @@ export const PARTS: readonly PartType[] = [
     pins: [{ id: 'a', name: '1', x: 0, y: 1 }, { id: 'b', name: '2', x: 4, y: 1 }],
     defaults: { value: DEFAULT_OHMS },
     value: { label: 'Resistance', unit: 'Ω', min: 1, max: 10e6 },
+    fields: [POWER_FIELD],
+    catalog: { file: 'resistors.json', label: 'resistor', keys: ['value', 'ratedWatts'] },
     variant: (s) => resistorArt(s.value ?? DEFAULT_OHMS),
-    sim: (s) => ({ kind: 'resistor', ohms: s.value ?? DEFAULT_OHMS }),
+    sim: (s) => ({ kind: 'resistor', ohms: s.value ?? DEFAULT_OHMS,
+      ...(s.ratedWatts === undefined ? {} : { ratedWatts: s.ratedWatts }) }),
   },
   {
     id: 'capacitor', name: 'Capacitor', ...CAPACITOR_ART,
@@ -465,6 +480,7 @@ export const PARTS: readonly PartType[] = [
     defaults: { value: DEFAULT_FARADS },
     value: { label: 'Capacitance', unit: 'F', min: 1e-12, max: 1 },
     fields: [RATED_FIELD],
+    catalog: { file: 'capacitors.json', label: 'capacitor', keys: ['value', 'volts'] },
     readout: reactiveReadout,
     warnWhen: (r, s) => warnText(capStress(r, s)),
     burnWhen: (r, s) => burnText(capStress(r, s)),
@@ -479,6 +495,7 @@ export const PARTS: readonly PartType[] = [
     defaults: { value: DEFAULT_ECAP_FARADS },
     value: { label: 'Capacitance', unit: 'F', min: 1e-12, max: 1 },
     fields: [RATED_FIELD],
+    catalog: { file: 'electrolytic-capacitors.json', label: 'electrolytic capacitor', keys: ['value', 'volts'] },
     readout: ecapReadout,
     warnWhen: (r, s) => warnText(ecapStress(r, s)),
     burnWhen: (r, s) => burnText(ecapStress(r, s)),
@@ -495,8 +512,10 @@ export const PARTS: readonly PartType[] = [
     pins: [{ id: 'a', name: '1', x: 0, y: 1 }, { id: 'b', name: '2', x: 4, y: 1 }],
     defaults: { value: DEFAULT_HENRIES },
     value: { label: 'Inductance', unit: 'H', min: 1e-9, max: 100 },
+    fields: [{ key: 'dcr', label: 'Winding resistance', unit: 'Ω', min: 0, max: 10_000, defaultValue: () => REACTIVE_SERIES_OHMS }],
+    catalog: { file: 'inductors.json', label: 'inductor', keys: ['value', 'dcr'] },
     readout: reactiveReadout,
-    sim: (s) => ({ kind: 'inductor', henries: s.value ?? DEFAULT_HENRIES, dcr: REACTIVE_SERIES_OHMS }),
+    sim: (s) => ({ kind: 'inductor', henries: s.value ?? DEFAULT_HENRIES, dcr: s.dcr ?? REACTIVE_SERIES_OHMS }),
   },
   {
     id: 'led', name: 'LED', ...LED_ART, mirrorable: true,
@@ -519,10 +538,13 @@ export const PARTS: readonly PartType[] = [
   {
     id: 'switch', name: 'Toggle switch', ...TOGGLE_ART,
     pins: [{ id: 'a', name: '1', x: 0, y: 1 }, { id: 'b', name: '2', x: 4, y: 1 }],
+    fields: [contactRatingField(1)],
+    catalog: { file: 'toggle-switches.json', label: 'toggle switch', keys: ['contactAmps'] },
     defaults: { closed: false },
     control: 'toggle',
     variant: (s) => (s.closed ? { key: 'on', svg: TOGGLE_ON_SVG } : null),
-    sim: (s) => ({ kind: 'switch', closed: s.closed === true }),
+    sim: (s) => ({ kind: 'switch', closed: s.closed === true,
+      ...(s.contactAmps === undefined ? {} : { ratedContactAmps: s.contactAmps }) }),
   },
   {
     id: 'button', name: 'Push button', ...PUSH_BUTTON_ART,
@@ -531,26 +553,33 @@ export const PARTS: readonly PartType[] = [
       { id: 'b', name: '2a', x: 0, y: 2 }, { id: 'b2', name: '2b', x: 4, y: 2 },
     ],
     links: [['a', 'a2'], ['b', 'b2']],
+    fields: [contactRatingField(1)],
+    catalog: { file: 'push-buttons.json', label: 'push button', keys: ['contactAmps'] },
     defaults: { closed: false },
     control: 'momentary',
     variant: (s) => (s.closed ? { key: 'down', svg: PUSH_BUTTON_PRESSED_SVG } : null),
-    sim: (s) => ({ kind: 'switch', closed: s.closed === true }),
+    sim: (s) => ({ kind: 'switch', closed: s.closed === true,
+      ...(s.contactAmps === undefined ? {} : { ratedContactAmps: s.contactAmps }) }),
   },
   {
     id: 'pot', name: 'Potentiometer', ...POT_ART, mirrorable: true,
     pins: [{ id: 'a', name: '1', x: 1, y: 4 }, { id: 'w', name: 'Wiper', x: 2, y: 4 }, { id: 'b', name: '3', x: 3, y: 4 }],
     defaults: { value: DEFAULT_POT_OHMS, position: 0.5 },
     value: { label: 'Resistance', unit: 'Ω', min: 10, max: 10e6 },
+    fields: [POWER_FIELD],
+    catalog: { file: 'potentiometers.json', label: 'potentiometer', keys: ['value', 'ratedWatts'] },
     control: 'knob',
     knob: { x: POT_KNOB.x / ART_CELL, y: POT_KNOB.y / ART_CELL, r: POT_KNOB.r / ART_CELL },
     overlay: (ctx, s) => drawPotPointer(ctx, s.position ?? 0.5),
-    sim: (s) => ({ kind: 'pot', ohms: s.value ?? DEFAULT_POT_OHMS, position: s.position ?? 0.5 }),
+    sim: (s) => ({ kind: 'pot', ohms: s.value ?? DEFAULT_POT_OHMS, position: s.position ?? 0.5,
+      ...(s.ratedWatts === undefined ? {} : { ratedWatts: s.ratedWatts }) }),
   },
   {
     // Pin ids are the diode model's, like the LED's; the band marks the cathode.
     id: 'diode', name: 'Diode (1N4148)', ...DIODE_ART,
     pins: [{ id: 'anode', name: 'Anode (+)', x: 0, y: 1 }, { id: 'cathode', name: 'Cathode (−, band)', x: 4, y: 1 }],
     fields: DIODE_FIELDS,
+    catalog: DIODE_CATALOGS.diode,
     readout: diodeReadout,
     sim: diodeModel,
   },
@@ -669,12 +698,12 @@ export function getPart(id: string): PartType | undefined {
 }
 
 export function hasPartSettings(type: PartType | undefined): boolean {
-  return Boolean(type?.value || type?.fields?.length || type?.colorable);
+  return Boolean(type?.value || type?.fields?.length || type?.colorable || type?.catalog);
 }
 
 export function placedPartName(type: PartType, state: PartState | undefined): string {
-  return isDiodeFamily(type.id) && state?.diodePreset
-    ? `${type.name.split(' (')[0]} (${state.diodePreset})` : type.name;
+  const preset = partPresetName(type, state);
+  return preset ? `${type.name.split(' (')[0]} (${preset})` : type.name;
 }
 
 /** True when placed parts of this type can be mirrored (PartType.mirrorable, default false). */

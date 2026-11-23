@@ -60,6 +60,15 @@ const STRESS: Record<string, (v: number) => PartResult> = {
 };
 
 describe('rating table', () => {
+  it.each(['resistor', 'pot', 'ldr', 'ntc'])('uses the selected power rating in the %s model', (id) => {
+    const t = getPart(id)!;
+    const at = STRESS[`${id}:P`];
+    const state = { ...t.defaults, ratedWatts: 0.02 };
+    expect(partWarning(t, at(0.03), t.defaults ?? {})).toBeNull();
+    expect(partWarning(t, at(0.03), state)).toMatch(/20 mW/);
+    expect(burnReason(t, at(0.09), state)).toMatch(/rated 20 mW/);
+  });
+
   it('has a stress case for every limit of every row, and every row is a part type', () => {
     const limits = Object.entries(PART_SPECS).flatMap(([type, spec]) => spec.limits.map((l) => `${type}:${l.label}`));
     expect(limits.sort()).toEqual(Object.keys(STRESS).sort());

@@ -10,7 +10,7 @@ import {
   drawLedBulbGlow, ledbulbSvg, transformerSvg,
 } from './art/ac';
 import { BRIDGE_ART, bridgeArt } from './art/bridge';
-import { CHANGEOVER_ART, CHANGEOVER_ON_SVG, MAINS_SWITCH_ART, MAINS_SWITCH_ON_SVG } from './art/mainsswitch';
+import { CHANGEOVER_ART, CHANGEOVER_ON_SVG, MAINS_SWITCH_ART, MAINS_SWITCH_ON_SVG, changeoverSvg, mainsSwitchSvg } from './art/mainsswitch';
 import { acsourceReadout, bridgeReadout, changeoverReadout, bulbReadout, ledbulbReadout, transformerReadout } from './devicereadouts';
 import type { PartState, PartType } from './parts';
 import {
@@ -28,6 +28,7 @@ import {
   transformerStress, type TransformerModel,
 } from './sim/transformer';
 import type { ComponentModel } from './sim';
+import { contactRatingField } from './switchrating';
 
 const ok = (v: number | undefined, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 
@@ -39,7 +40,8 @@ export function acsourceSettings(s: PartState): { vrms: number; freq: number; li
 export const bulbModelOf = (s: PartState): BulbModel => ({ kind: 'bulb', volts: ok(s.volts, BULB_DEFAULT_VOLTS), watts: ok(s.value, BULB_DEFAULT_WATTS) });
 export const ledbulbModelOf = (s: PartState): LedBulbModel => ({ kind: 'ledbulb', volts: ok(s.volts, BULB_DEFAULT_VOLTS), watts: ok(s.value, LEDBULB_DEFAULT_WATTS) });
 export const transformerModelOf = (s: PartState): TransformerModel => ({
-  kind: 'transformer', primaryVolts: ok(s.volts, TRANSFORMER_DEFAULT_PRIMARY), secondaryVolts: ok(s.value, TRANSFORMER_DEFAULT_SECONDARY), va: TRANSFORMER_VA,
+  kind: 'transformer', primaryVolts: ok(s.volts, TRANSFORMER_DEFAULT_PRIMARY),
+  secondaryVolts: ok(s.value, TRANSFORMER_DEFAULT_SECONDARY), va: ok(s.transformerVa, TRANSFORMER_VA),
 });
 
 export const bridgeModelOf = (s: PartState): BridgeModel => ({ kind: 'bridge', volts: ok(s.volts, BRIDGE_DEFAULT_VOLTS), amps: ok(s.value, BRIDGE_DEFAULT_AMPS) });
@@ -79,22 +81,34 @@ export const AC_PARTS: readonly PartType[] = [
   },
   {
     // A wall light switch: the same switch model as the toggle, rated for mains (specs.ts: 10 A).
-    id: 'mainsswitch', name: 'Mains switch (10 A)', ...MAINS_SWITCH_ART,
+    id: 'mainsswitch', name: 'Mains switch', ...MAINS_SWITCH_ART,
     pins: [{ id: 'a', name: '1', x: 0, y: 1 }, { id: 'b', name: '2', x: 4, y: 1 }],
     defaults: { closed: false },
+    catalog: { file: 'mains-switches.json', label: 'mains switch', keys: ['contactAmps'] },
+    fields: [contactRatingField(10)],
     control: 'toggle',
-    variant: (s) => (s.closed ? { key: 'on', svg: MAINS_SWITCH_ON_SVG } : null),
-    sim: (s) => ({ kind: 'switch', closed: s.closed === true }),
+    variant: (s) => {
+      const amps = s.contactAmps ?? 10;
+      if (amps === 10) return s.closed ? { key: 'on', svg: MAINS_SWITCH_ON_SVG } : null;
+      return { key: `${s.closed ? 'on' : 'off'}-${amps}`, svg: mainsSwitchSvg(s.closed === true, amps) };
+    },
+    sim: (s) => ({ kind: 'switch', closed: s.closed === true, ...(s.contactAmps === undefined ? {} : { ratedContactAmps: s.contactAmps }) }),
   },
   {
     // A wall two-way switch (SPDT): the common pin goes to NC at rest and to NO when switched (specs.ts: 10 A).
     id: 'changeover', name: 'Mains switch (changeover, SPDT)', ...CHANGEOVER_ART, mirrorable: true,
     pins: [{ id: 'com', name: 'COM (common)', x: 0, y: 2 }, { id: 'nc', name: 'NC (normally closed)', x: 4, y: 1 }, { id: 'no', name: 'NO (normally open)', x: 4, y: 3 }],
     defaults: { closed: false },
+    catalog: { file: 'changeover-switches.json', label: 'changeover switch', keys: ['contactAmps'] },
+    fields: [contactRatingField(10)],
     control: 'toggle',
     readout: changeoverReadout,
-    variant: (s) => (s.closed ? { key: 'on', svg: CHANGEOVER_ON_SVG } : null),
-    sim: (s) => ({ kind: 'changeover', no: s.closed === true }),
+    variant: (s) => {
+      const amps = s.contactAmps ?? 10;
+      if (amps === 10) return s.closed ? { key: 'on', svg: CHANGEOVER_ON_SVG } : null;
+      return { key: `${s.closed ? 'on' : 'off'}-${amps}`, svg: changeoverSvg(s.closed === true, amps) };
+    },
+    sim: (s) => ({ kind: 'changeover', no: s.closed === true, ...(s.contactAmps === undefined ? {} : { ratedContactAmps: s.contactAmps }) }),
   },
   {
     // Four diodes in a diamond; rated by reverse voltage (the voltage field) and average output current (the value).
@@ -104,6 +118,7 @@ export const AC_PARTS: readonly PartType[] = [
       { id: 'pos', name: 'DC + (output)', x: 4, y: 1 }, { id: 'neg', name: 'DC − (output)', x: 4, y: 3 },
     ],
     defaults: { value: BRIDGE_DEFAULT_AMPS, volts: BRIDGE_DEFAULT_VOLTS },
+    catalog: { file: 'bridge-rectifiers.json', label: 'bridge rectifier', keys: ['value', 'volts'] },
     value: { label: 'Rated current (average)', unit: 'A', min: BRIDGE_MIN_AMPS, max: BRIDGE_MAX_AMPS },
     fields: [{ key: 'volts', label: 'Rated reverse voltage', unit: 'V', min: BRIDGE_MIN_VOLTS, max: BRIDGE_MAX_VOLTS }],
     readout: bridgeReadout,
@@ -122,9 +137,12 @@ export const AC_PARTS: readonly PartType[] = [
       { id: 's1', name: 'Secondary 1 (dot)', x: 6, y: 1 }, { id: 's2', name: 'Secondary 2', x: 6, y: 4 },
     ],
     defaults: { value: TRANSFORMER_DEFAULT_SECONDARY, volts: TRANSFORMER_DEFAULT_PRIMARY },
+    catalog: { file: 'transformers.json', label: 'transformer', keys: ['value', 'volts', 'transformerVa'] },
     value: { label: 'Secondary voltage', unit: 'V', min: TRANSFORMER_MIN_VOLTS, max: TRANSFORMER_MAX_VOLTS },
-    // Two coupled windings of 50 VA; the two voltages are the nameplate (sim/transformer.ts).
-    fields: [{ key: 'volts', label: 'Primary voltage', unit: 'V', min: TRANSFORMER_MIN_VOLTS, max: TRANSFORMER_MAX_VOLTS }],
+    fields: [
+      { key: 'volts', label: 'Primary voltage', unit: 'V', min: TRANSFORMER_MIN_VOLTS, max: TRANSFORMER_MAX_VOLTS },
+      { key: 'transformerVa', label: 'Rated apparent power', unit: 'VA', min: 0.01, max: 10000, defaultValue: () => TRANSFORMER_VA },
+    ],
     readout: transformerReadout,
     warnWhen: (r, s) => warn(transformerStress(transformerModelOf(s), r)),
     burnWhen: (r, s) => burn(transformerStress(transformerModelOf(s), r)),
@@ -140,6 +158,7 @@ export const AC_PARTS: readonly PartType[] = [
     id: 'bulb', name: 'Light bulb (incandescent)', ...BULB_ART, mirrorable: true,
     pins: [{ id: 'a', name: '1', x: 1, y: 6 }, { id: 'b', name: '2', x: 3, y: 6 }],
     defaults: { value: BULB_DEFAULT_WATTS, volts: BULB_DEFAULT_VOLTS },
+    catalog: { file: 'incandescent-bulbs.json', label: 'incandescent bulb', keys: ['value', 'volts'] },
     value: { label: 'Power', unit: 'W', min: 1, max: BULB_MAX_WATTS },
     fields: [RATED_VOLTS_FIELD],
     readout: bulbReadout,
@@ -155,6 +174,7 @@ export const AC_PARTS: readonly PartType[] = [
     id: 'ledbulb', name: 'Light bulb (LED)', ...LEDBULB_ART, mirrorable: true,
     pins: [{ id: 'a', name: '1', x: 1, y: 6 }, { id: 'b', name: '2', x: 3, y: 6 }],
     defaults: { value: LEDBULB_DEFAULT_WATTS, volts: BULB_DEFAULT_VOLTS },
+    catalog: { file: 'led-bulbs.json', label: 'LED bulb', keys: ['value', 'volts'] },
     value: { label: 'Power', unit: 'W', min: 0.5, max: 100 },
     fields: [RATED_VOLTS_FIELD],
     readout: ledbulbReadout,

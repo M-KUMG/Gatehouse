@@ -21,6 +21,7 @@
 // With burning off, a limit beyond burnAbove is reported as a warning.
 
 import { formatSI } from '../format';
+import { BUZZER_DEFAULT_MAX_VOLTS } from './buzzer';
 import { POT_END_OHMS } from './devices';
 import type { Stress } from './ratings';
 import type { ComponentModel, PartResult } from './types';
@@ -188,7 +189,7 @@ export const PART_SPECS: Readonly<Record<string, PartSpec>> = {
   buzzer: {
     source: '5 V active buzzer: operating 3..6.5 V (warned above), destroyed above 15 V, or above 12 V reversed',
     limits: [
-      { label: 'V', what: 'over-voltage', unit: 'V', rated: 6.5, warnAbove: 6.5, burnAbove: 15, measure: (r) => r.voltage },
+      { label: 'V', what: 'over-voltage', unit: 'V', rated: BUZZER_DEFAULT_MAX_VOLTS, warnAbove: BUZZER_DEFAULT_MAX_VOLTS, burnAbove: 15, measure: (r) => r.voltage },
       { label: 'Vr', what: 'reverse voltage', unit: 'V', rated: 12, warnAbove: 0.8 * 12, burnAbove: 12, measure: (r) => -r.voltage },
     ],
   },
@@ -220,15 +221,20 @@ export function specStress(typeId: string, r: PartResult, model: ComponentModel)
   const spec = partSpec(typeId);
   if (!spec) return { level: 'ok', short: 'ok' };
   const values = spec.limits.map((limit) => {
-    let l = limit;
+    let rated: number | undefined;
     if ((typeId === 'diode' || typeId === 'schottky') && model.kind === 'diode') {
-      const rated = limit.label === 'If' ? model.ratedForwardAmps : model.ratedReverseVolts;
-      if (rated !== undefined) {
-        const scale = rated / limit.rated;
-        l = { ...limit, rated, warnAbove: limit.warnAbove * scale,
-          burnAbove: limit.burnAbove === undefined ? undefined : limit.burnAbove * scale };
-      }
+      rated = limit.label === 'If' ? model.ratedForwardAmps : model.ratedReverseVolts;
+    } else if (limit.label === 'P' && (model.kind === 'resistor' || model.kind === 'pot')) {
+      rated = model.ratedWatts;
+    } else if (limit.label === 'I' && (model.kind === 'switch' || model.kind === 'changeover')) {
+      rated = model.ratedContactAmps;
+    } else if (limit.label === 'V' && model.kind === 'buzzer') {
+      rated = model.ratedMaxVolts;
     }
+    if (rated === undefined) return { l: limit, v: limit.measure(r, model) };
+    const scale = rated / limit.rated;
+    const l = { ...limit, rated, warnAbove: limit.warnAbove * scale,
+      burnAbove: limit.burnAbove === undefined ? undefined : limit.burnAbove * scale };
     return { l, v: l.measure(r, model) };
   });
   for (const { l, v } of values) {

@@ -1,0 +1,44 @@
+name: Build Linux AppImage
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run toolchain:fetch
+      - run: npm run toolchain:packs
+      - run: npm run dist:linux
+      - name: Verify AppImage contents
+        working-directory: release
+        run: |
+          version=$(node -p "require('../package.json').version")
+          image="Gatehouse-${version}-linux-x64.AppImage"
+          sha256sum "$image" > "${image}.sha256"
+          "./$image" --appimage-extract >/dev/null
+          test -x squashfs-root/AppRun
+          test -s squashfs-root/resources/app.asar
+          diff -rq ../toolchain/packs squashfs-root/resources/toolchain-packs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Gatehouse-linux-x64
+          path: |
+            release/Gatehouse-*-linux-x64.AppImage
+            release/Gatehouse-*-linux-x64.AppImage.sha256
+          if-no-files-found: error
+          compression-level: 0

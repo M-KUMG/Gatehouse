@@ -209,66 +209,66 @@
 }
 
 /* Preset results unfold inside the existing part editor, below its final row. */
-.value-editor:has(.diode-preset-search) {
+.value-editor:has(.part-preset-search) {
   max-height: 65vh;
   overflow-y: auto;
 }
 
-.diode-preset-search {
+.part-preset-search {
   grid-column: 1 / -1;
   min-width: 0;
 }
 
-.diode-preset-fold {
+.part-preset-fold {
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows var(--gh-glide) var(--gh-ease-glide);
 }
 
-.diode-preset-fold.open {
+.part-preset-fold.open {
   grid-template-rows: 1fr;
 }
 
-.diode-preset-fold > div {
+.part-preset-fold > div {
   overflow: hidden;
   min-height: 0;
 }
 
-.diode-preset-options {
+.part-preset-options {
   position: relative;
   max-height: 11rem;
   overflow-y: auto;
 }
 
-.diode-preset-options:has(.gs-item) {
+.part-preset-options:has(.gs-item) {
   margin-top: 6px;
 }
 
-.diode-preset-options .gs-item {
+.part-preset-options .gs-item {
   padding-inline-end: 6px;
 }
 
-.diode-preset-fold.open .gs-item {
+.part-preset-fold.open .gs-item {
   opacity: 1;
 }
 
-.diode-preset-status,
-.diode-preset-hint {
+.part-preset-status,
+.part-preset-hint {
   color: var(--gh-text-muted);
 }
 
-.diode-preset-hint {
+.part-preset-hint {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.diode-preset-status {
+.part-preset-status {
   padding: 6px 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .diode-preset-fold,
-  .diode-preset-options .gs-item {
+  .part-preset-fold,
+  .part-preset-options .gs-item {
     transition: none;
   }
 }

@@ -1,0 +1,74 @@
+[
+  {
+    "name": "RDER71H472K0K1H03B",
+    "hint": "Murata X7R ceramic · 4.7 nF · 50 V",
+    "datasheet": "https://pim.murata.com/asset/pim4/ceramicCapacitorLead/RDE_X7R_X7S_25V-100V_E_PDF_CERAMICCAPACITORLEAD?lastModifiedDatetime=20250909130222",
+    "settings": {
+      "value": 4.7e-9,
+      "volts": 50
+    }
+  },
+  {
+    "name": "RDER71H103K0K1H03B",
+    "hint": "Murata X7R ceramic · 10 nF · 50 V",
+    "datasheet": "https://pim.murata.com/asset/pim4/ceramicCapacitorLead/RDE_X7R_X7S_25V-100V_E_PDF_CERAMICCAPACITORLEAD?lastModifiedDatetime=20250909130222",
+    "settings": {
+      "value": 1e-8,
+      "volts": 50
+    }
+  },
+  {
+    "name": "RDER71H473K0K1H03B",
+    "hint": "Murata X7R ceramic · 47 nF · 50 V",
+    "datasheet": "https://pim.murata.com/asset/pim4/ceramicCapacitorLead/RDE_X7R_X7S_25V-100V_E_PDF_CERAMICCAPACITORLEAD?lastModifiedDatetime=20250909130222",
+    "settings": {
+      "value": 4.7e-8,
+      "volts": 50
+    }
+  },
+  {
+    "name": "RDER71H104K0K1H03B",
+    "hint": "Murata X7R ceramic · 100 nF · 50 V",
+    "datasheet": "https://pim.murata.com/asset/pim4/ceramicCapacitorLead/RDE_X7R_X7S_25V-100V_E_PDF_CERAMICCAPACITORLEAD?lastModifiedDatetime=20250909130222",
+    "settings": {
+      "value": 1e-7,
+      "volts": 50
+    }
+  },
+  {
+    "name": "RDER72A104K1S1H03A",
+    "hint": "Murata X7R ceramic · 100 nF · 100 V",
+    "datasheet": "https://pim.murata.com/asset/pim4/ceramicCapacitorLead/RDE_X7R_X7S_25V-100V_E_PDF_CERAMICCAPACITORLEAD?lastModifiedDatetime=20250909130222",
+    "settings": {
+      "value": 1e-7,
+      "volts": 100
+    }
+  },
+  {
+    "name": "RDER72A105K2K1H03B",
+    "hint": "Murata X7R ceramic · 1 µF · 100 V",
+    "datasheet": "https://pim.murata.com/asset/pim4/ceramicCapacitorLead/RDE_X7R_X7S_25V-100V_E_PDF_CERAMICCAPACITORLEAD?lastModifiedDatetime=20250909130222",
+    "settings": {
+      "value": 0.000001,
+      "volts": 100
+    }
+  },
+  {
+    "name": "RDEC71E475K2K1H03B",
+    "hint": "Murata X7S ceramic · 4.7 µF · 25 V",
+    "datasheet": "https://pim.murata.com/asset/pim4/ceramicCapacitorLead/RDE_X7R_X7S_25V-100V_E_PDF_CERAMICCAPACITORLEAD?lastModifiedDatetime=20250909130222",
+    "settings": {
+      "value": 0.0000047,
+      "volts": 25
+    }
+  },
+  {
+    "name": "RDEC71E106K2K1H03B",
+    "hint": "Murata X7S ceramic · 10 µF · 25 V",
+    "datasheet": "https://pim.murata.com/asset/pim4/ceramicCapacitorLead/RDE_X7R_X7S_25V-100V_E_PDF_CERAMICCAPACITORLEAD?lastModifiedDatetime=20250909130222",
+    "settings": {
+      "value": 0.00001,
+      "volts": 25
+    }
+  }
+]

@@ -1,0 +1,42 @@
+[
+  {
+    "name": "VB 1,0/1/9",
+    "hint": "BLOCK · 230 V to 9 V, 1 VA",
+    "datasheet": "https://www.block.eu/en_EN/productversion/vb-1019",
+    "settings": {
+      "value": 9,
+      "volts": 230,
+      "transformerVa": 1
+    }
+  },
+  {
+    "name": "VB 2,8/1/6",
+    "hint": "BLOCK · 230 V to 6 V, 2.8 VA",
+    "datasheet": "https://www.block.eu/en_EN/productversion/vb-2816",
+    "settings": {
+      "value": 6,
+      "volts": 230,
+      "transformerVa": 2.8
+    }
+  },
+  {
+    "name": "VB 2,8/1/12",
+    "hint": "BLOCK · 230 V to 12 V, 2.8 VA",
+    "datasheet": "https://www.block.eu/en_EN/productversion/vb-28112",
+    "settings": {
+      "value": 12,
+      "volts": 230,
+      "transformerVa": 2.8
+    }
+  },
+  {
+    "name": "VB 2,8/1/15",
+    "hint": "BLOCK · 230 V to 15 V, 2.8 VA",
+    "datasheet": "https://www.block.eu/en_EN/productversion/vb-28115",
+    "settings": {
+      "value": 15,
+      "volts": 230,
+      "transformerVa": 2.8
+    }
+  }
+]

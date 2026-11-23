@@ -3,6 +3,7 @@
 Living notes so later sessions keep the same context. Add a line to "Done" after each task. Do one task at a time.
 
 ## Current status (kept honest, update with every task)
+- 0.2.4 bundles 130 editable presets across 21 catalogs. The Linux x64 portable archive includes the app and the same offline compiler packs as Windows. Linux startup, offline compilation, and saving and reopening a project are pending a native user test.
 - The diode library uses static JSON files bundled with the web and desktop builds. Each part editor loads its own catalog on demand and saves editable values with the circuit, so simulation works offline. The library has 18 switching and rectifier presets, 7 Schottky presets, and 8 nominal-voltage presets in the existing 1 W Zener model. Entries include datasheet links.
 **Works** (typecheck, build and 812 unit tests pass; UI checked by hand as noted):
 - Grid editor: pan (middle mouse), zoom, parts menu, drag-in placement, select/box-select/move/rotate/duplicate/delete, undo/redo (Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, file bar buttons), floating toolbar, wires between pins, wire-to-wire junctions, touching pins connect without a wire, hover readouts. Current dashes animate on their own (frame loop runs only while something moves).
@@ -44,7 +45,9 @@ Living notes so later sessions keep the same context. Add a line to "Done" after
 **Verification so far:** the owner tried the old JSON save/load by hand and reported it works. In a browser I checked: placing parts, the Uno Blink example (LED blinks at 1.00x, serial text appears), autosave restore, the dock windows, the self-running current animation, a wire-to-wire junction, place/delete/undo/redo, creating files and a bad name in the explorer, and opening `main.ino` in the editor (highlighting, typed text kept after closing and reopening the tab). Not checked by anyone yet: Save/Open of `.gth` files with the real file dialogs (zip codec is unit-tested only), editor sync with undo/rename/delete, touching-pin contacts in the browser (unit-tested only), explorer rename/delete, Pause/Reset, Open .hex with real or broken files, PWM brightness, floating/tabbing/re-docking windows, layout restore after reload, narrow screens, Electron.
 
 ## Done
-- Prepared 0.2.3 with the x64 setup installer, versioned download links, and GitHub-ready notes in `docs/RELEASE-0.2.3.md`. The installer opened and closed in a temporary profile. The web app, download page, and matching installer are staged in `deploy/www` for the owner's upload.
+- Built 0.2.4 with 97 new datasheet-backed presets, scientific notation in numeric settings, a Windows x64 installer, and a Linux x64 portable archive. Typecheck passed, with 1,476 tests passed and 5 skipped. The packaged Windows app passed relay and diode editor checks. Verified Linux archive file modes, contents, and compiler packs. Release notes are in `docs/RELEASE-0.2.4.md`.
+- Reviewed 0.2.3 for a possible patch release. Typecheck passed and the suite passed with 1,464 tests and 5 skips under ordinary Windows temporary paths. Identified a numeric-entry improvement for the library release and recorded the Linux packaging work.
+- Released 0.2.3 with the x64 setup installer and release notes in `docs/RELEASE-0.2.3.md`. The installer opened and closed in a temporary profile. The public GitHub release and download page list the same installer checksum, and the site serves an installer of the expected size.
 - The shared scrollbar styles now use the Glass and Solid palettes, with a compact lane for dock tabs. Verified both themes, scrolling in both axes, and forced colors in Electron.
 - Expanded the diode library to 33 presets across the separate Diode, Schottky, and Zener editors. Verified family-specific search, project round-tripping, and representative forward and reverse circuit behavior.
 - Fixed the relay editor's unit columns and the diode editor's width transition. The Electron layout check confirmed the relay's four rows and the diode toolbar's intermediate widths during opening.
@@ -197,6 +200,15 @@ Built and unit-tested (full suite passes), NOT yet tried by the owner. Release p
 - Both new parts are mirrorable and live in the AC & mains menu section.
 Tests: src/sim/v022.test.ts. Not checked: the new parts in a real window (only their artwork and the example's numbers in the dev preview and the unit tests), the relay fix with the owner's exact circuit, Electron.
 
+## After 0.2.3 — part library and Linux
+
+- **0.2.4** ships the eligible non-transistor catalogs and a Linux x64 preview. A Linux tester can extract the archive, launch Gatehouse, compile a sketch offline, and save and reopen a `.gth` project.
+- Numeric settings accept scientific notation, such as `4.5e-9` in the diode saturation-current field, alongside SI shorthand such as `4.5n`.
+- Complete library coverage in **0.3.0** with BJT, MOSFET, and IGBT presets where real devices fit the available models. These types currently use fixed models. Wire the editable parameters and ratings into the simulation and verify that old projects retain their defaults.
+- Catalog eligibility requires a distinct part number with specifications that affect its existing Gatehouse model. Catalogs cover diodes, relays, bridge rectifiers, passives, LDRs, thermistors, switches, transformers, bulbs, active buzzers, and DC motors. The regular LED keeps its color picker. The RGB LED and seven-segment parts use fixed light models. Batteries, power supplies, the signal generator, ground, and the outlet are generic circuit elements. Boards and ICs already have specific models, and the generic logic gates do not model IC packages or alternate device parameters.
+- Keep separate Diode, Schottky, and Zener catalogs. Use datasheet-backed presets compatible with the part's model and pin layout. The relay catalog applies coil resistance and pull-in and release voltages; contact behavior keeps its generic approximation.
+- Put part-number search below the manual settings in each eligible editor. Selecting a preset fills in its supported parameters, which remain editable. Bundle the catalogs with the app and save the part number and parameter values in the project so circuits work offline and reopen with the same values. Preserve defaults for existing projects.
+
 ## Findable in Google (owner's wish, 2026-11-21; release not decided: 0.3.0 or 1.0)
 
 Not started. Expect days to weeks before a new site is indexed; a search for the bare word Gatehouse is hard to win.
@@ -207,7 +219,7 @@ Not started. Expect days to weeks before a new site is indexed; a search for the
 - The site must stay honest about data: no cookies, no tracking, and the privacy line in the footer must match what Caddy logs.
 
 ## Linux and macOS builds (owner, 2026-11-21: optional, not required for 0.2.0)
-Cannot be built reliably from Windows (macOS needs macOS tooling; Linux needs WSL or Docker). Plan: one GitHub Actions workflow that runs on a pushed tag (`v*`) and builds on Windows, Linux and macOS runners (free for a public repo): `npm ci`, `npm run toolchain:fetch`, `npm run toolchain:packs`, `npm run dist` with the right electron-builder target per OS (NSIS, AppImage, dmg), then attaches the files to the release. Notes: nobody has tested Linux; **the owner's friend has a Mac and can test the macOS build** (unsigned: Gatehouse is blocked by Gatekeeper until right-click > Open, and Apple Silicon may refuse an unsigned build; real support needs an Apple developer account, about $99 a year, and notarization); the icon is 256 px and Linux/macOS want 512 px (enlarge it or export a bigger one); label both builds "experimental, untested" in the release notes until someone has run them. Also gives a reproducible Windows installer. Signing (all platforms): apply to SignPath Foundation (free for open source) for Windows after 0.2.0.
+The 0.2.4 Linux x64 preview is a portable tarball built with `npm run dist:linux:portable`. The Ubuntu workflow `.github/workflows/build-linux.yml` also builds an AppImage and uploads it as a workflow artifact. Both use the bundled compiler packs. The owner has a friend who can test Linux. A macOS build remains future work.
 
 ## Release checklist (nothing is published before 1.0; owner's decision 2026-11-19)
 Do before the first public web deploy or installer:

@@ -1,0 +1,74 @@
+[
+  {
+    "name": "MB2S",
+    "hint": "Vishay · 0.5 A average, 200 V peak reverse",
+    "datasheet": "https://www.vishay.com/en/product/88661/",
+    "settings": {
+      "value": 0.5,
+      "volts": 200
+    }
+  },
+  {
+    "name": "MB6S",
+    "hint": "Vishay · 0.5 A average, 600 V peak reverse",
+    "datasheet": "https://www.vishay.com/en/product/88661/",
+    "settings": {
+      "value": 0.5,
+      "volts": 600
+    }
+  },
+  {
+    "name": "W01G",
+    "hint": "Vishay · 1.5 A average, 100 V peak reverse",
+    "datasheet": "https://www.vishay.com/docs/88769/w005g.pdf",
+    "settings": {
+      "value": 1.5,
+      "volts": 100
+    }
+  },
+  {
+    "name": "W04G",
+    "hint": "Vishay · 1.5 A average, 400 V peak reverse",
+    "datasheet": "https://www.vishay.com/docs/88769/w005g.pdf",
+    "settings": {
+      "value": 1.5,
+      "volts": 400
+    }
+  },
+  {
+    "name": "W10G",
+    "hint": "Vishay · 1.5 A average, 1000 V peak reverse",
+    "datasheet": "https://www.vishay.com/docs/88769/w005g.pdf",
+    "settings": {
+      "value": 1.5,
+      "volts": 1000
+    }
+  },
+  {
+    "name": "GBU4D",
+    "hint": "Vishay · 4 A average, 200 V peak reverse",
+    "datasheet": "https://www.vishay.com/docs/88614/gbu4a.pdf",
+    "settings": {
+      "value": 4,
+      "volts": 200
+    }
+  },
+  {
+    "name": "GBU4M",
+    "hint": "Vishay · 4 A average, 1000 V peak reverse",
+    "datasheet": "https://www.vishay.com/docs/88614/gbu4a.pdf",
+    "settings": {
+      "value": 4,
+      "volts": 1000
+    }
+  },
+  {
+    "name": "KBU6M",
+    "hint": "Vishay · 6 A average, 1000 V peak reverse",
+    "datasheet": "https://www.vishay.com/docs/98732/kbu6.pdf",
+    "settings": {
+      "value": 6,
+      "volts": 1000
+    }
+  }
+]

@@ -2,13 +2,13 @@
 // ProjectFile or throws a ProjectError that says what is wrong and where.
 
 import { MAX_ZOOM, MIN_ZOOM } from '../camera';
-import { DIODE_FIELDS, isDiodeFamily, isDiodeField, isDiodePresetName } from '../diodepresets';
 import { isLedColor } from '../ledcolor';
 import { CLOCK_CHOICES } from '../mcu/clock';
 import {
   endKey, isPinEnd, sameEnd, type GridPoint, type Junction, type PinRef, type PlacedPart, type Rotation, type Wire, type WireEnd,
 } from '../model';
-import { canMirror, getPart, type PartState } from '../parts';
+import { canMirror, getPart, PARTS, type PartState } from '../parts';
+import { isPartPresetName } from '../partpresets';
 import { isBoardType } from './boardid';
 import { normalizeBoardName } from './boardname';
 import { PROJECT_FORMAT, PROJECT_VERSION, ProjectError, type CameraState, type ProjectFile } from './format';
@@ -76,12 +76,14 @@ function boardName(text: string, typeId: string, where: string): string {
 }
 
 const MAX_BURN_REASON = 200;
+const EXTRA_SETTINGS = new Set(PARTS.flatMap((type) => type.fields?.map((field) => field.key) ?? []));
+const PART_STATE_KEYS = ['closed', 'position', 'value', 'burned', 'burnedBy', 'name', 'clockHz', 'vcc', 'lux', 'temp', 'color',
+  'diodePreset', 'partPreset', ...EXTRA_SETTINGS];
 
 function partState(v: unknown, typeId: string, where: string): PartState {
   const o = obj(v, where);
   // v4: a board's program is a .hex file in its folder, no longer part state.
-  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'burnedBy', 'name', 'clockHz', 'vcc', 'lux', 'temp', 'color', 'wave', 'amp', 'offset', 'duty', 'limit', 'freq', 'volts', 'coilOhms', 'pullVolts', 'releaseVolts',
-    'diodePreset', ...DIODE_FIELDS.map((field) => field.key)], where);
+  onlyKeys(o, PART_STATE_KEYS, where);
   const type = getPart(typeId);
   const state: PartState = {};
   for (const key of Object.keys(o)) {
@@ -103,22 +105,23 @@ function partState(v: unknown, typeId: string, where: string): PartState {
       const p = num(o, key, where);
       if (p < 0 || p > 1) fail(`${where}.position must be between 0 and 1 (got ${p}).`);
       state.position = p;
-    } else if (key === 'diodePreset') {
+    } else if (key === 'diodePreset' || key === 'partPreset') {
       const preset = str(o, key, where);
-      if (!isDiodeFamily(typeId) || !isDiodePresetName(preset)) fail(`${where}.diodePreset must be a valid diode part number.`);
-      state.diodePreset = preset;
-    } else if (key === 'wave' || key === 'amp' || key === 'offset' || key === 'duty' || key === 'limit' || key === 'freq' || key === 'volts'
-        || key === 'coilOhms' || key === 'pullVolts' || key === 'releaseVolts' || isDiodeField(key)) {
+      if (!type?.catalog || (type.catalog.nameKey ?? 'partPreset') !== key || !isPartPresetName(preset)) {
+        fail(`${where}.${key} must be a valid part number for ${typeId}.`);
+      }
+      state[key] = preset;
+    } else if (key !== 'value' && key !== 'lux' && key !== 'color' && key !== 'temp' && key !== 'vcc') {
       const field = type?.fields?.find((f) => f.key === key);
       if (!field) fail(`${where}.${key} is only allowed on parts that have this setting. A ${typeId} part has no such setting.`);
-      if (key === 'wave') {
+      if (field.key === 'wave') {
         const w = str(o, key, where);
         if (!field.choices?.includes(w)) fail(`${where}.wave must be one of ${field.choices?.join(', ')} (got ${JSON.stringify(w)}).`);
         state.wave = w as NonNullable<PartState['wave']>;
       } else {
         const v = num(o, key, where);
         if (v < field.min || v > field.max) fail(`${where}.${key} must be between ${field.min} and ${field.max} ${field.unit} (got ${v}).`);
-        state[key] = v;
+        state[field.key] = v;
       }
     } else if (key === 'lux') {
       // An LDR's light level: only on parts whose value popup edits it, within its range.

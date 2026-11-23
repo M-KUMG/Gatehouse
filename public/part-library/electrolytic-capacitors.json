@@ -1,0 +1,74 @@
+[
+  {
+    "name": "EEUFR0J221",
+    "hint": "Panasonic FR · 220 µF · 6.3 V",
+    "datasheet": "https://industrial.panasonic.com/cdbs/www-data/pdf/RDF0000/ABA0000C1259.pdf",
+    "settings": {
+      "value": 0.00022,
+      "volts": 6.3
+    }
+  },
+  {
+    "name": "EEUFR1A102",
+    "hint": "Panasonic FR · 1000 µF · 10 V",
+    "datasheet": "https://industrial.panasonic.com/cdbs/www-data/pdf/RDF0000/ABA0000C1259.pdf",
+    "settings": {
+      "value": 0.001,
+      "volts": 10
+    }
+  },
+  {
+    "name": "EEUFR1C101",
+    "hint": "Panasonic FR · 100 µF · 16 V",
+    "datasheet": "https://industrial.panasonic.com/cdbs/www-data/pdf/RDF0000/ABA0000C1259.pdf",
+    "settings": {
+      "value": 0.0001,
+      "volts": 16
+    }
+  },
+  {
+    "name": "EEUFR1C471",
+    "hint": "Panasonic FR · 470 µF · 16 V",
+    "datasheet": "https://industrial.panasonic.com/cdbs/www-data/pdf/RDF0000/ABA0000C1259.pdf",
+    "settings": {
+      "value": 0.00047,
+      "volts": 16
+    }
+  },
+  {
+    "name": "EEUFR1E221",
+    "hint": "Panasonic FR · 220 µF · 25 V",
+    "datasheet": "https://industrial.panasonic.com/cdbs/www-data/pdf/RDF0000/ABA0000C1259.pdf",
+    "settings": {
+      "value": 0.00022,
+      "volts": 25
+    }
+  },
+  {
+    "name": "EEUFR1E471",
+    "hint": "Panasonic FR · 470 µF · 25 V",
+    "datasheet": "https://industrial.panasonic.com/cdbs/www-data/pdf/RDF0000/ABA0000C1259.pdf",
+    "settings": {
+      "value": 0.00047,
+      "volts": 25
+    }
+  },
+  {
+    "name": "EEUFR1V330",
+    "hint": "Panasonic FR · 33 µF · 35 V",
+    "datasheet": "https://industrial.panasonic.com/cdbs/www-data/pdf/RDF0000/ABA0000C1259.pdf",
+    "settings": {
+      "value": 0.000033,
+      "volts": 35
+    }
+  },
+  {
+    "name": "EEUFR1H101",
+    "hint": "Panasonic FR · 100 µF · 50 V",
+    "datasheet": "https://industrial.panasonic.com/cdbs/www-data/pdf/RDF0000/ABA0000C1259.pdf",
+    "settings": {
+      "value": 0.0001,
+      "volts": 50
+    }
+  }
+]

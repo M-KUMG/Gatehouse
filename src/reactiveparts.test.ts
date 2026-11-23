@@ -39,6 +39,9 @@ describe('capacitor and inductor parts', () => {
     expect(parseSI('10m')).toBeCloseTo(0.01, 12);
     expect(parseSI('22pF')).toBeCloseTo(22e-12, 18);
     expect(parseSI('10 mH')).toBeCloseTo(0.01, 12);
+    expect(parseSI('4.5e-9 A')).toBe(4.5e-9);
+    expect(parseSI('-1,2E+2 Ω')).toBe(-120);
+    expect(parseSI('1e999')).toBeNull();
     expect(parseSI('1')).toBe(1);
     expect(parseSI('abc')).toBeNull();
     expect(parseSI('')).toBeNull();

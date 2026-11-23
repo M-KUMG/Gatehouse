@@ -1,18 +1,6 @@
 import { D1N4148, VT } from './sim/devices';
 import type { ComponentModel } from './sim/types';
-import { ZENER_MAX_VOLTS, ZENER_MIN_VOLTS } from './sim/zener';
-
-const DIODE_CATALOG_FILES = {
-  diode: 'diodes.json',
-  schottky: 'schottky.json',
-  zener: 'zeners.json',
-} as const;
-
-export type DiodeFamily = keyof typeof DIODE_CATALOG_FILES;
-
-export function isDiodeFamily(typeId: string): typeId is DiodeFamily {
-  return Object.hasOwn(DIODE_CATALOG_FILES, typeId);
-}
+import type { PartCatalog } from './partpresets';
 
 export const DIODE_FIELDS = [
   { key: 'diodeIs', label: 'Saturation current', unit: 'A', min: 1e-12, max: 1e-3 },
@@ -24,6 +12,13 @@ export const DIODE_FIELDS = [
 
 export type DiodeField = typeof DIODE_FIELDS[number]['key'];
 export type DiodeSettings = Record<DiodeField, number>;
+
+const diodeKeys = DIODE_FIELDS.map((field) => field.key);
+export const DIODE_CATALOGS = {
+  diode: { file: 'diodes.json', label: 'diode', keys: diodeKeys, nameKey: 'diodePreset' },
+  schottky: { file: 'schottky.json', label: 'Schottky', keys: diodeKeys, nameKey: 'diodePreset' },
+  zener: { file: 'zeners.json', label: 'Zener', keys: ['value'], nameKey: 'diodePreset' },
+} as const satisfies Record<string, PartCatalog>;
 
 export const DEFAULT_DIODE_SETTINGS: DiodeSettings = {
   diodeIs: D1N4148.is,
@@ -43,18 +38,8 @@ export const DEFAULT_SCHOTTKY_SETTINGS: DiodeSettings = {
   diodeReverseVolts: 40,
 };
 
-export interface DiodePreset {
-  name: string;
-  hint: string;
-  settings: Partial<DiodeSettings> & { value?: number };
-}
-
 export function isDiodeField(key: string): key is DiodeField {
   return DIODE_FIELDS.some((field) => field.key === key);
-}
-
-export function isDiodePresetName(value: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9 ._+-]{0,63}$/.test(value);
 }
 
 /** The chosen numeric settings travel with the project. No catalog lookup is needed to solve it. */
@@ -65,48 +50,4 @@ export function diodeModel(state: Partial<DiodeSettings>, defaults = DEFAULT_DIO
     ...(state.diodeForwardAmps === undefined ? {} : { ratedForwardAmps: state.diodeForwardAmps }),
     ...(state.diodeReverseVolts === undefined ? {} : { ratedReverseVolts: state.diodeReverseVolts }),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-export function readDiodeCatalog(data: unknown, family: DiodeFamily = 'diode'): DiodePreset[] {
-  if (!Array.isArray(data)) throw new Error('Invalid diode catalog');
-  const fields = family === 'zener' ? [{ key: 'value', min: ZENER_MIN_VOLTS, max: ZENER_MAX_VOLTS }] as const : DIODE_FIELDS;
-  const names = new Set<string>();
-  return data.map((item: unknown) => {
-    if (!isRecord(item) || typeof item.name !== 'string' || !isDiodePresetName(item.name)
-      || typeof item.hint !== 'string' || !isRecord(item.settings)) throw new Error('Invalid diode preset');
-    const nameKey = item.name.toUpperCase();
-    if (names.has(nameKey)) throw new Error('Duplicate diode preset');
-    names.add(nameKey);
-    if (Object.keys(item.settings).length !== fields.length) throw new Error('Invalid diode preset settings');
-    const settings: DiodePreset['settings'] = {};
-    for (const field of fields) {
-      const value = item.settings[field.key];
-      if (typeof value !== 'number' || !Number.isFinite(value) || value < field.min || value > field.max) {
-        throw new Error('Invalid diode setting: ' + field.key);
-      }
-      settings[field.key] = value;
-    }
-    return { name: item.name, hint: item.hint, settings };
-  });
-}
-
-const catalogs = new Map<DiodeFamily, Promise<DiodePreset[]>>();
-
-export function loadDiodeCatalog(family: DiodeFamily): Promise<DiodePreset[]> {
-  const cached = catalogs.get(family);
-  if (cached) return cached;
-  const url = new URL(`part-library/${DIODE_CATALOG_FILES[family]}`, document.baseURI);
-  const catalog = fetch(url).then(async (response) => {
-    if (!response.ok) throw new Error('Diode catalog unavailable');
-    return readDiodeCatalog(await response.json(), family);
-  }).catch((error: unknown) => {
-    catalogs.delete(family);
-    throw error;
-  });
-  catalogs.set(family, catalog);
-  return catalog;
 }

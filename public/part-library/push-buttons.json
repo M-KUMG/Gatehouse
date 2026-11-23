@@ -1,0 +1,18 @@
+[
+  {
+    "name": "B3F-1000",
+    "hint": "Omron 6 mm tactile button · 50 mA at up to 24 V DC",
+    "datasheet": "https://components.omron.com/us-en/system/files/2025-06/ds_related_pdf/Y272-E1.pdf",
+    "settings": {
+      "contactAmps": 0.05
+    }
+  },
+  {
+    "name": "SKHHAKA010",
+    "hint": "Alps Alpine 6 mm tactile button · 50 mA at 12 V DC",
+    "datasheet": "https://tech.alpsalpine.com/e/products/detail/SKHHAKA010/",
+    "settings": {
+      "contactAmps": 0.05
+    }
+  }
+]

@@ -16,7 +16,7 @@ const defs = `
 </linearGradient>`;
 
 /** The motor art; `burned` darkens the can. */
-export function motorSvg(burned = false): string {
+export function motorSvg(burned = false, volts = 6): string {
   const body = `
 ${hLead(0, 24, 20, 2.6)}
 ${hLead(0, 24, 40, 2.6)}
@@ -26,7 +26,7 @@ ${hLead(0, 24, 40, 2.6)}
 <rect x="86" y="27" width="14" height="6" rx="2" fill="#c9ced4"/>
 <circle cx="31" cy="30" r="3" fill="#2a2d31"/>
 <g font-family="Arial, Helvetica, sans-serif" font-weight="bold" font-size="8" fill="#303338" text-anchor="middle">
-  <text x="54" y="28">DC MOTOR</text><text x="54" y="39" font-size="6.5" font-weight="normal">6 V</text>
+  <text x="54" y="28">DC MOTOR</text><text x="54" y="39" font-size="6.5" font-weight="normal">${volts} V</text>
 </g>
 <text x="16" y="17" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="#c0392b">+</text>
 ${burned ? '<rect x="24" y="8" width="58" height="44" rx="6" fill="#000" fill-opacity=".45"/>' : ''}`;

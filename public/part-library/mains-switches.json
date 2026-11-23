@@ -1,0 +1,18 @@
+[
+  {
+    "name": "752101",
+    "hint": "Legrand Valena Life one-way · 10 AX, 250 V AC",
+    "datasheet": "https://www.legrand.com/ecatalogue/en/catalog/products/one-way-switch-valena-life-10-ax-250-v-with-cover-plate-white-752101",
+    "settings": {
+      "contactAmps": 10
+    }
+  },
+  {
+    "name": "KB31_1",
+    "hint": "Schneider Vivace one-way · 16 AX, 250 V AC",
+    "datasheet": "https://www.se.com/in/en/product/KB31_1/switch-vivce-250v-16ax-1-gang-1-way-white/",
+    "settings": {
+      "contactAmps": 16
+    }
+  }
+]

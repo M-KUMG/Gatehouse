@@ -1,0 +1,47 @@
+[
+  {
+    "name": "2825",
+    "hint": "OSRAM W5W · 12 V, 5 W",
+    "datasheet": "https://www.osram.com/appsj/pdc/pdf.do?cid=GPS01_1057061&lid=EN&mpid=ZMP_1285773&vid=PP_EUROPE_PL_eCat",
+    "settings": {
+      "value": 5,
+      "volts": 12
+    }
+  },
+  {
+    "name": "7506",
+    "hint": "OSRAM P21W · 12 V, 21 W",
+    "datasheet": "https://www.osram.com/ecat/Lamps%20with%20metal%20bases-Signal%20lamps-Car%20lighting-Automotive/in/en/GPS01_1057060/ZMP_1285824/",
+    "settings": {
+      "value": 21,
+      "volts": 12
+    }
+  },
+  {
+    "name": "64150",
+    "hint": "OSRAM H1 · 12 V, 55 W",
+    "datasheet": "https://www.osram.com/appsj/pdc/pdf.do?cid=GPS01_1057023&lid=EN&mpid=ZMP_61208&vid=PP_EUROPE_UK_eCat",
+    "settings": {
+      "value": 55,
+      "volts": 12
+    }
+  },
+  {
+    "name": "4008321419415",
+    "hint": "LEDVANCE Classic A frosted E27 · 230 V, 40 W",
+    "datasheet": "https://www.ledvance.com/en-asia/home-lighting/products/incandescent-lamps/incandescent-lamps--classic-bulb-shapes/incandescent-lamps--classic-bulb-shape-c7523",
+    "settings": {
+      "value": 40,
+      "volts": 230
+    }
+  },
+  {
+    "name": "4008321419552",
+    "hint": "LEDVANCE Classic A frosted E27 · 230 V, 60 W",
+    "datasheet": "https://www.ledvance.com/en-asia/home-lighting/products/incandescent-lamps/incandescent-lamps--classic-bulb-shapes/incandescent-lamps--classic-bulb-shape-c7523",
+    "settings": {
+      "value": 60,
+      "volts": 230
+    }
+  }
+]

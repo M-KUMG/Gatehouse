@@ -1,0 +1,112 @@
+[
+  {
+    "name": "SRD-05VDC-SL-C",
+    "hint": "Songle · 5 V DC SPDT, 70 Ω",
+    "datasheet": "https://docs.baud-dance.com/assets/files/%E7%BB%A7%E7%94%B5%E5%99%A8SRD-5VDC-SL-C-70ce928566405a30bf507703caa472bf.pdf",
+    "settings": {
+      "value": 5,
+      "coilOhms": 70,
+      "pullVolts": 3.75,
+      "releaseVolts": 0.5
+    }
+  },
+  {
+    "name": "G5LE-1 DC5",
+    "hint": "Omron · 5 V DC SPDT, 63 Ω",
+    "datasheet": "https://components.omron.com/us-en/datasheet_pdf/K100-E1.pdf",
+    "settings": {
+      "value": 5,
+      "coilOhms": 63,
+      "pullVolts": 3.75,
+      "releaseVolts": 0.5
+    }
+  },
+  {
+    "name": "JS1-5V-F",
+    "hint": "Panasonic · 5 V DC SPDT, 69.4 Ω",
+    "datasheet": "https://industry.panasonic.com/ap/en/products/control/relay/power/number/ajs1319f",
+    "settings": {
+      "value": 5,
+      "coilOhms": 69.4,
+      "pullVolts": 3.5,
+      "releaseVolts": 0.5
+    }
+  },
+  {
+    "name": "SRD-06VDC-SL-C",
+    "hint": "Songle · 6 V DC SPDT, 100 Ω",
+    "datasheet": "https://docs.baud-dance.com/assets/files/%E7%BB%A7%E7%94%B5%E5%99%A8SRD-5VDC-SL-C-70ce928566405a30bf507703caa472bf.pdf",
+    "settings": {
+      "value": 6,
+      "coilOhms": 100,
+      "pullVolts": 4.5,
+      "releaseVolts": 0.6
+    }
+  },
+  {
+    "name": "SRD-09VDC-SL-C",
+    "hint": "Songle · 9 V DC SPDT, 225 Ω",
+    "datasheet": "https://docs.baud-dance.com/assets/files/%E7%BB%A7%E7%94%B5%E5%99%A8SRD-5VDC-SL-C-70ce928566405a30bf507703caa472bf.pdf",
+    "settings": {
+      "value": 9,
+      "coilOhms": 225,
+      "pullVolts": 6.75,
+      "releaseVolts": 0.9
+    }
+  },
+  {
+    "name": "SRD-12VDC-SL-C",
+    "hint": "Songle · 12 V DC SPDT, 400 Ω",
+    "datasheet": "https://docs.baud-dance.com/assets/files/%E7%BB%A7%E7%94%B5%E5%99%A8SRD-5VDC-SL-C-70ce928566405a30bf507703caa472bf.pdf",
+    "settings": {
+      "value": 12,
+      "coilOhms": 400,
+      "pullVolts": 9,
+      "releaseVolts": 1.2
+    }
+  },
+  {
+    "name": "G5LE-1 DC12",
+    "hint": "Omron · 12 V DC SPDT, 360 Ω",
+    "datasheet": "https://components.omron.com/us-en/datasheet_pdf/K100-E1.pdf",
+    "settings": {
+      "value": 12,
+      "coilOhms": 360,
+      "pullVolts": 9,
+      "releaseVolts": 1.2
+    }
+  },
+  {
+    "name": "JS1F-12V-F",
+    "hint": "Panasonic · 12 V DC SPDT, 400 Ω",
+    "datasheet": "https://industry.panasonic.com/global/en/products/control/relay/power/number/ajs1211f",
+    "settings": {
+      "value": 12,
+      "coilOhms": 400,
+      "pullVolts": 8.4,
+      "releaseVolts": 1.2
+    }
+  },
+  {
+    "name": "SRD-24VDC-SL-C",
+    "hint": "Songle · 24 V DC SPDT, 1.6 kΩ",
+    "datasheet": "https://docs.baud-dance.com/assets/files/%E7%BB%A7%E7%94%B5%E5%99%A8SRD-5VDC-SL-C-70ce928566405a30bf507703caa472bf.pdf",
+    "settings": {
+      "value": 24,
+      "coilOhms": 1600,
+      "pullVolts": 18,
+      "releaseVolts": 2.4
+    }
+  },
+  {
+    "name": "G5LE-1 DC24",
+    "hint": "Omron · 24 V DC SPDT, 1.44 kΩ",
+    "datasheet": "https://components.omron.com/us-en/datasheet_pdf/K100-E1.pdf",
+    "settings": {
+      "value": 24,
+      "coilOhms": 1440,
+      "pullVolts": 18,
+      "releaseVolts": 2.4
+    }
+  }
+]

@@ -1,0 +1,35 @@
+[
+  {
+    "name": "CMI-9605IC-0580T",
+    "hint": "Same Sky · 5 V DC, 30 mA",
+    "datasheet": "https://www.sameskydevices.com/product/resource/cmi-9605ic-0580t.pdf",
+    "settings": {
+      "value": 5,
+      "buzzerMinVolts": 3,
+      "buzzerMaxVolts": 7,
+      "buzzerRatedAmps": 0.03
+    }
+  },
+  {
+    "name": "CMI-1275-85T",
+    "hint": "Same Sky · 5 V DC, 30 mA",
+    "datasheet": "https://www.sameskydevices.com/product/resource/cmi-1275-85t.pdf",
+    "settings": {
+      "value": 5,
+      "buzzerMinVolts": 3,
+      "buzzerMaxVolts": 7,
+      "buzzerRatedAmps": 0.03
+    }
+  },
+  {
+    "name": "CMI-9650C-120",
+    "hint": "Same Sky · 12 V DC, 30 mA",
+    "datasheet": "https://www.sameskydevices.com/product/resource/cmi-9650c-120.pdf",
+    "settings": {
+      "value": 12,
+      "buzzerMinVolts": 10,
+      "buzzerMaxVolts": 13,
+      "buzzerRatedAmps": 0.03
+    }
+  }
+]

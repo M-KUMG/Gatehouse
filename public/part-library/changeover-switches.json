@@ -1,0 +1,26 @@
+[
+  {
+    "name": "733801",
+    "hint": "Legrand Synergy two-way · 10 AX, 250 V AC",
+    "datasheet": "https://www.legrand.com/ecatalogue/en/catalog/products/synergy-single-pole-switch-1-gang-2-way-10-ax-250-v-metalclad-733801",
+    "settings": {
+      "contactAmps": 10
+    }
+  },
+  {
+    "name": "752027",
+    "hint": "Legrand Valena In’Matic two-way · 16 AX, 250 V AC",
+    "datasheet": "https://www.legrand.com/ecatalogue/en/catalog/products/two-way-switch-valena-inmatic-16-ax-250-v-752027",
+    "settings": {
+      "contactAmps": 16
+    }
+  },
+  {
+    "name": "KB31_WE_G15",
+    "hint": "Schneider Vivace two-way · 16 AX, 250 V AC",
+    "datasheet": "https://www.se.com/my/en/product/KB31_WE_G15/vivace-16ax-250v-1gang-2way-switchwhite/",
+    "settings": {
+      "contactAmps": 16
+    }
+  }
+]

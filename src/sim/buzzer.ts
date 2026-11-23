@@ -20,6 +20,7 @@ export type BuzzerModel = Extract<ComponentModel, { kind: 'buzzer' }>;
 
 /** The active buzzer part: off below 2.0 V (1 MOhm), on above 2.5 V (150 ohm). */
 export const ACTIVE_BUZZER: BuzzerModel = { kind: 'buzzer', vOff: 2.0, vOn: 2.5, ohmsOff: 1e6, ohmsOn: 150 };
+export const BUZZER_DEFAULT_MAX_VOLTS = 6.5;
 
 /** The oscillator runs (it sounds) from the middle of the turn-on range: 2.25 V. */
 export function buzzerSounding(model: BuzzerModel, volts: number): boolean {

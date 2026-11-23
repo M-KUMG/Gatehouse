@@ -4,20 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Download Gatehouse</title>
-  <meta name="description" content="Download the Gatehouse desktop app for Windows, from our server or from GitHub." />
+  <meta name="description" content="Download Gatehouse for Windows or try the portable Linux preview." />
   <meta name="theme-color" content="#090b11" />
   <link rel="icon" type="image/png" href="../icon.png" />
   <!-- The downloads page of Gatehouse: one static file, no framework. Everything that changes per release is in
        the block below (docs/PLAN.md, "Main site"). A platform with no "files" is shown greyed out as Coming soon. -->
   <script>
     window.GATEHOUSE_DOWNLOADS = {
-      version: '0.2.3',
+      version: '0.2.4',
       // What is new in this version (one line each), shown above the downloads.
       notes: [
-        'Searchable library with 33 presets across the Diode, Schottky, and Zener editors',
-        'Editable SPDT relay coil resistance, pull-in voltage, and release voltage',
-        'Better recovery from difficult light transitions in the transient simulator',
-        'Refined part editor animations and themed scrollbars',
+        'Searchable library with 130 presets across 21 component editors',
+        'Editable ratings and model settings for more component types',
+        'Scientific notation in numeric component settings',
+        'Portable Linux x64 preview with offline compiler packs',
       ],
       allReleasesUrl: 'https://github.com/M-KUMG/Gatehouse/releases',
       homeUrl: '../',
@@ -26,15 +26,25 @@
         {
           name: 'Windows',
           detail: 'Windows 10 or 11, 64-bit · installer (.exe)',
-          fileName: 'Gatehouse-Setup-0.2.3.exe',
+          fileName: 'Gatehouse-Setup-0.2.4.exe',
           size: '91 MB', // shown under the buttons; empty hides it
-          sha256: '69087fc86afdc1f30920e0a0e7a578f3a01977b6c963cf09c20ab082fd821693', // of the installer (Get-FileHash); empty hides it
+          sha256: '04228298e760fff07bd527f79a31a195c7c4be8b5f3a0098a10afa465331c313',
           files: [
-            { label: 'Download from our server', url: 'Gatehouse-Setup-0.2.3.exe' },
-            { label: 'Download from GitHub', url: 'https://github.com/M-KUMG/Gatehouse/releases/download/v0.2.3/Gatehouse-Setup-0.2.3.exe' },
+            { label: 'Download from our server', url: 'Gatehouse-Setup-0.2.4.exe' },
+            { label: 'Download from GitHub', url: 'https://github.com/M-KUMG/Gatehouse/releases/download/v0.2.4/Gatehouse-Setup-0.2.4.exe' },
           ],
         },
-        { name: 'Linux', detail: 'Coming soon' },
+        {
+          name: 'Linux',
+          detail: '64-bit x86 · portable preview (.tar.gz)',
+          fileName: 'Gatehouse-0.2.4-linux-x64.tar.gz',
+          size: '122 MB',
+          sha256: '58d3f5f4845edddb9d86e738204a4135f6b2954d8558ea08d448763d80a4bea7',
+          files: [
+            { label: 'Download from our server', url: 'Gatehouse-0.2.4-linux-x64.tar.gz' },
+            { label: 'Download from GitHub', url: 'https://github.com/M-KUMG/Gatehouse/releases/download/v0.2.4/Gatehouse-0.2.4-linux-x64.tar.gz' },
+          ],
+        },
         { name: 'macOS', detail: 'Coming soon' },
       ],
     };

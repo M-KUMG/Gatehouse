@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { SCHOTTKY_1N5819 } from './basicparts';
 import { toolbarButtons } from './boardcontrols';
-import { readDiodeCatalog, type DiodeFamily } from './diodepresets';
+import { readPartCatalog } from './partpresets';
 import { searchNamed } from './partsearch';
 import { getPart, partWarning } from './parts';
 import { decodeGth, encodeGth } from './project/gth';
@@ -13,8 +13,9 @@ import { D1N4148 } from './sim/devices';
 import { zenerModel } from './sim/zener';
 
 const raw = JSON.parse(readFileSync(new URL('../public/part-library/diodes.json', import.meta.url), 'utf8'));
-const catalog = (family: DiodeFamily, file: string) => readDiodeCatalog(
-  JSON.parse(readFileSync(new URL(`../public/part-library/${file}.json`, import.meta.url), 'utf8')), family,
+const readDiodeCatalog = (data: unknown, family = 'diode') => readPartCatalog(data, getPart(family)!);
+const catalog = (family: string) => readDiodeCatalog(
+  JSON.parse(readFileSync(new URL(`../public/part-library/${getPart(family)!.catalog!.file}`, import.meta.url), 'utf8')), family,
 );
 
 function bias(model: ComponentModel, volts: number, ohms: number) {
@@ -68,8 +69,8 @@ describe('diode presets', () => {
     const project = new Project();
     const families = [
       { type: 'diode', presets: readDiodeCatalog(raw), partNumber: '1N4007' },
-      { type: 'schottky', presets: catalog('schottky', 'schottky'), partNumber: 'SS34' },
-      { type: 'zener', presets: catalog('zener', 'zeners'), partNumber: '1N4742A' },
+      { type: 'schottky', presets: catalog('schottky'), partNumber: 'SS34' },
+      { type: 'zener', presets: catalog('zener'), partNumber: '1N4742A' },
     ] as const;
     for (const { type, presets, partNumber } of families) {
       for (const other of families) {
@@ -87,13 +88,13 @@ describe('diode presets', () => {
   });
 
   it('uses a lower forward drop for a Schottky preset and gives a Zener preset reverse breakdown', () => {
-    const schottky = catalog('schottky', 'schottky').find((preset) => preset.name === 'SS14')!;
+    const schottky = catalog('schottky').find((preset) => preset.name === 'SS14')!;
     const lowDrop = bias(getPart('schottky')!.sim!(schottky.settings), 5, 100);
     const silicon = bias(getPart('diode')!.sim!({}), 5, 100);
     expect(lowDrop.converged && silicon.converged).toBe(true);
     expect(lowDrop.parts[3].voltage).toBeLessThan(silicon.parts[3].voltage - 0.2);
 
-    const zener = catalog('zener', 'zeners').find((preset) => preset.name === '1N4742A')!;
+    const zener = catalog('zener').find((preset) => preset.name === '1N4742A')!;
     const reverse = bias(getPart('zener')!.sim!(zener.settings), -24, 600);
     expect(reverse.converged).toBe(true);
     expect(reverse.parts[3].voltage).toBeCloseTo(-12, 1);

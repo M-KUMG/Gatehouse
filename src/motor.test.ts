@@ -117,8 +117,11 @@ describe('motor part', () => {
     for (const p of type.pins) expect(Number.isInteger(p.x) && Number.isInteger(p.y)).toBe(true);
     expect(type.sim!({}).kind).toBe('motor');
     expect(type.sim!({ burned: true })).toEqual({ kind: 'open' });
-    expect(type.warnAbove).toBe(1.5);
-    expect(type.burnAbove).toBe(10);
+    const reading = { voltage: 6, current: 1.5, power: 9, pins: {} };
+    expect(type.warnWhen!(reading, {})).toBeNull();
+    expect(type.warnWhen!({ ...reading, current: 1.51 }, {})).toContain('current');
+    expect(type.burnWhen!({ ...reading, current: 10 }, {})).toBeNull();
+    expect(type.burnWhen!({ ...reading, current: 10.01 }, {})).toContain('current');
     const input = circuit(6);
     const state = run(input, initialState(input, { charged: false }), 0.5).state;
     const res = solveStep(input, state, 1e-3).result;

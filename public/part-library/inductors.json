@@ -1,0 +1,65 @@
+[
+  {
+    "name": "77F100K-RC",
+    "hint": "Bourns axial choke · 10 µH · 0.65 Ω max DCR",
+    "datasheet": "https://www.bourns.com/data/global/pdfs/77F_series.pdf",
+    "settings": {
+      "value": 0.00001,
+      "dcr": 0.65
+    }
+  },
+  {
+    "name": "77F220K-RC",
+    "hint": "Bourns axial choke · 22 µH · 0.9 Ω max DCR",
+    "datasheet": "https://www.bourns.com/data/global/pdfs/77F_series.pdf",
+    "settings": {
+      "value": 0.000022,
+      "dcr": 0.9
+    }
+  },
+  {
+    "name": "77F470J-RC",
+    "hint": "Bourns axial choke · 47 µH · 1.3 Ω max DCR",
+    "datasheet": "https://www.bourns.com/data/global/pdfs/77F_series.pdf",
+    "settings": {
+      "value": 0.000047,
+      "dcr": 1.3
+    }
+  },
+  {
+    "name": "77F101J-RC",
+    "hint": "Bourns axial choke · 100 µH · 2.5 Ω max DCR",
+    "datasheet": "https://www.bourns.com/data/global/pdfs/77F_series.pdf",
+    "settings": {
+      "value": 0.0001,
+      "dcr": 2.5
+    }
+  },
+  {
+    "name": "77F221J-RC",
+    "hint": "Bourns axial choke · 220 µH · 5 Ω max DCR",
+    "datasheet": "https://www.bourns.com/data/global/pdfs/77F_series.pdf",
+    "settings": {
+      "value": 0.00022,
+      "dcr": 5
+    }
+  },
+  {
+    "name": "77F471J-RC",
+    "hint": "Bourns axial choke · 470 µH · 8.5 Ω max DCR",
+    "datasheet": "https://www.bourns.com/data/global/pdfs/77F_series.pdf",
+    "settings": {
+      "value": 0.00047,
+      "dcr": 8.5
+    }
+  },
+  {
+    "name": "77F102J-RC",
+    "hint": "Bourns axial choke · 1 mH · 20 Ω max DCR",
+    "datasheet": "https://www.bourns.com/data/global/pdfs/77F_series.pdf",
+    "settings": {
+      "value": 0.001,
+      "dcr": 20
+    }
+  }
+]

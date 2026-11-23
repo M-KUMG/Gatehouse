@@ -1,0 +1,29 @@
+[
+  {
+    "name": "4052899326927",
+    "hint": "LEDVANCE Classic A40 frosted E27 · 230 V, 4.9 W",
+    "datasheet": "https://www.ledvance.com/en/gtin/4052899326927",
+    "settings": {
+      "value": 4.9,
+      "volts": 230
+    }
+  },
+  {
+    "name": "4058075288645",
+    "hint": "LEDVANCE Classic A60 filament E27 · 230 V, 7 W",
+    "datasheet": "https://www.ledvance.com/en/gtin/4058075288645",
+    "settings": {
+      "value": 7,
+      "volts": 230
+    }
+  },
+  {
+    "name": "4052899326873",
+    "hint": "LEDVANCE Classic A60 frosted E27 · 230 V, 8.5 W",
+    "datasheet": "https://www.ledvance.com/en/gtin/4052899326873",
+    "settings": {
+      "value": 8.5,
+      "volts": 230
+    }
+  }
+]

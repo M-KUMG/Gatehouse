@@ -7,11 +7,12 @@
 
 import { leave } from './leave';
 import type { FoldHost, FoldHostProvider } from './barfold';
-import { diodePresetSearch } from './diodepresetsearch';
-import { DEFAULT_DIODE_SETTINGS, DEFAULT_SCHOTTKY_SETTINGS, isDiodeFamily, isDiodeField } from './diodepresets';
+import { DEFAULT_DIODE_SETTINGS, DEFAULT_SCHOTTKY_SETTINGS, isDiodeField } from './diodepresets';
 import { formatSI, parseSI } from './format';
 import type { ScreenRect } from './grid';
 import type { PlacedPart } from './model';
+import { partPresetName } from './partpresets';
+import { partPresetSearch } from './partpresetsearch';
 import { getPart, type ExtraField, type PartState } from './parts';
 
 export class ValueEditor {
@@ -37,18 +38,17 @@ export class ValueEditor {
   open(part: PlacedPart, anchor: ScreenRect, bounds: DOMRect, onChange: () => void): void {
     this.close();
     const type = getPart(part.typeId);
-    const spec = type?.value;
-    const extraFields = type?.fields ?? [];
-    const diodeFamily = isDiodeFamily(part.typeId) ? part.typeId : null;
-    const diodeDefaults = diodeFamily === 'schottky' ? DEFAULT_SCHOTTKY_SETTINGS : DEFAULT_DIODE_SETTINGS;
-    const multi = extraFields.length > 0 || diodeFamily !== null;
+    if (!type) return;
+    const { value: spec, fields: extraFields = [], catalog } = type;
+    const diodeDefaults = type.id === 'schottky' ? DEFAULT_SCHOTTKY_SETTINGS : DEFAULT_DIODE_SETTINGS;
+    const multi = extraFields.length > 0 || !!catalog;
     if (!spec && !multi) return;
-    const diodeFields = new Map<keyof PartState, (value: number) => void>();
+    const presetFields = new Map<keyof PartState, (value: number) => void>();
     const refreshDefaults: (() => void)[] = [];
     const set = (key: keyof PartState, value: number | string | undefined): string | null => {
       const state = { ...part.state, [key]: value };
       if (value === undefined) delete state[key];
-      const error = type?.validateSettings?.(state);
+      const error = type.validateSettings?.(state);
       if (error) return error;
       part.state = state;
       for (const refresh of refreshDefaults) refresh();
@@ -94,6 +94,10 @@ export class ValueEditor {
           else current = value;
           showError(error);
         });
+        if (catalog) presetFields.set(key, (value) => {
+          current = value;
+          select.value = String(value);
+        });
         field = select;
       } else {
         const input = document.createElement('input');
@@ -101,12 +105,12 @@ export class ValueEditor {
         input.spellcheck = false;
         // A fraction such as a duty cycle is shown as 0.5, not as "500m".
         const formatted = (n: number) => key === 'duty' ? String(+n.toFixed(4))
-          : key === 'diodeN' ? String(n) : formatSI(n, '', 6).trim().replace(' ', '');
+          : !unitText || unitText === '°C' ? String(n) : formatSI(n, '', 6).trim().replace(' ', '');
         input.value = current === undefined ? '' : formatted(current);
         if (defaultValue) {
           const refresh = () => {
             input.placeholder = formatted(defaultValue(part.state ?? {}));
-            input.title = 'Clear and press Enter to restore the preset default.';
+            input.title = 'Clear and press Enter to restore the default.';
           };
           refresh();
           refreshDefaults.push(refresh);
@@ -124,7 +128,7 @@ export class ValueEditor {
             showError(error);
           }
         });
-        if (diodeFamily) diodeFields.set(key, (value) => {
+        if (catalog) presetFields.set(key, (value) => {
           input.value = formatted(value);
           input.classList.remove('invalid');
         });
@@ -154,7 +158,7 @@ export class ValueEditor {
 
     // The extra fields first when there are some (the waveform is what the rest depends on).
     const extra = (f: ExtraField): void => {
-      const current = part.state?.[f.key] ?? type?.defaults?.[f.key]
+      const current = part.state?.[f.key] ?? type.defaults?.[f.key]
         ?? (isDiodeField(f.key) ? diodeDefaults[f.key] : undefined);
       if (f.choices) choiceRow(f.label, f.key, String(current ?? f.choices[0]), f.choices);
       else numberRow(f.label, f.unit, f.key, typeof current === 'number' ? current : f.defaultValue ? undefined : f.min,
@@ -163,20 +167,24 @@ export class ValueEditor {
     for (const f of extraFields) if (f.choices) extra(f);
     if (spec) {
       const mainKey = spec.key ?? 'value';
-      const mainCurrent = part.state?.[mainKey] ?? type?.defaults?.[mainKey] ?? spec.min;
+      const mainCurrent = part.state?.[mainKey] ?? type.defaults?.[mainKey] ?? spec.min;
       numberRow(spec.label, spec.unit, mainKey, mainCurrent as number, spec.min, spec.max, spec.options);
     }
     for (const f of extraFields) if (!f.choices) extra(f);
     el.append(feedback);
-    if (diodeFamily) el.append(diodePresetSearch(diodeFamily, part.state?.diodePreset, (preset) => {
-      const state = { ...part.state, ...preset.settings, diodePreset: preset.name };
+    if (catalog) el.append(partPresetSearch(type, catalog, partPresetName(type, part.state), (preset) => {
+      const state = { ...part.state, ...preset.settings, [catalog.nameKey ?? 'partPreset']: preset.name };
+      const error = type.validateSettings?.(state) ?? null;
+      showError(error);
+      if (error) return false;
       part.state = state;
-      for (const [key, update] of diodeFields) {
-        const value = state[key];
-        if (typeof value === 'number') update(value);
+      for (const key of catalog.keys) {
+        const value = preset.settings[key];
+        if (value !== undefined) presetFields.get(key)?.(value);
       }
-      showError(null);
+      for (const refresh of refreshDefaults) refresh();
       onChange();
+      return true;
     }));
 
     el.addEventListener('keydown', (e) => {
@@ -197,7 +205,7 @@ export class ValueEditor {
       document.body.appendChild(el);
       placePopup();
     }
-    if (diodeFamily) {
+    if (catalog) {
       // Keep the bottom row reachable near the edge as the result list unfolds.
       this.resize = new ResizeObserver(this.hostedBy ? onChange : placePopup);
       this.resize.observe(el);
@@ -208,8 +216,9 @@ export class ValueEditor {
       const next = e.relatedTarget;
       if (!(next instanceof Node && el.contains(next))) this.close();
     });
-    const first = fields[multi ? fields.findIndex((f) => f instanceof HTMLInputElement) : 0] ?? fields[0];
-    (first as HTMLElement).focus();
+    const first = fields[multi ? fields.findIndex((f) => f instanceof HTMLInputElement) : 0] ?? fields[0]
+      ?? el.querySelector<HTMLInputElement>('input[type="search"]');
+    first?.focus();
     if (first instanceof HTMLInputElement) first.select();
   }
 

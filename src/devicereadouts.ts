@@ -3,7 +3,7 @@
 
 import { formatSI } from './format';
 import type { PartResult } from './sim';
-import { ACTIVE_BUZZER } from './sim/buzzer';
+import { ACTIVE_BUZZER, type BuzzerModel } from './sim/buzzer';
 import { ledBrightness } from './sim/inspect';
 import { buzzerState, zenerRegion } from './sim/partinspect';
 import { RGB_CHANNELS } from './sim/rgbled';
@@ -26,8 +26,8 @@ export function zenerReadout(r: PartResult): string[] {
 }
 
 /** Active buzzer: voltage, current and whether it sounds. */
-export function buzzerReadout(r: PartResult): string[] {
-  return [`${formatSI(r.voltage, 'V')} · ${formatSI(r.current, 'A')}`, buzzerState(ACTIVE_BUZZER, r.voltage)];
+export function buzzerReadout(r: PartResult, model: BuzzerModel = ACTIVE_BUZZER): string[] {
+  return [`${formatSI(r.voltage, 'V')} · ${formatSI(r.current, 'A')}`, buzzerState(model, r.voltage)];
 }
 
 /** 7-segment display: which segments are lit, and the common current. */

@@ -31,7 +31,7 @@ export function describePart(part: PlacedPart, sim: Simulation): ReadoutText | n
   const r = sim.partResult(part.id);
   if (!r || !sim.result?.converged) return text;
   if (type.readout) {
-    text.lines.push(...type.readout(r));
+    text.lines.push(...type.readout(r, state));
   } else if (type.board) {
     text.lines.push(`USB ${formatSI(r.voltage, 'V')} · ${formatSI(r.current, 'A')} out`, 'GND is the 0 V reference');
   } else if ('gnd' in r.pins || type.pins.length === 1) {

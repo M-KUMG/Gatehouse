@@ -16,11 +16,17 @@ export function formatSI(value: number, unit: string, digits = 3): string {
 }
 
 /**
- * "220", "4.7k", "4k7", "1M", "10 kΩ", "100n", "4.7u", "10p", "10mH", "-5", "25 °C" -> number, or null when it
+ * "220", "4.7k", "4k7", "1M", "10 kΩ", "100n", "4.7u", "10p", "4.5e-9", "10mH", "-5", "25 °C" -> number, or null when it
  * is not a value. A minus sign is read (a temperature can be below zero); every other editor rejects a negative by its range.
  */
 export function parseSI(text: string): number | null {
-  const m = /^\s*(-?)\s*(\d*[.,]?\d*)\s*([kKmMRrµμunp]?)(\d*)\s*(?:[ΩVvAaFH]|°\s*[Cc]|°)?\s*$/.exec(text.replace(/ohms?/i, ''));
+  const input = text.replace(/ohms?/i, '');
+  const scientific = /^\s*([+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)[eE][+-]?\d+)\s*(?:VA|Hz|rpm|[ΩVvAaFHW]|°\s*[Cc]|°)?\s*$/.exec(input);
+  if (scientific) {
+    const value = Number(scientific[1].replace(',', '.'));
+    return Number.isFinite(value) ? value : null;
+  }
+  const m = /^\s*(-?)\s*(\d*[.,]?\d*)\s*([kKmMRrµμunp]?)(\d*)\s*(?:VA|Hz|rpm|[ΩVvAaFHW]|°\s*[Cc]|°)?\s*$/.exec(input);
   if (!m || (m[2] === '' && m[4] === '') || m[2] === '.' || m[2] === ',') return null;
   const scale: Record<string, number> = { k: 1e3, K: 1e3, M: 1e6, m: 1e-3, 'µ': 1e-6, 'μ': 1e-6, u: 1e-6, n: 1e-9, p: 1e-12, R: 1, r: 1, '': 1 };
   // "4k7" means 4.7 k: digits after the prefix are the decimals.

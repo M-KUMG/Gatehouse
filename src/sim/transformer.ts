@@ -117,10 +117,10 @@ export function transformerStress(
   const p = transformerParams(model);
   const ratio = Math.max(Math.abs(r.pins.p1 ?? 0) / (Math.SQRT2 * p.i1), Math.abs(r.pins.s1 ?? 0) / (Math.SQRT2 * p.i2));
   if (ratio > TRANSFORMER_BURN_RATIO) {
-    return { level: 'burn', short: 'overloaded!', reason: `windings burned out (${ratio.toFixed(1)} x the rated current; a transformer needs AC, and a load within ${TRANSFORMER_VA} VA)` };
+    return { level: 'burn', short: 'overloaded!', reason: `windings burned out (${ratio.toFixed(1)} x the rated current; a transformer needs AC, and a load within ${model.va} VA)` };
   }
   if (ratio > TRANSFORMER_WARN_RATIO) {
-    return { level: 'warn', short: 'overloaded!', reason: `Windings carry ${ratio.toFixed(1)} x the rated current (${TRANSFORMER_VA} VA).` };
+    return { level: 'warn', short: 'overloaded!', reason: `Windings carry ${ratio.toFixed(1)} x the rated current (${model.va} VA).` };
   }
   return { level: 'ok' };
 }
