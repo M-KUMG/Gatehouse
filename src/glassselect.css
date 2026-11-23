@@ -103,8 +103,6 @@
     width 380ms var(--gh-ease-glide),
     height 380ms var(--gh-ease-glide),
     border-radius 380ms var(--gh-ease-glide);
-  scrollbar-width: thin;
-  scrollbar-color: var(--gh-scrollbar) transparent;
 }
 
 .gs-list.open {
@@ -206,8 +204,73 @@
   box-sizing: border-box;
 }
 
-.value-editor-multi > label > .gs-trigger {
+.value-editor-multi > label:not(:has(> .value-editor-unit)) > .gs-trigger {
   grid-column: 2 / 4;
+}
+
+/* Preset results unfold inside the existing part editor, below its final row. */
+.value-editor:has(.diode-preset-search) {
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.diode-preset-search {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.diode-preset-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--gh-glide) var(--gh-ease-glide);
+}
+
+.diode-preset-fold.open {
+  grid-template-rows: 1fr;
+}
+
+.diode-preset-fold > div {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.diode-preset-options {
+  position: relative;
+  max-height: 11rem;
+  overflow-y: auto;
+}
+
+.diode-preset-options:has(.gs-item) {
+  margin-top: 6px;
+}
+
+.diode-preset-options .gs-item {
+  padding-inline-end: 6px;
+}
+
+.diode-preset-fold.open .gs-item {
+  opacity: 1;
+}
+
+.diode-preset-status,
+.diode-preset-hint {
+  color: var(--gh-text-muted);
+}
+
+.diode-preset-hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.diode-preset-status {
+  padding: 6px 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diode-preset-fold,
+  .diode-preset-options .gs-item {
+    transition: none;
+  }
 }
 
 /* A list that is folding back into its button must not catch clicks meant for the button. */

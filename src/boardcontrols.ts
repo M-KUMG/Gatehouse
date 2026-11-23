@@ -11,7 +11,7 @@
 import type { BoardRunState } from './mcu/runtime';
 import { canFlip } from './flip';
 import type { PlacedPart } from './model';
-import { getPart } from './parts';
+import { getPart, hasPartSettings } from './parts';
 import { unrotatePoint } from './pins';
 import { compareBoardIds } from './project/boardidparse';
 
@@ -112,7 +112,7 @@ export function toolbarButtons(
     flipH: flip,
     flipV: flip,
     duplicate: selected.length > 0,
-    edit: selected.length === 1 && (getPart(selected[0].typeId)?.value !== undefined || getPart(selected[0].typeId)?.colorable === true),
+    edit: selected.length === 1 && hasPartSettings(getPart(selected[0].typeId)),
     board: board ? boardToolbar(stateOf(board.id), buildFailed(board.id)) : null,
   };
 }

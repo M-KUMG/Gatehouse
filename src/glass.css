@@ -13,9 +13,75 @@
   color-scheme: dark;
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--gh-scrollbar) transparent;
+@media (forced-colors: none) {
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--gh-scrollbar) var(--gh-scrollbar-track);
+    }
+  }
+
+  @supports selector(::-webkit-scrollbar) {
+    /* Chromium and Safari need the standard properties at auto for the detailed scrollbar styles. */
+    :root, :root * {
+      scrollbar-width: auto;
+      scrollbar-color: auto;
+    }
+
+    :root .dv-tabs-container {
+      --gh-scrollbar-size: 6px;
+      --gh-scrollbar-inset: 1px;
+    }
+
+    :is(:root, :root *)::-webkit-scrollbar {
+      width: var(--gh-scrollbar-size);
+      height: var(--gh-scrollbar-size);
+    }
+
+    :is(:root, :root *)::-webkit-scrollbar-track {
+      border: 1px solid transparent;
+      border-radius: var(--gh-radius-pill);
+      background: var(--gh-scrollbar-track) padding-box;
+    }
+
+    :is(:root, :root *)::-webkit-scrollbar-thumb {
+      border: var(--gh-scrollbar-inset) solid transparent;
+      border-radius: var(--gh-radius-pill);
+      background: var(--gh-glass-sheen), var(--gh-scrollbar);
+      background-clip: padding-box;
+      box-shadow: var(--gh-scrollbar-rim);
+    }
+
+    :is(:root, :root *)::-webkit-scrollbar-thumb:vertical {
+      min-height: 28px;
+    }
+
+    :is(:root, :root *)::-webkit-scrollbar-thumb:horizontal {
+      min-width: 28px;
+    }
+
+    :is(:root, :root *)::-webkit-scrollbar-thumb:hover {
+      background-color: var(--gh-scrollbar-hover);
+    }
+
+    :is(:root, :root *)::-webkit-scrollbar-thumb:active {
+      background-color: var(--gh-scrollbar-active);
+    }
+
+    :is(:root, :root *)::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+  }
+
+  /* Dockview also draws its own narrow overlay thumb for tab scrolling. */
+  .gh-dock .dv-scrollable .dv-scrollbar {
+    border-radius: var(--gh-radius-pill);
+  }
+
+  .gh-dock .dv-scrollable:is(:hover, .dv-scrollable-resizing, .dv-scrollable-scrolling) .dv-scrollbar {
+    background-image: var(--gh-glass-sheen);
+    box-shadow: var(--gh-scrollbar-rim);
+  }
 }
 
 /* ---- Ambient backdrop: soft colour behind the glass (static, no animation) ---- */

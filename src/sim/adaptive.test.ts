@@ -167,4 +167,23 @@ describe('error-controlled time steps', () => {
     expect(dts.length).toBe(6);
     expect(e.time).toBeCloseTo(1e-3, 12);
   });
+
+  it('retries an unconverged step from the same time with a shorter interval', () => {
+    const input: SimInput = { components: [], links: [] };
+    const until = 1e-3;
+    const stepper: typeof solveStep = (circuit, state, dt) => {
+      const out = solveStep(circuit, state, dt);
+      out.result.converged = dt <= until / 2;
+      return out;
+    };
+    const e = new AdaptiveStepper(stepper, ADAPTIVE_DEFAULTS, empty, until);
+    e.setInput('a', input, 0);
+
+    expect(e.advance(until, { overshoot: false, budget: 20 }).capped).toBe(false);
+    const pieces = e.takePieces();
+    expect(e.stats.rejected).toBeGreaterThan(0);
+    expect(pieces[0].from).toBe(0);
+    expect(pieces.every((piece) => piece.result.converged)).toBe(true);
+    expect(e.time).toBeCloseTo(until, 12);
+  });
 });

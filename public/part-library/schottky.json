@@ -1,0 +1,86 @@
+[
+  {
+    "name": "1N5819",
+    "hint": "Axial Schottky rectifier",
+    "datasheet": "https://www.vishay.com/docs/88525/1n5817.pdf",
+    "settings": {
+      "diodeIs": 2.443038330246214e-7,
+      "diodeN": 1,
+      "diodeRs": 0.05933525699629998,
+      "diodeForwardAmps": 1,
+      "diodeReverseVolts": 40
+    }
+  },
+  {
+    "name": "1N5817",
+    "hint": "Axial Schottky rectifier",
+    "datasheet": "https://www.vishay.com/docs/88525/1n5817.pdf",
+    "settings": {
+      "diodeIs": 0.000008,
+      "diodeN": 1.07,
+      "diodeRs": 0.045,
+      "diodeForwardAmps": 1,
+      "diodeReverseVolts": 20
+    }
+  },
+  {
+    "name": "1N5818",
+    "hint": "Axial Schottky rectifier",
+    "datasheet": "https://www.vishay.com/docs/88525/1n5817.pdf",
+    "settings": {
+      "diodeIs": 0.0000019,
+      "diodeN": 1.05,
+      "diodeRs": 0.047,
+      "diodeForwardAmps": 1,
+      "diodeReverseVolts": 30
+    }
+  },
+  {
+    "name": "1N5822",
+    "hint": "3 A axial Schottky rectifier",
+    "datasheet": "https://www.vishay.com/docs/88526/1n5820.pdf",
+    "settings": {
+      "diodeIs": 0.0001,
+      "diodeN": 1.08,
+      "diodeRs": 0.037,
+      "diodeForwardAmps": 3,
+      "diodeReverseVolts": 40
+    }
+  },
+  {
+    "name": "SS14",
+    "hint": "1 A SMD Schottky rectifier",
+    "datasheet": "https://www.vishay.com/docs/88746/ss12.pdf",
+    "settings": {
+      "diodeIs": 0.000016,
+      "diodeN": 1.06,
+      "diodeRs": 0.108,
+      "diodeForwardAmps": 1,
+      "diodeReverseVolts": 40
+    }
+  },
+  {
+    "name": "SS34",
+    "hint": "3 A SMD Schottky rectifier",
+    "datasheet": "https://www.vishay.com/docs/88751/ss32.pdf",
+    "settings": {
+      "diodeIs": 0.00006,
+      "diodeN": 1.06,
+      "diodeRs": 0.042,
+      "diodeForwardAmps": 3,
+      "diodeReverseVolts": 40
+    }
+  },
+  {
+    "name": "BAT54",
+    "hint": "Small-signal Schottky diode",
+    "datasheet": "https://assets.nexperia.com/documents/data-sheet/BAT54.pdf",
+    "settings": {
+      "diodeIs": 2.2e-8,
+      "diodeN": 1.02,
+      "diodeRs": 2,
+      "diodeForwardAmps": 0.2,
+      "diodeReverseVolts": 30
+    }
+  }
+]

@@ -31,7 +31,7 @@ import './scope.css';
 import './inspector.css';
 import { isBoardPart } from '../boardcontrols';
 import type { PlacedPart, Scene } from '../model';
-import { boardLabelWithId, getPart } from '../parts';
+import { boardLabelWithId, getPart, placedPartName } from '../parts';
 import type { ComponentModel } from '../sim';
 import { defaultPlot, inspect, quantityValues, type InspectPart, type Quantity } from '../sim/inspect';
 import { autoRange, columns, valueAt } from '../scope/analog';
@@ -622,7 +622,8 @@ export class ScopeWindow {
 /** Header name of a part: a board's label, else the type name and the part id ("NPN transistor (BC547) #5"). */
 export function partTitle(part: PlacedPart): string {
   if (isBoardPart(part)) return boardLabelWithId(part);
-  return `${getPart(part.typeId)?.name ?? part.typeId} #${part.id}`;
+  const type = getPart(part.typeId);
+  return `${type ? placedPartName(type, part.state) : part.typeId} #${part.id}`;
 }
 
 function button(b: HTMLButtonElement, text: string, title: string): void {

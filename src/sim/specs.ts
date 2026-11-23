@@ -219,7 +219,18 @@ const fmt = (v: number, unit: string): string => formatSI(v, unit);
 export function specStress(typeId: string, r: PartResult, model: ComponentModel): Stress {
   const spec = partSpec(typeId);
   if (!spec) return { level: 'ok', short: 'ok' };
-  const values = spec.limits.map((l) => ({ l, v: l.measure(r, model) }));
+  const values = spec.limits.map((limit) => {
+    let l = limit;
+    if ((typeId === 'diode' || typeId === 'schottky') && model.kind === 'diode') {
+      const rated = limit.label === 'If' ? model.ratedForwardAmps : model.ratedReverseVolts;
+      if (rated !== undefined) {
+        const scale = rated / limit.rated;
+        l = { ...limit, rated, warnAbove: limit.warnAbove * scale,
+          burnAbove: limit.burnAbove === undefined ? undefined : limit.burnAbove * scale };
+      }
+    }
+    return { l, v: l.measure(r, model) };
+  });
   for (const { l, v } of values) {
     if (l.burnAbove === undefined || !(v > l.burnAbove)) continue;
     const short = `${l.label} too high!`;

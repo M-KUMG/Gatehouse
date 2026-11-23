@@ -257,7 +257,9 @@ export class AdaptiveStepper {
       const out = this.stepper(input, this.base.state, h);
       solves++;
       this.stats.solves++;
-      const ratio = out.result.converged && this.slopes ? this.errorRatio(input, out.state, h) : 0;
+      // Shorten a failed solve before advancing time with the previous charge.
+      // A large step can miss a rapid change even when a shorter one converges.
+      const ratio = out.result.converged ? (this.slopes ? this.errorRatio(input, out.state, h) : 0) : Infinity;
       if (ratio > 1 && !force && h > minStep * (1 + 1e-9)) {
         this.stats.rejected++;
         this.h = Math.max(minStep, h * Math.max(MIN_SHRINK, SAFETY / Math.sqrt(ratio)));

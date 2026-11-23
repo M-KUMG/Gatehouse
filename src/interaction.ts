@@ -24,7 +24,7 @@ import { NameEditor } from './nameedit';
 import { ClockEditor } from './clockedit';
 import { ColorEditor } from './coloredit';
 import { boardClockHz, formatClock } from './mcu/clock';
-import { boardLabel, defaultBoardLabel, getPart } from './parts';
+import { boardLabel, defaultBoardLabel, getPart, hasPartSettings } from './parts';
 import { findPin, pinAt, wirePointAt, wireRoute } from './pins';
 import type { FileOpResult } from './project/boardfiles';
 import { Placer } from './placing';
@@ -736,7 +736,7 @@ export class Editor {
   /** Open the value popup for a part that has an editable value. */
   private editValue(part: PlacedPart | undefined): void {
     const type = part ? getPart(part.typeId) : undefined;
-    if (!part || !type || (!type.value && !type.colorable) || this.drag) return;
+    if (!part || !type || !hasPartSettings(type) || this.drag) return;
     this.selection.set([part.id]);
     this.positionOverlays(); // the bar must show this part before the editor unfolds it
     if (type.colorable) {

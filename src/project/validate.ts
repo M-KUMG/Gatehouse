@@ -2,6 +2,7 @@
 // ProjectFile or throws a ProjectError that says what is wrong and where.
 
 import { MAX_ZOOM, MIN_ZOOM } from '../camera';
+import { DIODE_FIELDS, isDiodeFamily, isDiodeField, isDiodePresetName } from '../diodepresets';
 import { isLedColor } from '../ledcolor';
 import { CLOCK_CHOICES } from '../mcu/clock';
 import {
@@ -79,7 +80,9 @@ const MAX_BURN_REASON = 200;
 function partState(v: unknown, typeId: string, where: string): PartState {
   const o = obj(v, where);
   // v4: a board's program is a .hex file in its folder, no longer part state.
-  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'burnedBy', 'name', 'clockHz', 'vcc', 'lux', 'temp', 'color', 'wave', 'amp', 'offset', 'duty', 'limit', 'freq', 'volts'], where);
+  onlyKeys(o, ['closed', 'position', 'value', 'burned', 'burnedBy', 'name', 'clockHz', 'vcc', 'lux', 'temp', 'color', 'wave', 'amp', 'offset', 'duty', 'limit', 'freq', 'volts', 'coilOhms', 'pullVolts', 'releaseVolts',
+    'diodePreset', ...DIODE_FIELDS.map((field) => field.key)], where);
+  const type = getPart(typeId);
   const state: PartState = {};
   for (const key of Object.keys(o)) {
     if (key === 'closed' || key === 'burned') {
@@ -100,10 +103,14 @@ function partState(v: unknown, typeId: string, where: string): PartState {
       const p = num(o, key, where);
       if (p < 0 || p > 1) fail(`${where}.position must be between 0 and 1 (got ${p}).`);
       state.position = p;
-    } else if (key === 'wave' || key === 'amp' || key === 'offset' || key === 'duty' || key === 'limit' || key === 'freq' || key === 'volts') {
-      // A function generator's extra settings: only on parts that list the field, within its range.
-      const field = getPart(typeId)?.fields?.find((f) => f.key === key);
-      if (!field) fail(`${where}.${key} is only allowed on parts that have it (function generators, power supplies, AC supplies, bulbs, transformers), but a ${typeId} part has no such setting.`);
+    } else if (key === 'diodePreset') {
+      const preset = str(o, key, where);
+      if (!isDiodeFamily(typeId) || !isDiodePresetName(preset)) fail(`${where}.diodePreset must be a valid diode part number.`);
+      state.diodePreset = preset;
+    } else if (key === 'wave' || key === 'amp' || key === 'offset' || key === 'duty' || key === 'limit' || key === 'freq' || key === 'volts'
+        || key === 'coilOhms' || key === 'pullVolts' || key === 'releaseVolts' || isDiodeField(key)) {
+      const field = type?.fields?.find((f) => f.key === key);
+      if (!field) fail(`${where}.${key} is only allowed on parts that have this setting. A ${typeId} part has no such setting.`);
       if (key === 'wave') {
         const w = str(o, key, where);
         if (!field.choices?.includes(w)) fail(`${where}.wave must be one of ${field.choices?.join(', ')} (got ${JSON.stringify(w)}).`);
@@ -149,6 +156,8 @@ function partState(v: unknown, typeId: string, where: string): PartState {
       state.value = value;
     }
   }
+  const settingsError = type?.validateSettings?.(state);
+  if (settingsError) fail(`${where}: ${settingsError}`);
   return state;
 }
 

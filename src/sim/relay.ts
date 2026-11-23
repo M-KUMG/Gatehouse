@@ -13,8 +13,8 @@
 //
 // Logic state `on` (RelayLogic, kept like the gates' in TransientState.logic):
 // the armature pulls in when the coil current reaches `pullAmps` and releases
-// when it falls to `dropAmps` (hysteresis, like a real relay: pull-in at 75 %
-// of the nominal coil voltage, drop-out at 10 %). The decision uses the coil
+// when it falls to `dropAmps` (by default 75 % and 10 % of nominal coil voltage).
+// The decision uses the coil
 // CURRENT (not the voltage), so the switching delay comes from L/R: about 4 ms
 // to operate and 7 ms to release for the 5 V coil. A coil is not polarised
 // (either direction pulls in), but the model has no diode: reverse current is
@@ -39,14 +39,31 @@ export const RELAY_DROP_FRACTION = 0.1;
 export const RELAY_CONTACT_WARN_AMPS = 3;
 export const RELAY_CONTACT_BURN_AMPS = 10;
 
-/** The model of a relay with this nominal coil voltage (volts not in the table fall back to 5 V). */
-export function relayModel(coilVolts: number): RelayModel {
+export interface RelayCoilSettings {
+  coilOhms?: number;
+  pullVolts?: number;
+  releaseVolts?: number;
+}
+
+/** The selected preset supplies defaults for any settings the user has left blank. */
+export function relayCoilSettings(coilVolts: number, overrides: RelayCoilSettings = {}): Required<RelayCoilSettings> {
   const v = RELAY_COILS[coilVolts] !== undefined ? coilVolts : RELAY_DEFAULT_VOLTS;
-  const ohms = RELAY_COILS[v];
-  const nominal = v / ohms;
   return {
-    kind: 'relay', coilVolts: v, coilOhms: ohms, coilHenries: RELAY_HENRIES,
-    pullAmps: RELAY_PULL_FRACTION * nominal, dropAmps: RELAY_DROP_FRACTION * nominal,
+    coilOhms: overrides.coilOhms ?? RELAY_COILS[v],
+    pullVolts: overrides.pullVolts ?? RELAY_PULL_FRACTION * v,
+    releaseVolts: overrides.releaseVolts ?? RELAY_DROP_FRACTION * v,
+  };
+}
+
+/** Convert steady-state threshold voltages into the currents that move the armature. */
+export function relayModel(coilVolts: number, overrides: RelayCoilSettings = {}): RelayModel {
+  const v = RELAY_COILS[coilVolts] !== undefined ? coilVolts : RELAY_DEFAULT_VOLTS;
+  const { coilOhms } = relayCoilSettings(v, overrides);
+  const nominalAmps = v / coilOhms;
+  return {
+    kind: 'relay', coilVolts: v, coilOhms, coilHenries: RELAY_HENRIES,
+    pullAmps: overrides.pullVolts === undefined ? RELAY_PULL_FRACTION * nominalAmps : overrides.pullVolts / coilOhms,
+    dropAmps: overrides.releaseVolts === undefined ? RELAY_DROP_FRACTION * nominalAmps : overrides.releaseVolts / coilOhms,
   };
 }
 

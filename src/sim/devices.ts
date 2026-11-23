@@ -65,7 +65,7 @@ const TO220_LEAD_OHMS = 0.0005;
  * 1N4148 small-signal silicon diode: the widely used SPICE parameters
  * (IS 2.52 nA, N 1.752, RS 0.568 ohm). About 0.58 V at 1 mA, 0.69 V at 10 mA.
  */
-export const D1N4148: ComponentModel = { kind: 'diode', is: 2.52e-9, n: 1.752, rs: 0.568 };
+export const D1N4148 = { kind: 'diode', is: 2.52e-9, n: 1.752, rs: 0.568 } satisfies ComponentModel;
 
 /**
  * Logic-level N-channel power MOSFET, IRLZ44N-like: kp chosen so that

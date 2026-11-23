@@ -20,6 +20,10 @@
   /* Lines a little stronger, since there is no glow to separate surfaces. */
   --gh-border: rgba(255, 255, 255, 0.16);
   --gh-border-strong: rgba(255, 255, 255, 0.34);
+  --gh-scrollbar: #667a94;
+  --gh-scrollbar-track: #10141d;
+  --gh-scrollbar-hover: #93abc9;
+  --gh-scrollbar-rim: none;
 
   /* The glass recipe, flattened: no blur, no sheen, no light on the rim. */
   --gh-glass-blur: none;

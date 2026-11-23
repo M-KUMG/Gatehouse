@@ -11,12 +11,13 @@
        the block below (docs/PLAN.md, "Main site"). A platform with no "files" is shown greyed out as Coming soon. -->
   <script>
     window.GATEHOUSE_DOWNLOADS = {
-      version: '0.2.2',
+      version: '0.2.3',
       // What is new in this version (one line each), shown above the downloads.
       notes: [
-        'New parts: a bridge rectifier (settable current and voltage rating) and a changeover (SPDT) mains switch',
-        'Capacitors have a settable voltage rating, printed on the part',
-        'Fixes: an LED bulb alone no longer fails, and a relay is no longer burned by its own switch-off spike',
+        'Searchable library with 33 presets across the Diode, Schottky, and Zener editors',
+        'Editable SPDT relay coil resistance, pull-in voltage, and release voltage',
+        'Better recovery from difficult light transitions in the transient simulator',
+        'Refined part editor animations and themed scrollbars',
       ],
       allReleasesUrl: 'https://github.com/M-KUMG/Gatehouse/releases',
       homeUrl: '../',
@@ -25,12 +26,12 @@
         {
           name: 'Windows',
           detail: 'Windows 10 or 11, 64-bit · installer (.exe)',
-          fileName: 'Gatehouse-Setup-0.2.2.exe',
+          fileName: 'Gatehouse-Setup-0.2.3.exe',
           size: '91 MB', // shown under the buttons; empty hides it
-          sha256: '822ad66c6f2836fbf8a4fa666eed8c1bb73412df69017e904d998d1c1675804c', // of the installer (Get-FileHash); empty hides it
+          sha256: '69087fc86afdc1f30920e0a0e7a578f3a01977b6c963cf09c20ab082fd821693', // of the installer (Get-FileHash); empty hides it
           files: [
-            { label: 'Download from our server', url: 'Gatehouse-Setup-0.2.2.exe' },
-            { label: 'Download from GitHub', url: 'https://github.com/M-KUMG/Gatehouse/releases/download/v0.2.2/Gatehouse-Setup-0.2.2.exe' },
+            { label: 'Download from our server', url: 'Gatehouse-Setup-0.2.3.exe' },
+            { label: 'Download from GitHub', url: 'https://github.com/M-KUMG/Gatehouse/releases/download/v0.2.3/Gatehouse-Setup-0.2.3.exe' },
           ],
         },
         { name: 'Linux', detail: 'Coming soon' },

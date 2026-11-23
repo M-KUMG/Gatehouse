@@ -3,7 +3,7 @@
 
 import { formatSI } from './format';
 import type { JunctionRef, PlacedPart, Wire } from './model';
-import { getPart, partWarning } from './parts';
+import { getPart, partWarning, placedPartName } from './parts';
 import type { Pin } from './pins';
 import type { Simulation } from './simulation';
 
@@ -22,7 +22,7 @@ export function describePart(part: PlacedPart, sim: Simulation): ReadoutText | n
   if (type.value && value !== undefined) facts.push(formatSI(value, type.value.unit));
   if (type.control === 'knob') facts.push(`wiper ${Math.round((state.position ?? 0.5) * 100)} %`);
   if (type.control === 'toggle' || type.control === 'momentary') facts.push(state.closed ? 'closed' : 'open');
-  const text: ReadoutText = { title: [type.name, ...facts].join(' · '), lines: [] };
+  const text: ReadoutText = { title: [placedPartName(type, state), ...facts].join(' · '), lines: [] };
 
   if (state.burned) {
     text.warning = `Burned out by ${state.burnedBy ?? 'too much current'}. Click it to replace it.`;

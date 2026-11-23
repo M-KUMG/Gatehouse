@@ -109,8 +109,6 @@ html, body {
 /* The sections scroll as a whole; Examples stay visible below. */
 .palette-cats {
   overflow: hidden auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--gh-scrollbar) transparent;
   min-height: 0;
   flex: 0 1 auto;
   display: flex;
@@ -1176,6 +1174,12 @@ html, body {
 
 .value-editor input.invalid {
   border-color: var(--gh-danger);
+}
+
+.value-editor-error {
+  grid-column: 1 / -1;
+  max-width: 250px;
+  color: var(--gh-danger-text);
 }
 
 /* New / Open / Save, Windows and the project name, top-left of the grid. */

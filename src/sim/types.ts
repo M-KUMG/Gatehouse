@@ -68,7 +68,7 @@ export type ComponentModel =
    * ibv * exp(-(v + bv) / (nbv VT)) backwards, i.e. `ibv` amps at a junction
    * voltage of -`bv` (nbv default 1). Without `bv` there is no breakdown.
    */
-  | { kind: 'diode'; is: number; n: number; rs: number; bv?: number; ibv?: number; nbv?: number }
+  | { kind: 'diode'; is: number; n: number; rs: number; bv?: number; ibv?: number; nbv?: number; ratedForwardAmps?: number; ratedReverseVolts?: number }
   /**
    * Active buzzer (see buzzer.ts): a smooth voltage-controlled resistance,
    * `ohmsOff` below `vOff`, `ohmsOn` (parallel to ohmsOff) above `vOn`,

@@ -66,6 +66,18 @@ describe('relay model', () => {
     expect(decideRelay({ on: true }, m.dropAmps * 0.99, m).on).toBe(false);
     expect(decideRelay({ on: false }, -m.pullAmps * 1.01, m).on).toBe(true); // the coil has no polarity
   });
+  it('uses the custom winding resistance and converts both voltage thresholds to current', () => {
+    const model = relayModel(12, { coilOhms: 500, pullVolts: 8, releaseVolts: 2 });
+    expect(model).toMatchObject({ coilVolts: 12, coilOhms: 500, pullAmps: 0.016, dropAmps: 0.004 });
+    expect(relayModel(12, { coilOhms: 500 }).pullAmps).toBeCloseTo(9 / 500);
+    const input = circuit(12);
+    input.components[1].model = model;
+    expect(solveCircuit(input).parts[RELAY].current).toBeCloseTo(12 / 500, 5);
+    expect(decideRelay({ on: false }, 0.01, model).on).toBe(false);
+    expect(decideRelay({ on: false }, 0.016, model).on).toBe(true);
+    expect(decideRelay({ on: true }, 0.01, model).on).toBe(true);
+    expect(decideRelay({ on: true }, 0.004, model).on).toBe(false);
+  });
 });
 
 describe('relay in a circuit', () => {
@@ -146,6 +158,8 @@ describe('relay part', () => {
     expect(burnReason(type, r(11), {})).toMatch(/coil overvoltage/);
     expect(partWarning(type, r(5, 4), {})).toMatch(/Contacts/);
     expect(burnReason(type, r(5, 12), {})).toMatch(/contacts/);
+    expect(partWarning(type, r(5), { coilOhms: 100 })).toMatch(/Coil/);
+    expect(burnReason(type, r(5), { coilOhms: 160 })).toMatch(/coil overvoltage/);
   });
   it('shows the armature state in the inspector', () => {
     const res = solveCircuit(circuit(5));
@@ -163,5 +177,22 @@ describe('relay part', () => {
     const doc = JSON.parse(stringifyProject(first));
     doc.parts[0].state = { value: 100 };
     expect(() => readProject(JSON.stringify(doc))).toThrow(/value/);
+  });
+  it('round-trips custom settings and validates release against the effective pull-in voltage', () => {
+    const p = new Project();
+    const state = { value: 12, coilOhms: 500, pullVolts: 8, releaseVolts: 2 };
+    p.scene.add({ typeId: 'relay', col: 0, row: 0, rotation: 0, state });
+    const saved = p.serialize();
+    expect(readProject(stringifyProject(saved)).parts[0].state).toEqual(state);
+    expect(type.sim!(state)).toEqual(relayModel(12, state));
+    expect(type.fields?.map((field) => field.defaultValue?.({ value: 12 }))).toEqual([400, 9, expect.closeTo(1.2)]);
+
+    saved.parts[0].state = { value: 12, releaseVolts: 9 };
+    expect(() => readProject(stringifyProject(saved))).toThrow(/Release voltage must be lower/);
+    saved.parts[0].state = { value: 12, coilOhms: 0 };
+    expect(() => readProject(stringifyProject(saved))).toThrow(/coilOhms/);
+    saved.parts[0].typeId = 'resistor';
+    saved.parts[0].state = { coilOhms: 500 };
+    expect(() => readProject(stringifyProject(saved))).toThrow(/coilOhms/);
   });
 });

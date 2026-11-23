@@ -1,0 +1,66 @@
+[
+  {
+    "name": "1N4728A",
+    "hint": "3.3 V · 1 W",
+    "datasheet": "https://www.onsemi.com/pdf/datasheet/1n4736at-d.pdf",
+    "settings": {
+      "value": 3.3
+    }
+  },
+  {
+    "name": "1N4732A",
+    "hint": "4.7 V · 1 W",
+    "datasheet": "https://www.onsemi.com/pdf/datasheet/1n4736at-d.pdf",
+    "settings": {
+      "value": 4.7
+    }
+  },
+  {
+    "name": "1N4733A",
+    "hint": "5.1 V · 1 W",
+    "datasheet": "https://www.onsemi.com/pdf/datasheet/1n4736at-d.pdf",
+    "settings": {
+      "value": 5.1
+    }
+  },
+  {
+    "name": "1N4735A",
+    "hint": "6.2 V · 1 W",
+    "datasheet": "https://www.onsemi.com/pdf/datasheet/1n4736at-d.pdf",
+    "settings": {
+      "value": 6.2
+    }
+  },
+  {
+    "name": "1N4739A",
+    "hint": "9.1 V · 1 W",
+    "datasheet": "https://www.onsemi.com/pdf/datasheet/1n4736at-d.pdf",
+    "settings": {
+      "value": 9.1
+    }
+  },
+  {
+    "name": "1N4742A",
+    "hint": "12 V · 1 W",
+    "datasheet": "https://www.onsemi.com/pdf/datasheet/1n4736at-d.pdf",
+    "settings": {
+      "value": 12
+    }
+  },
+  {
+    "name": "1N4744A",
+    "hint": "15 V · 1 W",
+    "datasheet": "https://www.onsemi.com/pdf/datasheet/1n4736at-d.pdf",
+    "settings": {
+      "value": 15
+    }
+  },
+  {
+    "name": "1N4749A",
+    "hint": "24 V · 1 W",
+    "datasheet": "https://www.onsemi.com/pdf/datasheet/1n4736at-d.pdf",
+    "settings": {
+      "value": 24
+    }
+  }
+]

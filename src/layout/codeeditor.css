@@ -18,8 +18,6 @@
   overflow-y: hidden;
   border-bottom: 1px solid var(--gh-border);
   background: var(--gh-bg-panel);
-  scrollbar-width: thin;
-  scrollbar-color: var(--gh-scrollbar) transparent;
 }
 
 .ce-tab {

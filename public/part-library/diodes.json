@@ -1,0 +1,218 @@
+[
+  {
+    "name": "1N4148",
+    "hint": "Small-signal switching diode",
+    "datasheet": "https://www.diodes.com/_files/datasheets/ds12019.pdf",
+    "settings": {
+      "diodeIs": 2.52e-9,
+      "diodeN": 1.752,
+      "diodeRs": 0.568,
+      "diodeForwardAmps": 0.3,
+      "diodeReverseVolts": 75
+    }
+  },
+  {
+    "name": "1N4007",
+    "hint": "General-purpose rectifier",
+    "datasheet": "https://www.vishay.com/docs/88503/1n4001.pdf",
+    "settings": {
+      "diodeIs": 1e-8,
+      "diodeN": 1.8,
+      "diodeRs": 0.045,
+      "diodeForwardAmps": 1,
+      "diodeReverseVolts": 1000
+    }
+  },
+  {
+    "name": "1N914",
+    "hint": "Small-signal switching diode",
+    "datasheet": "https://www.onsemi.com/pdf/datasheet/1n914-d.pdf",
+    "settings": {
+      "diodeIs": 3.3e-9,
+      "diodeN": 1.87,
+      "diodeRs": 0.64,
+      "diodeForwardAmps": 0.3,
+      "diodeReverseVolts": 100
+    }
+  },
+  {
+    "name": "1N4448",
+    "hint": "Small-signal switching diode",
+    "datasheet": "https://www.diodes.com/_files/datasheets/ds12019.pdf",
+    "settings": {
+      "diodeIs": 2.5e-9,
+      "diodeN": 1.7,
+      "diodeRs": 0.6,
+      "diodeForwardAmps": 0.5,
+      "diodeReverseVolts": 75
+    }
+  },
+  {
+    "name": "1N4148W",
+    "hint": "SMD switching diode",
+    "datasheet": "https://www.diodes.com/datasheet/download/1N4148W%28LS%29.pdf",
+    "settings": {
+      "diodeIs": 1.5e-9,
+      "diodeN": 1.85,
+      "diodeRs": 0.8,
+      "diodeForwardAmps": 0.3,
+      "diodeReverseVolts": 100
+    }
+  },
+  {
+    "name": "BAV21",
+    "hint": "High-voltage switching diode",
+    "datasheet": "https://www.vishay.com/docs/85543/bav17.pdf",
+    "settings": {
+      "diodeIs": 2e-9,
+      "diodeN": 1.8,
+      "diodeRs": 0.45,
+      "diodeForwardAmps": 0.25,
+      "diodeReverseVolts": 200
+    }
+  },
+  {
+    "name": "1N4001",
+    "hint": "General-purpose rectifier",
+    "datasheet": "https://www.vishay.com/docs/88503/1n4001.pdf",
+    "settings": {
+      "diodeIs": 1e-8,
+      "diodeN": 1.8,
+      "diodeRs": 0.045,
+      "diodeForwardAmps": 1,
+      "diodeReverseVolts": 50
+    }
+  },
+  {
+    "name": "1N4002",
+    "hint": "General-purpose rectifier",
+    "datasheet": "https://www.vishay.com/docs/88503/1n4001.pdf",
+    "settings": {
+      "diodeIs": 1e-8,
+      "diodeN": 1.8,
+      "diodeRs": 0.045,
+      "diodeForwardAmps": 1,
+      "diodeReverseVolts": 100
+    }
+  },
+  {
+    "name": "1N4003",
+    "hint": "General-purpose rectifier",
+    "datasheet": "https://www.vishay.com/docs/88503/1n4001.pdf",
+    "settings": {
+      "diodeIs": 1e-8,
+      "diodeN": 1.8,
+      "diodeRs": 0.045,
+      "diodeForwardAmps": 1,
+      "diodeReverseVolts": 200
+    }
+  },
+  {
+    "name": "1N4004",
+    "hint": "General-purpose rectifier",
+    "datasheet": "https://www.vishay.com/docs/88503/1n4001.pdf",
+    "settings": {
+      "diodeIs": 1e-8,
+      "diodeN": 1.8,
+      "diodeRs": 0.045,
+      "diodeForwardAmps": 1,
+      "diodeReverseVolts": 400
+    }
+  },
+  {
+    "name": "1N4005",
+    "hint": "General-purpose rectifier",
+    "datasheet": "https://www.vishay.com/docs/88503/1n4001.pdf",
+    "settings": {
+      "diodeIs": 1e-8,
+      "diodeN": 1.8,
+      "diodeRs": 0.045,
+      "diodeForwardAmps": 1,
+      "diodeReverseVolts": 600
+    }
+  },
+  {
+    "name": "1N4006",
+    "hint": "General-purpose rectifier",
+    "datasheet": "https://www.vishay.com/docs/88503/1n4001.pdf",
+    "settings": {
+      "diodeIs": 1e-8,
+      "diodeN": 1.8,
+      "diodeRs": 0.045,
+      "diodeForwardAmps": 1,
+      "diodeReverseVolts": 800
+    }
+  },
+  {
+    "name": "1N5402",
+    "hint": "3 A silicon rectifier",
+    "datasheet": "https://www.vishay.com/docs/88516/1n5400.pdf",
+    "settings": {
+      "diodeIs": 1.2e-8,
+      "diodeN": 1.6,
+      "diodeRs": 0.022,
+      "diodeForwardAmps": 3,
+      "diodeReverseVolts": 200
+    }
+  },
+  {
+    "name": "1N5404",
+    "hint": "3 A silicon rectifier",
+    "datasheet": "https://www.vishay.com/docs/88516/1n5400.pdf",
+    "settings": {
+      "diodeIs": 1.2e-8,
+      "diodeN": 1.6,
+      "diodeRs": 0.022,
+      "diodeForwardAmps": 3,
+      "diodeReverseVolts": 400
+    }
+  },
+  {
+    "name": "1N5406",
+    "hint": "3 A silicon rectifier",
+    "datasheet": "https://www.vishay.com/docs/88516/1n5400.pdf",
+    "settings": {
+      "diodeIs": 1.2e-8,
+      "diodeN": 1.6,
+      "diodeRs": 0.022,
+      "diodeForwardAmps": 3,
+      "diodeReverseVolts": 600
+    }
+  },
+  {
+    "name": "1N5408",
+    "hint": "3 A silicon rectifier",
+    "datasheet": "https://www.vishay.com/docs/88516/1n5400.pdf",
+    "settings": {
+      "diodeIs": 1.2e-8,
+      "diodeN": 1.6,
+      "diodeRs": 0.022,
+      "diodeForwardAmps": 3,
+      "diodeReverseVolts": 1000
+    }
+  },
+  {
+    "name": "UF4004",
+    "hint": "Ultrafast rectifier",
+    "datasheet": "https://www.vishay.com/docs/88755/uf4001.pdf",
+    "settings": {
+      "diodeIs": 2.5e-9,
+      "diodeN": 1.7,
+      "diodeRs": 0.078,
+      "diodeForwardAmps": 1,
+      "diodeReverseVolts": 400
+    }
+  },
+  {
+    "name": "UF4007",
+    "hint": "Ultrafast rectifier",
+    "datasheet": "https://www.vishay.com/docs/88755/uf4001.pdf",
+    "settings": {
+      "diodeIs": 2e-10,
+      "diodeN": 1.65,
+      "diodeRs": 0.22,
+      "diodeForwardAmps": 1,
+      "diodeReverseVolts": 1000
+    }
+  }
+]

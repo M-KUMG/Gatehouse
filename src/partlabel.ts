@@ -4,7 +4,7 @@
 import { formatSI } from './format';
 import { ledColorName } from './ledcolor';
 import type { PlacedPart } from './model';
-import { getPart } from './parts';
+import { getPart, placedPartName } from './parts';
 
 export interface SelectionLabel {
   title: string;
@@ -24,5 +24,5 @@ export function selectionLabel(parts: readonly PlacedPart[], boardName?: string)
   const key = type.value?.key ?? 'value';
   const raw = part.state?.[key] ?? type.defaults?.[key];
   const value = type.value && typeof raw === 'number' ? formatSI(raw, type.value.unit) : '';
-  return { title: type.name, value };
+  return { title: placedPartName(type, part.state), value };
 }

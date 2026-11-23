@@ -10,3 +10,10 @@ THIRD_PARTY_LICENSES.txt
 
 # Installer output (npm run dist)
 /release/
+
+# Local assistant files. Keep the Claude orchestrator in version control.
+/AGENTS.md
+/.claude/**
+!/.claude/skills/
+!/.claude/skills/gatehouse-orchestrator/
+!/.claude/skills/gatehouse-orchestrator/SKILL.md

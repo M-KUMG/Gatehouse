@@ -9,7 +9,8 @@ import { RELAY_ART, drawRelayContacts, relaySvg } from './art/relay';
 import { MOTOR_ART, drawMotorFan, motorSvg } from './art/motor';
 import { MOTOR_BURN_AMPS, MOTOR_DEFAULT, MOTOR_WARN_AMPS } from './sim/motor';
 import {
-  RELAY_COILS, RELAY_COIL_VOLTS, RELAY_CONTACT_BURN_AMPS, RELAY_CONTACT_WARN_AMPS, RELAY_DEFAULT_VOLTS, contactAmps, relayModel,
+  RELAY_COIL_VOLTS, RELAY_CONTACT_BURN_AMPS, RELAY_CONTACT_WARN_AMPS, RELAY_DEFAULT_VOLTS,
+  contactAmps, relayCoilSettings, relayModel, type RelayCoilSettings,
 } from './sim/relay';
 import { SIGNAL_MAX_HZ, SIGNAL_MIN_HZ, SIGNAL_OUT_OHMS, SIGNAL_WAVES, type SignalWave } from './sim/signal';
 import { CAPACITOR_ART, capacitorArt } from './art/capacitor';
@@ -18,6 +19,7 @@ import { INDUCTOR_ART } from './art/inductor';
 import { BATTERY_ART } from './art/battery';
 import { BATTERY_9V_ART } from './art/battery9v';
 import { DIODE_ART } from './art/diode';
+import { DIODE_FIELDS, diodeModel, isDiodeFamily, type DiodeField, type DiodeSettings } from './diodepresets';
 import { GROUND_ART } from './art/ground';
 import { LED_ART, LED_BURNED_SVG, drawLedGlow, ledColorSvg } from './art/led';
 import { AC_PARTS } from './acparts';
@@ -46,11 +48,13 @@ import { ledBrightness } from './sim/inspect';
 import { dielectricVolts, igbtStress, plainCapStress, polarizedCapStress, type Stress } from './sim/ratings';
 import { partSpec, specStress } from './sim/specs';
 import {
-  BC547, BC557, D1N4148, GENERIC_IGBT, GENERIC_PIGBT, LOGIC_NMOS, POWER_PMOS, type ComponentModel, type PartResult,
+  BC547, BC557, GENERIC_IGBT, GENERIC_PIGBT, LOGIC_NMOS, POWER_PMOS, type ComponentModel, type PartResult,
 } from './sim';
 
 /** What a placed part remembers besides its position. Plain serializable data. */
-export interface PartState {
+export interface PartState extends RelayCoilSettings, Partial<DiodeSettings> {
+  /** The part number used to fill a diode's editable settings. */
+  diodePreset?: string;
   /** Switches and buttons: contact closed. */
   closed?: boolean;
   /** Potentiometer wiper, 0..1. */
@@ -88,13 +92,15 @@ export interface PartState {
 
 /** One more editable field in a part's popup beside its main `value` (a function generator's waveform, amplitude, ...). */
 export interface ExtraField {
-  key: 'wave' | 'amp' | 'offset' | 'duty' | 'limit' | 'freq' | 'volts';
+  key: 'wave' | 'amp' | 'offset' | 'duty' | 'limit' | 'freq' | 'volts' | keyof RelayCoilSettings | DiodeField;
   label: string;
   unit: string;
   min: number;
   max: number;
   /** Text choices instead of a number (the waveform name). */
   choices?: readonly string[];
+  /** Preset-dependent default. Leaving the field blank restores this value. */
+  defaultValue?(state: PartState): number;
 }
 
 export interface PinDef {
@@ -126,6 +132,8 @@ export interface PartType {
   colorable?: boolean;
   /** More fields in the same popup (the popup then stays open after each change; see valueedit.ts). */
   fields?: readonly ExtraField[];
+  /** Validate relationships between settings after a single edit or loading a project. */
+  validateSettings?(state: PartState): string | null;
   /** Mouse behavior: closed while held, flips on click, or has a knob to turn. */
   control?: 'momentary' | 'toggle' | 'knob';
   /** Knob circle in cells inside the unrotated cell box. */
@@ -183,26 +191,25 @@ export const PSU_MAX_VOLTS = 1000;
 export const DEFAULT_PSU_LIMIT = 1;
 export const PSU_MAX_AMPS = 20;
 export const PSU_MIN_AMPS = 0.001;
-/** A relay against its ratings: the coil's voltage and the contacts' current (null while fine). */
+const relayDefaults = (state: PartState): Required<RelayCoilSettings> => relayCoilSettings(state.value ?? RELAY_DEFAULT_VOLTS);
+
 /**
  * The coil's voltage as the winding feels it: the current through it times its resistance. The terminal voltage is
  * not used for the ratings: when the switch feeding a coil opens, the coil's own inductive kick (L di/dt, thousands
  * of volts for a moment, a spark at a real switch) shows on it, and that does not damage a relay; only a lasting
  * overvoltage does, and that drives a proportionally larger current.
  */
-function coilVolts(r: PartResult, nominal: number): number {
-  return Math.abs(r.current) * (RELAY_COILS[nominal] ?? RELAY_COILS[RELAY_DEFAULT_VOLTS]);
-}
-
-function relayWarning(r: PartResult, nominal: number): string | null {
-  const v = coilVolts(r, nominal);
+function relayWarning(r: PartResult, s: PartState): string | null {
+  const { coilVolts: nominal, coilOhms } = relayModel(s.value ?? RELAY_DEFAULT_VOLTS, s);
+  const v = Math.abs(r.current) * coilOhms;
   if (v > 1.3 * nominal) return `Coil at ${v.toFixed(1)} V, rated ${nominal} V.`;
   const i = contactAmps(r);
   return i > RELAY_CONTACT_WARN_AMPS ? `Contacts carry ${i.toFixed(1)} A, rated ${RELAY_CONTACT_WARN_AMPS} A.` : null;
 }
 
-function relayBurn(r: PartResult, nominal: number): string | null {
-  const v = coilVolts(r, nominal);
+function relayBurn(r: PartResult, s: PartState): string | null {
+  const { coilVolts: nominal, coilOhms } = relayModel(s.value ?? RELAY_DEFAULT_VOLTS, s);
+  const v = Math.abs(r.current) * coilOhms;
   if (v > 2 * nominal) return `coil overvoltage (${v.toFixed(1)} V, rated ${nominal} V)`;
   const i = contactAmps(r);
   return i > RELAY_CONTACT_BURN_AMPS ? `contacts burned by ${i.toFixed(1)} A (rated ${RELAY_CONTACT_WARN_AMPS} A)` : null;
@@ -417,9 +424,18 @@ export const PARTS: readonly PartType[] = [
     defaults: { value: RELAY_DEFAULT_VOLTS },
     // The nominal coil voltage picks the winding (3, 5, 6, 9, 12 or 24 V; see sim/relay.ts).
     value: { label: 'Coil voltage', unit: 'V', min: RELAY_COIL_VOLTS[0], max: RELAY_COIL_VOLTS[RELAY_COIL_VOLTS.length - 1], options: RELAY_COIL_VOLTS },
+    fields: [
+      { key: 'coilOhms', label: 'Coil resistance', unit: 'Ω', min: 0.001, max: 1e6, defaultValue: (s) => relayDefaults(s).coilOhms },
+      { key: 'pullVolts', label: 'Pull-in voltage', unit: 'V', min: 0.001, max: 1000, defaultValue: (s) => relayDefaults(s).pullVolts },
+      { key: 'releaseVolts', label: 'Release voltage', unit: 'V', min: 0.001, max: 1000, defaultValue: (s) => relayDefaults(s).releaseVolts },
+    ],
+    validateSettings: (s) => {
+      const { pullVolts, releaseVolts } = relayCoilSettings(s.value ?? RELAY_DEFAULT_VOLTS, s);
+      return releaseVolts < pullVolts ? null : 'Release voltage must be lower than pull-in voltage.';
+    },
     // Coil above 1.3 x nominal warns, above 2 x burns; contacts above 3 A warn, above 10 A burn.
-    warnWhen: (r, s) => relayWarning(r, s.value ?? RELAY_DEFAULT_VOLTS),
-    burnWhen: (r, s) => relayBurn(r, s.value ?? RELAY_DEFAULT_VOLTS),
+    warnWhen: relayWarning,
+    burnWhen: relayBurn,
     variant: (s) => {
       const v = s.value ?? RELAY_DEFAULT_VOLTS;
       if (s.burned) return { key: `burned-${v}`, svg: relaySvg(v, true) };
@@ -428,7 +444,7 @@ export const PARTS: readonly PartType[] = [
     overlay: (ctx, s, r) => {
       if (!s.burned && r) drawRelayContacts(ctx, (r.volts?.['logic.on'] ?? 0) >= 0.5);
     },
-    sim: (s) => (s.burned ? { kind: 'open' } : relayModel(s.value ?? RELAY_DEFAULT_VOLTS)),
+    sim: (s) => (s.burned ? { kind: 'open' } : relayModel(s.value ?? RELAY_DEFAULT_VOLTS, s)),
   },
   {
     id: 'ground', name: 'Ground', ...GROUND_ART,
@@ -534,8 +550,9 @@ export const PARTS: readonly PartType[] = [
     // Pin ids are the diode model's, like the LED's; the band marks the cathode.
     id: 'diode', name: 'Diode (1N4148)', ...DIODE_ART,
     pins: [{ id: 'anode', name: 'Anode (+)', x: 0, y: 1 }, { id: 'cathode', name: 'Cathode (−, band)', x: 4, y: 1 }],
+    fields: DIODE_FIELDS,
     readout: diodeReadout,
-    sim: () => D1N4148,
+    sim: diodeModel,
   },
   {
     // The id stays 'bjt' (saved projects use it).
@@ -649,6 +666,15 @@ for (const type of PARTS) applySpecs(type);
 
 export function getPart(id: string): PartType | undefined {
   return PARTS.find((p) => p.id === id);
+}
+
+export function hasPartSettings(type: PartType | undefined): boolean {
+  return Boolean(type?.value || type?.fields?.length || type?.colorable);
+}
+
+export function placedPartName(type: PartType, state: PartState | undefined): string {
+  return isDiodeFamily(type.id) && state?.diodePreset
+    ? `${type.name.split(' (')[0]} (${state.diodePreset})` : type.name;
 }
 
 /** True when placed parts of this type can be mirrored (PartType.mirrorable, default false). */

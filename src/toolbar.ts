@@ -209,11 +209,11 @@ export class Toolbar {
       this.anchorLeft = r.left - this.lastTargetRight;
       this.anchorRight = r.right <= this.lastTargetLeft + 1 ? r.right - this.lastTargetLeft : null;
     }
+    // Lock the current width before inserting an editor, whose intrinsic width may be larger.
+    if (!this.fold.classList.contains('open')) this.el.style.width = `${this.el.offsetWidth}px`;
     this.foldBody.replaceChildren(content);
     this.foldContent = content;
-    // The bar widens to the editor (a width transition needs numbers, so from its own width to the new one).
     const closed = this.row.offsetWidth + 8; // padding and border of the bar
-    if (!this.fold.classList.contains('open')) this.el.style.width = `${this.el.offsetWidth}px`;
     void this.el.offsetWidth;
     this.el.style.width = `${Math.max(closed, FOLD_WIDTH)}px`;
     this.fold.inert = false;

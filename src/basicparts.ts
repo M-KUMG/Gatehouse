@@ -18,13 +18,13 @@ import { LDR_ART, LDR_BURNED_SVG } from './art/ldr';
 import { NTC_ART, NTC_BURNED_SVG } from './art/ntc';
 import { RGBLED_ART, RGBLED_BURNED_SVG, drawRgbGlow } from './art/rgbled';
 import { SEVENSEG_ART, SEVENSEG_BURNED_SVG, drawSevensegGlow } from './art/sevenseg';
+import { DEFAULT_SCHOTTKY_SETTINGS, DIODE_FIELDS, diodeModel } from './diodepresets';
 import { buzzerReadout, diodeReadout, rgbledReadout, sevensegReadout, zenerReadout } from './devicereadouts';
 import { formatSI } from './format';
 import type { PartType, PinDef } from './parts';
-import type { ComponentModel, PartResult } from './sim';
+import type { PartResult } from './sim';
 import { ACTIVE_BUZZER, buzzerSounding } from './sim/buzzer';
 import { markBuzzing } from './buzzsound';
-import { VT } from './sim/devices';
 import { ledBrightness } from './sim/inspect';
 import { RGB_LED } from './sim/rgbled';
 import { RED_SEVENSEG, SEVENSEG_SEGMENTS } from './sim/sevenseg';
@@ -34,17 +34,7 @@ const AXIAL_DIODE_PINS: readonly PinDef[] = [
   { id: 'anode', name: 'Anode (+)', x: 0, y: 1 }, { id: 'cathode', name: 'Cathode (−, band)', x: 4, y: 1 },
 ];
 
-/**
- * 1N5819 Schottky diode (1 A, 40 V): n 1 and rs fitted to the datasheet's
- * forward voltages at 25 C, Vf 0.34 V at 100 mA and 0.60 V at 3 A, which
- * gives 0.45 V at 1 A (datasheet 0.45 V): rs = (0.26 V - VT ln 30) / 2.9 A
- * = 59 mOhm, is = 0.1 A / exp((0.34 V - 0.1 A rs) / VT) = 0.24 uA, which is
- * also its reverse leakage (datasheet: below 1 mA at 40 V).
- */
-const SCHOTTKY_RS = (0.26 - VT * Math.log(30)) / 2.9;
-export const SCHOTTKY_1N5819: ComponentModel = {
-  kind: 'diode', n: 1, rs: SCHOTTKY_RS, is: 0.1 / Math.exp((0.34 - 0.1 * SCHOTTKY_RS) / VT),
-};
+export const SCHOTTKY_1N5819 = diodeModel({}, DEFAULT_SCHOTTKY_SETTINGS);
 
 /** The Zener voltage of a placed part (the default when missing or out of range). */
 export function zenerVolts(value: number | undefined): number {
@@ -117,9 +107,10 @@ export const DIODE_FAMILY_PARTS: readonly PartType[] = [
   {
     id: 'schottky', name: 'Schottky diode (1N5819)', ...SCHOTTKY_ART,
     pins: AXIAL_DIODE_PINS,
+    fields: DIODE_FIELDS,
     readout: diodeReadout,
     variant: burnedLook(SCHOTTKY_BURNED_SVG),
-    sim: () => SCHOTTKY_1N5819,
+    sim: (s) => diodeModel(s, DEFAULT_SCHOTTKY_SETTINGS),
   },
 ];
 

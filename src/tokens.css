@@ -18,7 +18,15 @@
   /* Lines */
   --gh-border: rgba(255, 255, 255, 0.14);
   --gh-border-strong: rgba(255, 255, 255, 0.3);
-  --gh-scrollbar: rgba(255, 255, 255, 0.22);
+
+  /* Scrollbars: a cool glass thumb inside a recessed track. */
+  --gh-scrollbar: rgba(109, 135, 171, 0.76);
+  --gh-scrollbar-track: rgba(5, 9, 18, 0.46);
+  --gh-scrollbar-hover: rgba(121, 174, 236, 0.88);
+  --gh-scrollbar-active: #64a4ef;
+  --gh-scrollbar-rim: inset 0 0 0 1px rgba(230, 241, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.27);
+  --gh-scrollbar-size: 12px;
+  --gh-scrollbar-inset: 2px;
 
   /* Glass recipe (used by glass.css) */
   --gh-glass-blur: blur(22px) saturate(180%);
