@@ -28,7 +28,7 @@ jobs:
         working-directory: release
         run: |
           version=$(node -p "require('../package.json').version")
-          image="Gatehouse-${version}-linux-x64.AppImage"
+          image="Gatehouse-${version}-linux-x86_64.AppImage"
           sha256sum "$image" > "${image}.sha256"
           "./$image" --appimage-extract >/dev/null
           test -x squashfs-root/AppRun
@@ -38,7 +38,7 @@ jobs:
         with:
           name: Gatehouse-linux-x64
           path: |
-            release/Gatehouse-*-linux-x64.AppImage
-            release/Gatehouse-*-linux-x64.AppImage.sha256
+            release/Gatehouse-*-linux-x86_64.AppImage
+            release/Gatehouse-*-linux-x86_64.AppImage.sha256
           if-no-files-found: error
           compression-level: 0
