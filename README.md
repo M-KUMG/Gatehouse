@@ -1,9 +1,7 @@
 # Gatehouse
-
-Web and Electron simulator for Arduino and RP2040 boards and circuits. A university project, built entirely with Claude (a requirement of the course). Gatehouse itself is MIT licensed (see `LICENSE`).
-
 <img width="470" height="357" alt="image" src="https://github.com/user-attachments/assets/d98f5012-a194-44ee-93a9-0102a0bcfbdf" />
 
+Web and Electron simulator for Arduino and (soon RP2040) boards and circuits. A university project, built entirely with Claude (a requirement of the course). Gatehouse itself is MIT licensed (see `LICENSE`).
 
 ## Get it
 
