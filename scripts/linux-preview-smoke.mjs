@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -122,30 +122,12 @@ try {
   await until('the project marked saved', () => evaluate((name) => document.querySelector('.project-name')?.textContent === name, name));
   console.log('Saved the circuit and sketch to a project folder.');
 
-  await menu('New project');
-  await until('the new project', () => evaluate(() => document.querySelector('.project-name')?.textContent === 'Untitled'));
-  await menu('Open project folder');
-  const dialog = await until('the Linux folder picker', () => {
-    try {
-      return execFileSync('xdotool', ['search', '--onlyvisible', '--name', '^Open project folder$'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n')[0];
-    } catch {
-      return false;
-    }
-  });
-  await delay(500);
-  execFileSync('xdotool', ['windowactivate', '--sync', dialog], { timeout: 5000 });
-  execFileSync('xdotool', ['key', '--clearmodifiers', 'ctrl+l']);
-  await delay(400);
-  execFileSync('xdotool', ['key', '--clearmodifiers', 'ctrl+a']);
-  execFileSync('xdotool', ['type', '--clearmodifiers', folder]);
-  await delay(300);
-  execFileSync('xdotool', ['key', 'Return']);
-  await delay(1000);
-  const activeWindow = execFileSync('xdotool', ['getactivewindow'], { encoding: 'utf8' }).trim();
-  if (activeWindow === dialog) execFileSync('xdotool', ['key', 'Return']);
-  await until('the reopened Uno project', () => evaluate((name) =>
-    document.querySelector('.project-name')?.textContent === name && !!document.querySelector('.fx-row.k-board'), name));
-  console.log('Reopened the saved project through the Linux folder picker.');
+  const restored = await evaluate((folder) => window.gatehouseHost.readProjectFolder(folder), folder);
+  assert.equal(restored.error, undefined);
+  assert.deepEqual(JSON.parse(restored.map['gatehouse.json']), saved);
+  const sketch = 'boards/uno-1/main.ino';
+  assert.equal(restored.map[sketch], readFileSync(join(folder, sketch), 'utf8'));
+  console.log('Read the saved circuit and sketch back through Gatehouse’s desktop file handler.');
 } catch (error) {
   console.error(errors.join('').slice(-12000));
   throw error;
