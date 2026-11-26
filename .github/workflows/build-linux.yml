@@ -1,17 +1,18 @@
-name: Build Linux AppImage
+name: Test published Linux preview
 
-on:
-  workflow_dispatch:
-  push:
-    tags: ['v*']
+on: workflow_dispatch
 
 permissions:
   contents: read
 
 jobs:
-  appimage:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+  preview:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
         with:
@@ -19,26 +20,25 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: npm
-      - run: npm ci
-      - run: npm run toolchain:fetch
-      - run: npm run toolchain:packs
-      - run: npm run dist:linux
-      - name: Verify AppImage contents
-        working-directory: release
+      - name: Fetch and verify the published archive
         run: |
-          version=$(node -p "require('../package.json').version")
-          image="Gatehouse-${version}-linux-x86_64.AppImage"
-          sha256sum "$image" > "${image}.sha256"
-          "./$image" --appimage-extract >/dev/null
-          test -x squashfs-root/AppRun
-          test -s squashfs-root/resources/app.asar
-          diff -rq ../toolchain/packs squashfs-root/resources/toolchain-packs
-      - uses: actions/upload-artifact@v7
-        with:
-          name: Gatehouse-linux-x64
-          path: |
-            release/Gatehouse-*-linux-x86_64.AppImage
-            release/Gatehouse-*-linux-x86_64.AppImage.sha256
-          if-no-files-found: error
-          compression-level: 0
+          archive=Gatehouse-0.2.4-linux-x64.tar.gz
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$archive" "https://github.com/M-KUMG/Gatehouse/releases/download/v0.2.4/$archive"
+          cd "$RUNNER_TEMP"
+          echo "58d3f5f4845edddb9d86e738204a4135f6b2954d8558ea08d448763d80a4bea7  $archive" | sha256sum --check
+          tar -xzf "$archive"
+          test -x Gatehouse-0.2.4-linux-x64/gatehouse
+      - name: Run the packaged desktop app offline
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth xdotool
+          test_home="$RUNNER_TEMP/smoke-home"
+          mkdir -p "$test_home"/{Documents,profile}
+          sudo ip netns add gatehouse-smoke
+          trap 'sudo ip netns del gatehouse-smoke' EXIT
+          sudo ip -n gatehouse-smoke link set lo up
+          sudo ip -n gatehouse-smoke -br address
+          test -z "$(sudo ip -n gatehouse-smoke route show default)"
+          sudo ip netns exec gatehouse-smoke runuser -u "$USER" -- env HOME="$test_home" PATH="$PATH" GTK_USE_PORTAL=0 \
+            xvfb-run -a --server-args="-screen 0 1440x1080x24" node scripts/linux-preview-smoke.mjs \
+            "$RUNNER_TEMP/Gatehouse-0.2.4-linux-x64/gatehouse" "$test_home/profile"
