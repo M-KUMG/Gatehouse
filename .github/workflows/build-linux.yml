@@ -40,7 +40,7 @@ jobs:
           RUNNER_IMAGE: ${{ matrix.os }}
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y xvfb xauth xdotool
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox
           test_home="$RUNNER_TEMP/smoke-home"
           mkdir -p "$test_home"/{Documents,profile}
           sudo ip netns add gatehouse-smoke
@@ -51,5 +51,6 @@ jobs:
           app="$RUNNER_TEMP/Gatehouse-0.2.4-linux-x64/gatehouse"
           if [ "$RUNNER_IMAGE" = ubuntu-24.04 ]; then app=/opt/gatehouse-preview-smoke/gatehouse; fi
           sudo ip netns exec gatehouse-smoke runuser -u "$USER" -- env HOME="$test_home" PATH="$PATH" GTK_USE_PORTAL=0 \
-            xvfb-run -a --server-args="-screen 0 1440x1080x24" node scripts/linux-preview-smoke.mjs \
+            xvfb-run -a --server-args="-screen 0 1440x1080x24" dbus-run-session -- \
+            bash -c 'openbox >/dev/null 2>&1 & exec node "$@"' bash scripts/linux-preview-smoke.mjs \
             "$app" "$test_home/profile"

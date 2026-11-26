@@ -132,9 +132,17 @@ try {
       return false;
     }
   });
-  execFileSync('xdotool', ['windowfocus', '--sync', dialog, 'key', 'ctrl+l'], { timeout: 3000 });
+  await delay(500);
+  execFileSync('xdotool', ['windowactivate', '--sync', dialog], { timeout: 5000 });
+  execFileSync('xdotool', ['key', '--clearmodifiers', 'ctrl+l']);
+  await delay(400);
+  execFileSync('xdotool', ['key', '--clearmodifiers', 'ctrl+a']);
   execFileSync('xdotool', ['type', '--clearmodifiers', folder]);
+  await delay(300);
   execFileSync('xdotool', ['key', 'Return']);
+  await delay(1000);
+  const activeWindow = execFileSync('xdotool', ['getactivewindow'], { encoding: 'utf8' }).trim();
+  if (activeWindow === dialog) execFileSync('xdotool', ['key', 'Return']);
   await until('the reopened Uno project', () => evaluate((name) =>
     document.querySelector('.project-name')?.textContent === name && !!document.querySelector('.fx-row.k-board'), name));
   console.log('Reopened the saved project through the Linux folder picker.');
