@@ -97,7 +97,8 @@ try {
   const built = await until('an offline build of the Uno sketch', () => evaluate(() => {
     const text = document.querySelector('.bo-header-text')?.textContent ?? '';
     if (/^(Build failed|Could not)/.test(text)) throw new Error(text + ' ' + document.querySelector('.bo-list')?.textContent);
-    return /^Compiled .*\d+ bytes of flash/.test(text) && text;
+    const usage = document.querySelector('.bo-usage')?.textContent ?? '';
+    return /^Build succeeded/.test(text) && /Flash.*\d/.test(usage) && `${text}. ${usage}`;
   }), 90_000);
   console.log(built);
 
@@ -118,6 +119,7 @@ try {
     existsSync(manifest) && existsSync(join(folder, 'boards', 'uno-1', 'main.ino')));
   const saved = JSON.parse(readFileSync(manifest, 'utf8'));
   assert(saved.parts.some((part) => part.typeId === 'uno'));
+  await until('the project marked saved', () => evaluate((name) => document.querySelector('.project-name')?.textContent === name, name));
   console.log('Saved the circuit and sketch to a project folder.');
 
   await menu('New project');
@@ -130,7 +132,7 @@ try {
       return false;
     }
   });
-  execFileSync('xdotool', ['windowfocus', '--sync', dialog, 'key', 'ctrl+l']);
+  execFileSync('xdotool', ['windowfocus', '--sync', dialog, 'key', 'ctrl+l'], { timeout: 3000 });
   execFileSync('xdotool', ['type', '--clearmodifiers', folder]);
   execFileSync('xdotool', ['key', 'Return']);
   await until('the reopened Uno project', () => evaluate((name) =>
